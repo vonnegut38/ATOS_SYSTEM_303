@@ -238,20 +238,21 @@ int kernel_user_mouse_event(uint32_t *buttons,int32_t *delta_x,int32_t *delta_y)
     if(!buttons||!delta_x||!delta_y||!input||!event||!input->poll||
        !event->pending||!event->receive)return 0;
     input->poll(0u);
-    /* Motion is aggregated to keep the GUI service responsive.  Bit 2 is an
-       edge marker: it preserves a complete press+release that arrived within
-       one poll even though bits 0..1 still describe the final button state. */
+    /* Jak XaAES k_mouse.c ("Read a packet out of our queue"): czytamy JEDEN
+       pakiet na wywolanie i zwracamy jego delte. Wczesniejsza agregacja
+       wszystkich zaleglych pakietow w jedna sume powodowala skoki kursora
+       (a MP_TIMEGAP w XaAES ogranicza tempo). Bit 2 pozostaje markerem
+       krawedzi wcisniecia. */
     while(event->pending(1u)&&event->receive(1u,&type,&value)){
         uint32_t packet_buttons;
         if(type!=KERNEL_INPUT_MOUSE_PACKET)continue;
         packet_buttons=(value>>16)&3u;
-        /* Remember every observed down state.  Some IKBD/host combinations
-           deliver the prior release one poll late, so edge detection based
-           only on the cached state could otherwise discard the next click. */
         if(packet_buttons)pressed=1;
         latest_buttons=packet_buttons;
-        total_x+=(int32_t)(int8_t)((value>>8)&0xffu);
-        total_y+=(int32_t)(int8_t)(value&0xffu);received=1;
+        total_x=(int32_t)(int8_t)((value>>8)&0xffu);
+        total_y=(int32_t)(int8_t)(value&0xffu);
+        received=1;
+        break;
     }
     if(!received)return 0;
     user_mouse_buttons=(uint8_t)latest_buttons;
