@@ -21,6 +21,18 @@ static int32_t launch_error;
 static uint32_t spawn_pid[DEMO_CLIENTS];
 static int menu_open=-1,menu_highlight=0,tasks_open=0,dialog=0;
 static const char *status=0;
+static int32_t dmg_x,dmg_y,dmg_w,dmg_h;static int dmg_valid=0;
+static void dmg_add(int32_t x,int32_t y,int32_t w,int32_t h){
+ if(w<=0||h<=0)return;
+ if(!dmg_valid){dmg_x=x;dmg_y=y;dmg_w=w;dmg_h=h;dmg_valid=1;return;}
+ {int32_t x1=dmg_x+dmg_w,y1=dmg_y+dmg_h,nx=x+w,ny=y+h;
+  if(x<dmg_x)dmg_x=x;
+  if(y<dmg_y)dmg_y=y;
+  if(nx>x1)x1=nx;
+  if(ny>y1)y1=ny;
+  dmg_w=x1-dmg_x;dmg_h=y1-dmg_y;}
+}
+static void mark_window(int i){wm_rect r=wm_bounds(&state,i);dmg_add(r.x,r.y,r.w,r.h);dirty=2+i;}
 static void handle(const gui_message_t *);
 static void close_window(int i);
 
@@ -227,6 +239,9 @@ static void render_tasks(void){
 static void render(void){
  int k,maxs;char label[24];
  used=0;
+ if(dmg_valid)add(GUI_CLIP,dmg_x,dmg_y,dmg_w,dmg_h,0,0);
+ else add(GUI_CLIP,0,0,640,400,0,0);
+ dmg_valid=0;
  if(dirty>=2){
   int i=(int)dirty-2;dirty=0;
   if(wm_is_open(&state,i))content(i);
@@ -316,7 +331,9 @@ static void mouse(const gui_message_t *m){int x=m->v[1]>>16,y=m->v[1]&65535,butt
   else if(press){tasks_open=0;dirty=1;}
   state.buttons=down;return;
  }
- if(state.gesture){wm_motion(&state,x,y);dirty=1;if(!down)state.gesture=0;state.buttons=down;return;}
+ if(state.gesture){wm_rect old=wm_bounds(&state,state.active);wm_motion(&state,x,y);
+  dmg_add(old.x,old.y,old.w,old.h);{wm_rect nw=wm_bounds(&state,state.active);dmg_add(nw.x,nw.y,nw.w,nw.h);}
+  dirty=1;if(!down)state.gesture=0;state.buttons=down;return;}
  state.buttons=down;if(!press)return;
  if(state.full>=0)return;
  if(y>=377){int k=(x-6)/TASKBAR_SLOT_W;i=taskbar_slot(k);if(i>=0){wm_select(&state,i);dirty=1;}return;}
@@ -337,12 +354,12 @@ static void handle(const gui_message_t *m){int i;
   if(reliable(m->sender,WM_HELLO|0x80000000u,0,0,0))fault=1;
   dirty=1;return;}
  if(i<0||!state.win[i].open)return;
- if(state.win[i].kind==1&&m->v[0]==WM_COUNT){state.win[i].count=m->v[1];state.win[i].paused=m->v[2]!=0;dirty=2+i;}
+ if(state.win[i].kind==1&&m->v[0]==WM_COUNT){state.win[i].count=m->v[1];state.win[i].paused=m->v[2]!=0;mark_window(i);}
  if(state.win[i].kind==2&&m->v[0]>=WM_TEXT0&&m->v[0]<=WM_TEXT2){unsigned j=m->v[0]-WM_TEXT0,k;
   if(!j)state.win[i].parts=0;
   for(k=0;k<12;k++)state.win[i].staging[j*12+k]=((const char *)&m->v[1])[k];
   state.win[i].parts|=(uint8_t)(1u<<j);
-  if(state.win[i].parts==7){for(k=0;k<35;k++)state.win[i].text[k]=state.win[i].staging[k];state.win[i].text[35]=0;dirty=2+i;}}
+  if(state.win[i].parts==7){for(k=0;k<35;k++)state.win[i].text[k]=state.win[i].staging[k];state.win[i].text[35]=0;mark_window(i);}}
 }
 static int launch(int index,const char *path){gui_spawn_t request;zero(&request,sizeof(request));copytext(request.path,path,sizeof(request.path));
  launch_error=gui_call(34,0,0,&request,0);

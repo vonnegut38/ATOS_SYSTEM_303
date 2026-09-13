@@ -14,7 +14,6 @@ static volatile uint16_t cursor_mono_background[16u*2u*4u];
 static int16_t cursor_x,cursor_y;
 static uint8_t cursor_width,cursor_height,cursor_is_visible;
 static volatile uint8_t *desktop_framebuffer;
-static volatile uint8_t *desktop_backbuffer;
 static uint8_t desktop_is_active;
 static uint16_t console_palette[16];
 static const uint16_t cursor_shape[16]={
@@ -678,36 +677,63 @@ void kgfx_emutos_controls(int32_t x,int32_t y,int32_t w,int32_t h,uint32_t state
     cursor_guard_end(guard);
 }
 
-/* Bounded display list. Window ownership/composition remains in user space. */
+static int32_t clip_x,clip_y,clip_w,clip_h;
+static int clip_intersect(int32_t *x,int32_t *y,int32_t *w,int32_t *h)
+{
+    int32_t x0=*x,y0=*y,x1=*x+*w,y1=*y+*h;
+    int32_t cx1=clip_x+clip_w,cy1=clip_y+clip_h;
+    if(x0<clip_x)x0=clip_x;
+    if(y0<clip_y)y0=clip_y;
+    if(x1>cx1)x1=cx1;
+    if(y1>cy1)y1=cy1;
+    if(x1<=x0||y1<=y0)return 0;
+    *x=x0;*y=y0;*w=x1-x0;*h=y1-y0;
+    return 1;
+}
+static int clip_hits(int32_t x,int32_t y,int32_t w,int32_t h)
+{return x<clip_x+clip_w&&y<clip_y+clip_h&&x+w>clip_x&&y+h>clip_y;}
+
+/* Bounded display list. Window ownership/composition remains in user space.
+ * GUI_CLIP zawęża rysowanie do obszaru zniszczeń (styl EmuTOS: rysujemy tylko
+ * to, co się zmieniło), a brak podwójnego bufora oszczędza 32 KB kopii na
+ * każdą klatkę. */
 void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
 {
     uint32_t i;int visible=kgfx_cursor_visible();int16_t cx=cursor_x,cy=cursor_y;
     if(count>GUI_DRAW_MAX)return;
     if(!desktop_is_active)return;
-    if(!desktop_backbuffer){
-        desktop_backbuffer=(volatile uint8_t *)kmem_alloc(SCREEN_BYTES,256u,KMEM_OWNER_KERNEL,
-            KMEM_READ|KMEM_WRITE|KMEM_SUPERVISOR,0);
-        if(desktop_backbuffer)kmem_pin((void *)desktop_backbuffer,KMEM_OWNER_KERNEL);
-    }
     if(visible)kgfx_cursor_hide();
-    if(desktop_backbuffer){
-        volatile uint32_t *dst=(volatile uint32_t *)desktop_backbuffer;
-        const volatile uint32_t *src=(const volatile uint32_t *)desktop_framebuffer;
-        for(i=0;i<SCREEN_BYTES/4u;i++)dst[i]=src[i];
-        graphics.framebuffer=desktop_backbuffer;
-    }
+    clip_x=0;clip_y=0;clip_w=graphics.width;clip_h=graphics.height;
     for(i=0;i<count;i++){
         gui_draw_t c;uint32_t j;
         for(j=0;j<sizeof(c);j++)((volatile uint8_t *)&c)[j]=((const uint8_t *)&list[i])[j];
         c.text[31]=0;
         switch(c.kind){
-        case GUI_BG:kgfx_emutos_background(c.x,c.y,c.w,c.h);break;
-        case GUI_FILL:kgfx_fill_rect(c.x,c.y,c.w,c.h,c.color);break;
-        case GUI_FRAME:kgfx_frame_rect(c.x,c.y,c.w,c.h,c.color);break;
-        case GUI_TEXT:kgfx_text(c.x,c.y,c.text,c.color,c.background,1);break;
+        case GUI_CLIP:
+            clip_x=c.x;clip_y=c.y;
+            clip_w=c.w?(int32_t)c.w:graphics.width;
+            clip_h=c.h?(int32_t)c.h:graphics.height;
+            break;
+        case GUI_BG:{
+            int32_t x=c.x,y=c.y,w=c.w,h=c.h;
+            if(clip_intersect(&x,&y,&w,&h))kgfx_emutos_background(x,y,w,h);
+            break;}
+        case GUI_FILL:{
+            int32_t x=c.x,y=c.y,w=c.w,h=c.h;
+            if(clip_intersect(&x,&y,&w,&h))kgfx_fill_rect(x,y,w,h,c.color);
+            break;}
+        case GUI_FRAME:
+            if(clip_hits(c.x,c.y,c.w,c.h))kgfx_frame_rect(c.x,c.y,c.w,c.h,c.color);
+            break;
+        case GUI_TEXT:{
+            int32_t tw=8;const char *p=c.text;
+            while(*p){if(*p!='\n')tw+=8;++p;}
+            if(clip_hits(c.x,c.y,tw,16))kgfx_text(c.x,c.y,c.text,c.color,c.background,1);
+            break;}
         case GUI_WINDOW:{
             static const uint16_t pattern[4]={0,0x5555,0,0x5555};
             surface_t s;uint16_t limit;
+            if(!clip_hits(c.x,c.y,c.w,c.h))break;
             if(c.x<0||c.y<0||c.w<64||c.h<40||c.w>graphics.width||c.h>graphics.height||
                c.x>graphics.width-c.w||c.y>graphics.height-c.h)break;
             kgfx_emutos_window(c.x,c.y,c.w,c.h);
@@ -719,11 +745,6 @@ void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
         }
         default:break;
         }
-    }
-    if(desktop_backbuffer){
-        volatile uint8_t *old=desktop_framebuffer;
-        desktop_framebuffer=desktop_backbuffer;desktop_backbuffer=old;
-        shifter_set_base(desktop_framebuffer);
     }
     if(visible)kgfx_cursor_show(cx,cy);
 }

@@ -9,5 +9,5 @@ typedef struct {
     uint16_t w,h,color,background,reserved;
     char text[32];
 } gui_draw_t;
-enum {GUI_BG=1,GUI_FILL,GUI_FRAME,GUI_TEXT,GUI_WINDOW};
+enum {GUI_BG=1,GUI_FILL,GUI_FRAME,GUI_TEXT,GUI_WINDOW,GUI_CLIP};
 #endif

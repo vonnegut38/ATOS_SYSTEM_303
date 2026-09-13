@@ -39,6 +39,26 @@ wielozadaniowo we własnych oknach; nowoczesny wygląd i szybkość.
   okna nie miescily sie w 32).
 - Zrzuty: `atari-030-port/gui-menu-emutos.png`, `gui-tasks-list.png`.
 
+
+## G3 — wydajność: damage + clipping — ZROBIONE
+
+Problem: każdy render kopiował cały bufor (32 KB) i rysował cały ekran
+(tło 640x400 = 256 000 pikseli), a każdy ruch myszy ustawiał `dirty=1`.
+
+Zmiany:
+- **Jądro** (`kernel_graphics.c`): nowa komenda `GUI_CLIP` i clipping w
+  `kgfx_draw_batch` — rysujemy tylko obszar zniszczeń (odpowiednik
+  `wind_get WF_FIRSTXYWH` w EmuTOS AES). Usunięty podwójny bufor
+  (32 KB kopii na klatkę).
+- **Desktop** (`mono_desktop.c`): damage jako unia prostokątów. Zmiana
+  treści okna odświeża tylko jego obszar; przeciąganie — sumę starego i
+  nowego położenia. Ruch kursora nie wymusza już renderu.
+- **Kursor**: bez zmian — to już XOR 16x16 w stylu EmuTOS
+  (`vdi/vdi_mouse.c cur_display`), tani. ET4000 (jak każda VGA w trybie
+  graficznym) **nie ma sprzętowego kursora sprite'owego**, a Shifter ST też
+  nie — więc programowy XOR jest właściwą drogą. Wąskim gardłem był pełny
+  render ekranu, nie sam kursor.
+
 ### Uwaga o myszy w Hatari
 
 Mysz w GUI dziala dopiero, gdy emulator przechwytuje hosta: **`--grab`**
