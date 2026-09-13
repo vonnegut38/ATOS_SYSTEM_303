@@ -16,6 +16,36 @@ wielozadaniowo we własnych oknach; nowoczesny wygląd i szybkość.
   (`SYSTEM.WM`) — auto-start po INIT/GFX/GUI.
 - Demo: `atari-030-port/gui-core-nwindows.png` (SYSTEM, LICZNIK, NOTATKA).
 
+
+## G2 — pasek menu EmuTOS + TASKS — ZROBIONE
+
+- **Menu bar** wziety 1:1 z EmuTOS (`desk/desk_rsc.c`):
+  `Desk` (Desktop info...), `File` (Open, Info/Rename..., Search...,
+  New folder..., Close folder, Close top window, Cycle windows,
+  Select all items, Set file mask..., Delete..., Format floppy...,
+  Execute EmuCON, Shutdown), `View` (Show as icons/text, Sort by
+  name/type/size/date, No sort, Size to fit), `Options` (Set background...,
+  Install icon/application/devices, Desktop configuration...).
+- **Ikonka TASKS** w prawym gornym rogu: rozwija liste uruchomionych
+  programow (`1 SYSTEM / 2 LICZNIK / 3 NOTATKA *`), klikniecie przelacza.
+- **Mysz**: obsluga w desktopie (klik w tytul menu, wybor pozycji, TASKS,
+  przeciaganie okien, przycisk zamykania, zmiana rozmiaru). Klawiatura:
+  F1-F4 menu, F5 TASKS, strzalki + Enter, Esc.
+- **Naprawiony blad**: `static const` tablice **wskaznikow** w `.rodata`
+  nie przezywaly zaladowania (aplikacja PC-relative) — `menus[].title` i
+  `items[].text` byly smieciami. Dane menu przepisane bez wskaznikow
+  (indeksy + literaly w kodzie).
+- Zwiekszony budzet rysowania `GUI_DRAW_MAX` 32 -> 96 (menu + dropdown +
+  okna nie miescily sie w 32).
+- Zrzuty: `atari-030-port/gui-menu-emutos.png`, `gui-tasks-list.png`.
+
+### Uwaga o myszy w Hatari
+
+Mysz w GUI dziala dopiero, gdy emulator przechwytuje hosta: **`--grab`**
+(albo AltGr+M w oknie). Bez tego ruch hosta nie trafia do emulowanego ST.
+Sciezka w systemie jest poprawna: GUI service op 6 -> syscall 47 (trwale
+przechwycenie) -> KMOUSE do desktopu -> `mouse()`.
+
 ## Ważne ustalenie o ścieżce obrazu
 
 - GUI jądra rysuje do **ekranu ST** (`SCREEN_BASE=0x10000` /
