@@ -697,9 +697,11 @@ static int clip_hits(int32_t x,int32_t y,int32_t w,int32_t h)
  * GUI_CLIP zawęża rysowanie do obszaru zniszczeń (styl EmuTOS: rysujemy tylko
  * to, co się zmieniło), a brak podwójnego bufora oszczędza 32 KB kopii na
  * każdą klatkę. */
+void (*kgfx_cursor_pump)(void);
+
 void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
 {
-    uint32_t i;int visible=kgfx_cursor_visible();int16_t cx=cursor_x,cy=cursor_y;
+    uint32_t i;int visible=kgfx_cursor_visible();
     if(count>GUI_DRAW_MAX)return;
     if(!desktop_is_active)return;
     if(visible)kgfx_cursor_hide();
@@ -731,20 +733,19 @@ void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
             if(clip_hits(c.x,c.y,tw,16))kgfx_text(c.x,c.y,c.text,c.color,c.background,1);
             break;}
         case GUI_WINDOW:{
-            static const uint16_t pattern[4]={0,0x5555,0,0x5555};
-            surface_t s;uint16_t limit;
+            uint16_t limit;
             if(!clip_hits(c.x,c.y,c.w,c.h))break;
             if(c.x<0||c.y<0||c.w<64||c.h<40||c.w>graphics.width||c.h>graphics.height||
                c.x>graphics.width-c.w||c.y>graphics.height-c.h)break;
             kgfx_emutos_window(c.x,c.y,c.w,c.h);
-            kgfx_fill_rect(c.x+18,c.y+1,c.w-19,17,1);
-            if(c.color){s=active_surface();emutos_vdi_planar_fill(s.words,s.line_words,s.planes,
-                c.x+18,c.y+1,c.w-19,17,0,1,pattern,3);}
+            /* Aktywny pasek: czarne tlo i bialy tekst (czytelny w mono),
+               nieaktywny: biale tlo i czarny tekst. */
+            kgfx_fill_rect(c.x+18,c.y+1,c.w-19,17,c.color?0:1);
             limit=(c.w-44)/8;if(limit>31)limit=31;c.text[limit]=0;
-            kgfx_text(c.x+24,c.y+1,c.text,0,1,1);break;
+            kgfx_text(c.x+24,c.y+1,c.text,c.color?1:0,c.color?0:1,1);break;
         }
         default:break;
         }
     }
-    if(visible)kgfx_cursor_show(cx,cy);
+    if(visible)kgfx_cursor_show(cursor_x,cursor_y);
 }

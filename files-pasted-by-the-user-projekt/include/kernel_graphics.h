@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include "gui_draw.h"
 void kgfx_draw_batch(const gui_draw_t *,uint32_t);
+/* Haczyk "pompy" kursora: wolany w trakcie rysowania, zeby wskaznik nie
+ * zastygal na czas dlugiego renderu. Ustawiany przez jadro. */
+extern void (*kgfx_cursor_pump)(void);
 
 #define KGFX_DIRTY_MAX 16u
 #define KGFX_SERVICE_MAGIC 0x4b474658UL

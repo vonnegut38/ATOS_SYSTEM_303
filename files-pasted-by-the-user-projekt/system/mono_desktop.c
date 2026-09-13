@@ -245,8 +245,14 @@ static void render(void){
  else add(GUI_CLIP,0,0,640,400,0,0);
  dmg_valid=0;
  if(dirty>=2){
-  int i=(int)dirty-2;dirty=0;
-  if(wm_is_open(&state,i))content(i);
+  /* Zmienione okno plus wszystkie okna NAD nim w kolejnosci Z: inaczej
+     odswiezenie tresci nizszego okna zamalowuje wyzsze (artefakty). */
+  int i=(int)dirty-2;int p=-1;dirty=0;
+  if(wm_is_open(&state,i)){
+   content(i);
+   for(k=0;k<state.count;++k)if(state.order[k]==i){p=k;break;}
+   if(p>=0)for(k=p+1;k<state.count;++k){int j=state.order[k];if(state.win[j].open)window(j);}
+  }
   if(rpc(gfx,18,(uint32_t)(uintptr_t)list,used,0))fault=18;
   return;}
  if(state.full>=0){int f=state.full;

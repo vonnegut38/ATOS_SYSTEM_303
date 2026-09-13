@@ -613,7 +613,7 @@ int kernel_user_gui_keyboard_wake(void)
        process_table[i].state!=USER_PROCESS_FREE&&
        process_table[i].state!=USER_PROCESS_TERMINATED){target=&process_table[i];break;}
     if(!target){kgfx_cursor_hide();gui_keyboard_pid=0;gui_keyboard_ready_tick=0;
-        gui_keyboard_dropped=0;gui_keyboard_persistent=0;return 0;}
+        gui_keyboard_dropped=0;gui_keyboard_persistent=0;kgfx_cursor_pump=0;return 0;}
     now=kernel_user_tick_now();
     if(gui_keyboard_ready_tick&&
        (now<0||(int32_t)((uint32_t)now-gui_keyboard_ready_tick)<0)){
@@ -1573,7 +1573,7 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
             user_syscall_result=-0x400;return 0;}
         if(gui_desktop_pid){kgfx_restore_console();gui_desktop_pid=0;}
         kgfx_cursor_hide();gui_keyboard_pid=0;gui_keyboard_ready_tick=0;gui_keyboard_dropped=0;
-        gui_keyboard_persistent=0;
+        gui_keyboard_persistent=0;kgfx_cursor_pump=0;
         user_syscall_result=0;return 0;}
     if(call==47u){uint8_t found=0;
         if(current_process->pid!=kernel_user_service_pid("SYSTEM.GUI")||
@@ -1597,7 +1597,7 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
         if(gui_desktop_pid&&(!argument0||argument0==gui_desktop_pid)){
             kgfx_restore_console();gui_desktop_pid=0;}
         kgfx_cursor_hide();gui_keyboard_pid=0;gui_keyboard_ready_tick=0;gui_keyboard_dropped=0;
-        gui_keyboard_persistent=0;user_syscall_result=0;return 0;}
+        gui_keyboard_persistent=0;kgfx_cursor_pump=0;user_syscall_result=0;return 0;}
     user_syscall_result=-0x2ff;
     return 0;
 }
