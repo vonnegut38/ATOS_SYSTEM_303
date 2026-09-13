@@ -34,6 +34,26 @@ static void dmg_add(int32_t x,int32_t y,int32_t w,int32_t h){
 }
 static void mark_window(int i){wm_rect r=wm_bounds(&state,i);dmg_add(r.x,r.y,r.w,r.h);dirty=2+i;}
 
+/* Widoczny region okna w stylu XaAES rectlist.c: obszar okna minus okna
+ * lezace WYZEJ w kolejnosci Z (state.order rosnie od spodu do wierzchu). */
+typedef struct {int32_t x,y,w,h;} rr_t;
+#define RG_MAX 8
+static int rg_sub(rr_t *in,int n,const rr_t *c,rr_t *out){
+ int i,m=0;int32_t cx1,cy1;
+ if(c->w<=0||c->h<=0){for(i=0;i<n&&m<RG_MAX;++i)out[m++]=in[i];return m;}
+ cx1=c->x+c->w;cy1=c->y+c->h;
+ for(i=0;i<n&&m<RG_MAX;++i){
+  rr_t r=in[i];int32_t x0=r.x,y0=r.y,x1=r.x+r.w,y1=r.y+r.h,ty,by;
+  if(cx1<=x0||c->x>=x1||cy1<=y0||c->y>=y1){out[m++]=r;continue;}
+  ty=c->y>y0?c->y:y0;by=cy1<y1?cy1:y1;
+  if(c->y>y0&&m<RG_MAX){out[m].x=x0;out[m].y=y0;out[m].w=x1-x0;out[m].h=c->y-y0;++m;}
+  if(cy1<y1&&m<RG_MAX){out[m].x=x0;out[m].y=cy1;out[m].w=x1-x0;out[m].h=y1-cy1;++m;}
+  if(c->x>x0&&by>ty&&m<RG_MAX){out[m].x=x0;out[m].y=ty;out[m].w=c->x-x0;out[m].h=by-ty;++m;}
+  if(cx1<x1&&by>ty&&m<RG_MAX){out[m].x=cx1;out[m].y=ty;out[m].w=x1-cx1;out[m].h=by-ty;++m;}
+ }
+ return m;
+}
+
 static void dmg_chrome(void){dmg_add(0,0,360,300);}
 static void dmg_tasks_area(void){dmg_add(0,0,640,19);dmg_add(TASKS_DROP_X,19,TASKS_DROP_W,230);}
 static void handle(const gui_message_t *);
@@ -247,14 +267,21 @@ static void render(void){
  else add(GUI_CLIP,0,0,640,400,0,0);
  dmg_valid=0;
  if(dirty>=2){
-  /* Zmienione okno, a po nim wszystkie okna NAD nim w kolejnosci Z: inaczej
-     odswiezenie tresci nizszego okna zamalowuje wyzsze. (XaAES robi to
-     regionem widocznym; u nas to dziala i jest proste.) */
+  /* XaAES: rysujemy zmienione okno tylko w jego WIDOCZNYM regionie, wiec nie
+     zamalowujemy okien wyzej i nie musimy ich przerysowywac. */
   int i=(int)dirty-2;int p=-1;dirty=0;
   if(wm_is_open(&state,i)){
-   content(i);
+   wm_rect wr=wm_bounds(&state,i);
+   rr_t cur[RG_MAX],tmp[RG_MAX];int n=1,m,k2;
+   cur[0].x=wr.x;cur[0].y=wr.y;cur[0].w=wr.w;cur[0].h=wr.h;
    for(k=0;k<state.count;++k)if(state.order[k]==i){p=k;break;}
-   if(p>=0)for(k=p+1;k<state.count;++k){int j=state.order[k];if(state.win[j].open)window(j);}
+   if(p>=0)for(k=p+1;k<state.count&&n>0;++k){
+    int j=state.order[k];
+    if(!state.win[j].open)continue;
+    {wm_rect o=wm_bounds(&state,j);rr_t c;c.x=o.x;c.y=o.y;c.w=o.w;c.h=o.h;
+     m=rg_sub(cur,n,&c,tmp);for(k2=0;k2<m;++k2)cur[k2]=tmp[k2];n=m;}
+   }
+   for(k=0;k<n;++k){add(GUI_CLIP,cur[k].x,cur[k].y,cur[k].w,cur[k].h,0,0);content(i);}
   }
   if(submit(used))fault=18;
   return;}
@@ -392,9 +419,9 @@ int app_main(void){gui_message_t m;unsigned i;int registered=0,captured=0;uint32
  captured=1;
  if(rpc(gfx,13,0,0,0)){fault=13;goto done;}
  if(rpc(gfx,1,0,0,0)!=(int32_t)((640u<<16)|400u)){fault=43;goto done;}
+ wm_open(&state,INTERNAL_PID,"SYSTEM");state.win[slot_of(INTERNAL_PID)].kind=3;
  if(!launch(0,"\\SYSTEM\\APP\\COUNT.APP")){fault=34;goto done;}
  if(!launch(1,"\\SYSTEM\\APP\\NOTE.APP")){fault=35;goto done;}
- wm_open(&state,INTERNAL_PID,"SYSTEM");state.win[slot_of(INTERNAL_PID)].kind=3;
  dirty=1;
  while(!quitting&&!fault){for(i=0;i<8&&receive(&m,0)==0;i++)handle(&m);reap();if(dirty)render();pause_tick();}
 done:
