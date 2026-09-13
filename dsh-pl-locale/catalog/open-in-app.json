@@ -1,0 +1,25 @@
+{
+  "en": {
+    "app.explorer": "File Explorer",
+    "app.filemanager": "Files",
+    "app.finder": "Finder",
+    "app.terminal": "Terminal",
+    "menu.aria": "Open in",
+    "menu.toggle": "Choose an app to open in",
+    "open.error": "Failed to open",
+    "open.title": "Open workspace in {app}",
+    "open.tooltip": "Open locally"
+  },
+  "source": "dsh-client-ui-open-in-app",
+  "zh": {
+    "app.explorer": "文件资源管理器",
+    "app.filemanager": "文件管理器",
+    "app.finder": "访达",
+    "app.terminal": "终端",
+    "menu.aria": "打开方式",
+    "menu.toggle": "选择打开方式",
+    "open.error": "打开失败",
+    "open.title": "在 {app} 中打开工作目录",
+    "open.tooltip": "在本地打开"
+  }
+}

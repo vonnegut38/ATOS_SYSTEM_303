@@ -1,0 +1,20 @@
+{
+  "changed": "Plik się zmienił – wyświetlana jest poprzednia zawartość.",
+  "error.notFound": "Nie znaleziono pliku. Mógł zostać przeniesiony lub usunięty.",
+  "error.notRegularFile": "To nie jest zwykły plik, nie ma nic do wyświetlenia.",
+  "error.notText": "To nie jest plik tekstowy, podgląd jest na razie niedostępny.",
+  "error.tooLarge": "Ta strona przekracza limit {limit} i nie można jej odczytać.",
+  "error.unavailable": "Odczyt nie powiódł się: {message}",
+  "loadMore": "Wczytaj więcej",
+  "loading": "Wczytywanie…",
+  "openWith": "Otwórz za pomocą",
+  "reload": "Odczytaj plik ponownie",
+  "reloadNow": "Wczytaj ponownie",
+  "rendererUnavailable": "Podgląd {name} jest niedostępny.",
+  "resourceUnavailable": "Usługa zasobów plików jest niedostępna.",
+  "retry": "Ponów",
+  "viewer.text": "Zwykły tekst",
+  "wrap.aria": "Zawijanie wierszy",
+  "wrap.disable": "Wyłącz zawijanie wierszy",
+  "wrap.enable": "Włącz zawijanie wierszy"
+}

@@ -1,0 +1,14 @@
+{
+  "confirm.acknowledge": "Rozumiem ryzyko i chcę kontynuować",
+  "confirm.cancel": "Anuluj",
+  "confirm.description": "Pełny dostęp sprawia, że nowe sesje ograniczają liczbę potwierdzeń i wykonują więcej działań bezpośrednio, w tym operacje wrażliwe, zmiany w plikach czy polecenia zewnętrzne. Włączaj go tylko wtedy, gdy ufasz kolejnym zadaniom.",
+  "confirm.enable": "Włącz pełny dostęp",
+  "confirm.title": "Włączyć pełny dostęp?",
+  "description": "Wybierz domyślny tryb uprawnień dla nowych sesji",
+  "loading": "Wczytywanie",
+  "preset.fullAccess": "Pełny dostęp",
+  "preset.readOnly": "Tylko do odczytu",
+  "preset.workspaceWrite": "Zapis w obszarze roboczym",
+  "title": "Uprawnienia",
+  "unavailable": "Niedostępne"
+}

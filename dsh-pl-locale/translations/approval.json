@@ -1,0 +1,7 @@
+{
+  "allowOnce": "Zezwól raz",
+  "detail.aria": "Szczegóły zatwierdzenia",
+  "escalation": "Narzędzie {toolName} prosi o wykonanie z podwyższonymi uprawnieniami",
+  "reject": "Odrzuć",
+  "waiting": "Oczekiwanie na zatwierdzenie"
+}

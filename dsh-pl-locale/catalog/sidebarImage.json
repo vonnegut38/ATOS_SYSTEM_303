@@ -1,0 +1,17 @@
+{
+  "en": {
+    "failed": "This image could not be displayed.",
+    "loading": "Opening image…",
+    "preview": "Image preview: {name}",
+    "title": "Image",
+    "unsupported": "Image preview requires the complete file contents."
+  },
+  "source": "dsh-client-ui-sidebar-documentpreview",
+  "zh": {
+    "failed": "无法显示这张图片。",
+    "loading": "正在打开图片…",
+    "preview": "图片预览：{name}",
+    "title": "图片",
+    "unsupported": "图片预览需要完整文件内容。"
+  }
+}

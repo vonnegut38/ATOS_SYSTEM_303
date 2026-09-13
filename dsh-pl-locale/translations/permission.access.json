@@ -1,0 +1,10 @@
+{
+  "confirm.acknowledge": "Rozumiem ryzyko i chcę kontynuować",
+  "confirm.cancel": "Anuluj",
+  "confirm.description": "Pełny dostęp ogranicza liczbę kroków zatwierdzania i pozwala agentowi wykonywać więcej działań bezpośrednio, w tym operacje wrażliwe, zmiany w plikach i polecenia zewnętrzne. Używaj go tylko wtedy, gdy ufasz bieżącemu zadaniu.",
+  "confirm.enable": "Włącz pełny dostęp",
+  "confirm.title": "Włączyć pełny dostęp?",
+  "preset.fullAccess": "Pełny dostęp",
+  "preset.readOnly": "Tylko do odczytu",
+  "preset.workspaceWrite": "Zapis w obszarze roboczym"
+}

@@ -1,0 +1,16 @@
+{
+  "description.compact": "Kompresuj starszą historię rozmowy",
+  "description.export": "Pobierz dziennik tej sesji jako archiwum ZIP",
+  "description.feedback": "Przekaż opinię o tej sesji",
+  "description.goal": "Ustaw lub wyświetl cel długotrwałego zadania",
+  "description.permission": "Przełącz preset uprawnień (tryb piaskownicy + zasady zatwierdzania)",
+  "description.plan": "Wejdź w tryb planu lub go opuść",
+  "listbox.aria": "/{command} — dopasowania",
+  "notice.attachmentsUnsupported": "/{command} nie przyjmuje załączników; najpierw je usuń",
+  "overlay.aria": "/{command} — opcje",
+  "search.aria": "Filtruj opcje",
+  "search.placeholder": "Szukaj…",
+  "status.applying": "Stosowanie…",
+  "status.empty": "Brak opcji",
+  "status.loading": "Wczytywanie opcji…"
+}

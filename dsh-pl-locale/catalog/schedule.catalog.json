@@ -1,0 +1,43 @@
+{
+  "en": {
+    "frequency.every": "Every {value} {unit}",
+    "frequency.once": "Once",
+    "list.aria": "Active reminders",
+    "relative.future": "in {value} {unit}",
+    "relative.now": "Due now",
+    "relative.overdue": "{value} {unit} overdue",
+    "status.overdue": "Overdue",
+    "status.scheduled": "Scheduled",
+    "trigger.one": "{count} reminder",
+    "trigger.other": "{count} reminders",
+    "unit.day.one": "day",
+    "unit.day.other": "days",
+    "unit.hour.one": "hour",
+    "unit.hour.other": "hours",
+    "unit.minute.one": "minute",
+    "unit.minute.other": "minutes",
+    "unit.second.one": "second",
+    "unit.second.other": "seconds"
+  },
+  "source": "dsh-client-ui-schedule",
+  "zh": {
+    "frequency.every": "{value}{unit}一次",
+    "frequency.once": "单次",
+    "list.aria": "活动提醒",
+    "relative.future": "{value}{unit}后",
+    "relative.now": "现在到期",
+    "relative.overdue": "已逾期 {value}{unit}",
+    "status.overdue": "已逾期",
+    "status.scheduled": "等待中",
+    "trigger.one": "{count} 个提醒",
+    "trigger.other": "{count} 个提醒",
+    "unit.day.one": "天",
+    "unit.day.other": "天",
+    "unit.hour.one": "小时",
+    "unit.hour.other": "小时",
+    "unit.minute.one": "分钟",
+    "unit.minute.other": "分钟",
+    "unit.second.one": "秒",
+    "unit.second.other": "秒"
+  }
+}

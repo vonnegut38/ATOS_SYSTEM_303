@@ -1,0 +1,12 @@
+{
+  "candidate.noCwd": "(brak katalogu roboczego)",
+  "crumb.root": "Obszar roboczy",
+  "section.files": "Pliki i foldery",
+  "section.sessions": "Sesje",
+  "time.days": "{n} d",
+  "time.hours": "{n} godz.",
+  "time.minutes": "{n} min",
+  "time.months": "{n} mies.",
+  "time.now": "teraz",
+  "time.years": "{n} lat"
+}

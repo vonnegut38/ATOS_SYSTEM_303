@@ -1,0 +1,43 @@
+{
+  "en": {
+    "changed": "The file has changed, showing the previous content.",
+    "error.notFound": "File not found. It may have been moved or deleted.",
+    "error.notRegularFile": "Not a regular file, nothing to display.",
+    "error.notText": "Not a text file, preview is unavailable for now.",
+    "error.tooLarge": "This page exceeds the {limit} limit and cannot be read.",
+    "error.unavailable": "Read failed: {message}",
+    "loadMore": "Load more",
+    "loading": "Reading…",
+    "openWith": "Open with",
+    "reload": "Read the file again",
+    "reloadNow": "Reload",
+    "rendererUnavailable": "The {name} preview is unavailable.",
+    "resourceUnavailable": "The file resource service is unavailable.",
+    "retry": "Retry",
+    "viewer.text": "Plain text",
+    "wrap.aria": "Line wrap",
+    "wrap.disable": "Turn off line wrap",
+    "wrap.enable": "Turn on line wrap"
+  },
+  "source": "dsh-client-ui-sidebar-documentpreview",
+  "zh": {
+    "changed": "文件已更新，当前显示为旧内容。",
+    "error.notFound": "文件不存在，可能已被移动或删除。",
+    "error.notRegularFile": "该路径不是普通文件，没有可显示的内容。",
+    "error.notText": "非文本文件，暂时无法预览。",
+    "error.tooLarge": "单页内容超过 {limit} 上限，无法读取。",
+    "error.unavailable": "读取失败：{message}",
+    "loadMore": "加载更多",
+    "loading": "正在读取…",
+    "openWith": "打开方式",
+    "reload": "重新读取文件",
+    "reloadNow": "重新载入",
+    "rendererUnavailable": "预览器 {name} 不可用。",
+    "resourceUnavailable": "文件资源服务不可用。",
+    "retry": "重试",
+    "viewer.text": "纯文本",
+    "wrap.aria": "自动换行",
+    "wrap.disable": "取消换行",
+    "wrap.enable": "自动换行"
+  }
+}

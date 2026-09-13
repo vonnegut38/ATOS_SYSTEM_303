@@ -1,0 +1,27 @@
+{
+  "en": {
+    "candidate.noCwd": "(no cwd)",
+    "crumb.root": "Workspace",
+    "section.files": "Files & folders",
+    "section.sessions": "Sessions",
+    "time.days": "{n}d",
+    "time.hours": "{n}h",
+    "time.minutes": "{n}min",
+    "time.months": "{n}mo",
+    "time.now": "now",
+    "time.years": "{n}y"
+  },
+  "source": "dsh-client-ui-reference",
+  "zh": {
+    "candidate.noCwd": "（无工作目录）",
+    "crumb.root": "工作区",
+    "section.files": "文件与文件夹",
+    "section.sessions": "对话",
+    "time.days": "{n}天",
+    "time.hours": "{n}小时",
+    "time.minutes": "{n}分钟",
+    "time.months": "{n}个月",
+    "time.now": "刚刚",
+    "time.years": "{n}年"
+  }
+}

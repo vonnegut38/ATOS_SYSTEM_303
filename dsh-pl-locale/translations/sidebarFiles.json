@@ -1,0 +1,15 @@
+{
+  "empty": "Pusty katalog",
+  "entry.other": "To nie jest plik ani katalog, więc nie można go otworzyć.",
+  "error.notDirectory": "To nie jest katalog.",
+  "error.notFound": "Ten katalog zniknął. Mógł zostać przeniesiony lub usunięty.",
+  "error.outsideWorkspace": "Ten katalog znajduje się poza obszarem roboczym, więc panel boczny go nie odczyta.",
+  "error.unavailable": "Odczyt nie powiódł się: {message}",
+  "guide.description": "Przeglądaj pliki w obszarze roboczym tej sesji",
+  "guide.title": "Pliki obszaru roboczego",
+  "loading": "Wczytywanie…",
+  "noWorkspace": "Ta sesja nie ma katalogu obszaru roboczego.",
+  "reload": "Wczytaj ponownie",
+  "truncated": "Zbyt wiele pozycji – wyświetlono tylko część z nich.",
+  "type.label": "Pliki"
+}

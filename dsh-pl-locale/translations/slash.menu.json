@@ -1,0 +1,11 @@
+{
+  "command": "Komendy",
+  "crumbs.aria": "Nawigacja po folderach",
+  "drill.aria": "Przeglądaj folder",
+  "drill.hint": "Przeglądaj folder",
+  "drill.key": "Tab",
+  "loading": "Wczytywanie…",
+  "skill": "Umiejętności",
+  "subagent": "Podagenty",
+  "suggestions.aria": "Sugestie wyzwalaczy"
+}

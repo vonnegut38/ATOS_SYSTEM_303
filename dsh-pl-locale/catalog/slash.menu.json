@@ -1,0 +1,25 @@
+{
+  "en": {
+    "command": "Commands",
+    "crumbs.aria": "Folder navigation",
+    "drill.aria": "Browse folder",
+    "drill.hint": "Browse folder",
+    "drill.key": "Tab",
+    "loading": "Loading…",
+    "skill": "Skills",
+    "subagent": "Subagents",
+    "suggestions.aria": "Trigger suggestions"
+  },
+  "source": "dsh-client-ui-input-trigger",
+  "zh": {
+    "command": "指令",
+    "crumbs.aria": "目录导航",
+    "drill.aria": "进入目录",
+    "drill.hint": "进入目录",
+    "drill.key": "Tab",
+    "loading": "正在加载…",
+    "skill": "技能",
+    "subagent": "子智能体",
+    "suggestions.aria": "触发候选建议"
+  }
+}

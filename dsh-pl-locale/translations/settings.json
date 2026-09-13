@@ -1,0 +1,14 @@
+{
+  "close": "Zamknij",
+  "connection.connected": "Połączono",
+  "connection.connecting": "Ponowne łączenie",
+  "connection.error": "Rozłączono",
+  "connection.reconnect": "Rozłączono, połącz ponownie",
+  "connection.restart": "Trwa automatyczne ponowne łączenie, połącz ponownie",
+  "connection.retry": "Połącz ponownie",
+  "general.nav": "Ogólne",
+  "openDocument": "Otwórz plik konfiguracyjny",
+  "openDocument.error": "Nie udało się otworzyć pliku konfiguracyjnego",
+  "title": "Ustawienia",
+  "trigger": "Ustawienia"
+}

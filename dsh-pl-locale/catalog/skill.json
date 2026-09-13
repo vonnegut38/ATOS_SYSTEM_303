@@ -1,0 +1,21 @@
+{
+  "en": {
+    "menu.userOnly": "user-only",
+    "row.failed": "Skill load failed",
+    "row.inspect": "Inspect",
+    "row.instructions": "Instructions",
+    "row.running": "Loading skill",
+    "row.stopped": "Skill load stopped",
+    "row.title": "Skill"
+  },
+  "source": "dsh-client-ui-skill",
+  "zh": {
+    "menu.userOnly": "仅用户",
+    "row.failed": "skill 加载失败",
+    "row.inspect": "查看",
+    "row.instructions": "说明",
+    "row.running": "正在加载 skill",
+    "row.stopped": "skill 加载已中止",
+    "row.title": "Skill"
+  }
+}

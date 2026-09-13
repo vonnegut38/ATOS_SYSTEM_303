@@ -1,0 +1,22 @@
+
+void kgfx_emutos_controls(int32_t x,int32_t y,int32_t w,int32_t h,uint32_t state)
+{
+    cursor_guard_t guard;const char *mode,*size;
+    if(w<220||h<130||w>graphics.width||h>graphics.height||x<0||y<0||
+        x>graphics.width-w||y>graphics.height-h)return;
+    guard=cursor_guard_begin(x,y,w,h);
+    kgfx_fill_rect(x+16,y+38,80,22,1);kgfx_frame_rect(x+16,y+38,80,22,0);
+    kgfx_fill_rect(x+112,y+38,80,22,1);kgfx_frame_rect(x+112,y+38,80,22,0);
+    kgfx_frame_rect(x+((state&4u)?114:18),y+40,76,18,0);
+    kgfx_text(x+32,y+41,(state&1u)?"READY":"START",0,1,1);
+    kgfx_text(x+136,y+41,(state&2u)?"HIDE":"INFO",0,1,1);
+    kgfx_fill_rect(x+16,y+70,208,52,1);
+    if(state&2u){
+        if(graphics.mode==2){mode="SHIFTER MONO";size="640 X 400";}
+        else if(graphics.mode==1){mode="SHIFTER MEDIUM";size="640 X 200";}
+        else{mode="SHIFTER LOW";size="320 X 200";}
+        kgfx_text(x+16,y+72,mode,0,1,1);kgfx_text(x+16,y+88,size,0,1,1);
+        kgfx_text(x+16,y+104,"SURFACE READY",0,1,1);
+    }
+    cursor_guard_end(guard);
+}

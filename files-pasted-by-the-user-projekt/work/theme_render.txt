@@ -1,0 +1,63 @@
+
+/* Fixed EmuTOS resource renderer. The caller supplies only a clipped damage
+ * rectangle or window geometry; no user pointers or scheduler policy enter
+ * this layer. Placement/interaction remains owned by DESKTOP.APP. */
+static void theme_icon(const surface_t *s,int32_t cx,int32_t cy,int32_t cw,int32_t ch,
+                       int32_t ix,int32_t iy,const uint16_t *mask,const uint16_t *data,
+                       const char *label)
+{
+    int32_t x,y,k;uint16_t bit;const uint8_t *glyph;
+    for(y=0;y<32;y++)for(x=0;x<32;x++){
+        int32_t px=ix+x,py=iy+y;
+        if(px<cx||py<cy||px>=cx+cw||py>=cy+ch)continue;
+        bit=(uint16_t)(0x8000u>>(x&15));
+        if(mask[y*2+(x>>4)]&bit)
+            surface_pixel_set(s,(uint16_t)px,(uint16_t)py,(data[y*2+(x>>4)]&bit)?0:1);
+    }
+    for(k=0;label[k];k++){
+        glyph=emutos_system_font[(uint8_t)label[k]];
+        for(y=0;y<16;y++)for(x=0;x<8;x++){
+            int32_t px=ix-8+k*8+x,py=iy+32+y;
+            if(px>=cx&&py>=cy&&px<cx+cw&&py<cy+ch)
+                surface_pixel_set(s,(uint16_t)px,(uint16_t)py,(glyph[y]&(0x80u>>x))?0:1);
+        }
+    }
+}
+
+void kgfx_emutos_background(int32_t x,int32_t y,int32_t w,int32_t h)
+{
+    /* EmuDesk INF_Q defaults: IP_4PATT, black in mono, green in colour.
+       vdi_fill.c DITHER intensity 8. Screen coordinates preserve its phase. */
+    static const uint16_t pattern[4]={0xaaaa,0x5555,0xaaaa,0x5555};
+    surface_t s;cursor_guard_t guard;
+    if(!clip_rect(&x,&y,&w,&h))return;
+    guard=cursor_guard_begin(x,y,w,h);s=active_surface();
+    emutos_vdi_planar_fill(s.words,s.line_words,s.planes,x,y,w,h,
+        s.planes==1?0:2,1,pattern,3);
+    theme_icon(&s,x,y,w,h,24,30,rs_iconmask0,rs_icondata0,"DISK C");
+    theme_icon(&s,x,y,w,h,24,90,rs_iconmask0,rs_icondata0,"DISK D");
+    theme_icon(&s,x,y,w,h,24,150,rs_iconmask3,rs_icondata3,"TRASH");
+    mark_dirty(x,y,w,h);cursor_guard_end(guard);
+}
+
+void kgfx_emutos_window(int32_t x,int32_t y,int32_t w,int32_t h)
+{
+    static const uint16_t title_pattern[4]={0,0x5555,0,0x5555};
+    surface_t s;cursor_guard_t guard;int32_t tx,ty,tw,th;
+    /* This fixed resource has a minimum geometry; callers cannot produce
+       underflowed gadget dimensions. All additions fit signed 32 bits. */
+    if(w<64||h<40||w>graphics.width||h>graphics.height||x<0||y<0||
+       x>graphics.width-w||y>graphics.height-h)return;
+    guard=cursor_guard_begin(x,y,w,h);
+    kgfx_fill_rect(x,y,w,h,1);kgfx_frame_rect(x,y,w,h,0);
+    tx=x+18;ty=y+1;tw=w-19;th=17;s=active_surface();
+    /* AES gemwmlib.c: active W_NAME uses opaque pattern 2, black/white. */
+    emutos_vdi_planar_fill(s.words,s.line_words,s.planes,tx,ty,tw,th,0,1,title_pattern,3);
+    kgfx_line(x,y+18,x+w-1,y+18,0);
+    kgfx_frame_rect(x,y,18,19,0);
+    kgfx_text(x+5,y+1,"\005",0,1,1); /* W_CLOSER */
+    kgfx_text(x+24,y+1," ATARI DESKTOP ",0,1,1);
+    kgfx_frame_rect(x+w-17,y+h-19,17,19,0);
+    kgfx_text(x+w-12,y+h-18,"\006",0,1,1); /* W_SIZER */
+    mark_dirty(x,y,w,h);cursor_guard_end(guard);
+}

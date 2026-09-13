@@ -1,0 +1,11 @@
+{
+  "appearance.dark": "Ciemny",
+  "appearance.light": "Jasny",
+  "appearance.system": "Systemowy",
+  "appearance.title": "Wygląd",
+  "fontSize.decrease": "Zmniejsz rozmiar czcionki",
+  "fontSize.description": "Dotyczy tylko treści rozmowy",
+  "fontSize.increase": "Zwiększ rozmiar czcionki",
+  "fontSize.title": "Rozmiar czcionki",
+  "fontSize.unit": "px"
+}

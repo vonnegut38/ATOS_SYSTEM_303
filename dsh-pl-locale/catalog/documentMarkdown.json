@@ -1,0 +1,15 @@
+{
+  "en": {
+    "code.copied": "Copied",
+    "code.copy": "Copy",
+    "footnotes": "Footnotes",
+    "viewer.label": "Markdown"
+  },
+  "source": "dsh-client-ui-sidebar-documentpreview",
+  "zh": {
+    "code.copied": "已复制",
+    "code.copy": "复制",
+    "footnotes": "脚注",
+    "viewer.label": "Markdown"
+  }
+}

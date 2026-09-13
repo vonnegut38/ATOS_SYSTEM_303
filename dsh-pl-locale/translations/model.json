@@ -1,0 +1,22 @@
+{
+  "action.reload": "Wczytaj ponownie",
+  "blocked.composer": "Ten model jest niedostępny — wybierz model, aby kontynuować",
+  "command.description": "Wybierz model dla tej rozmowy",
+  "effort.providerDefault": "Domyślny",
+  "empty.efforts": "Ten model nie udostępnia poziomów nakładu rozumowania.",
+  "empty.models": "Brak dostępnych modeli.",
+  "error.action": "Operacja na modelu nie powiodła się: {message}",
+  "menu.aria": "Model i nakład rozumowania",
+  "menu.effort": "Nakład rozumowania",
+  "menu.model": "Model",
+  "option.deepseekV4Flash.description": "Szybki, wydajny i oszczędny; odpowiedni do zadań skupionych, rutynowych lub równoległych.",
+  "option.deepseekV4Pro.description": "Mocniejszy w kodowaniu agentowym, wiedzy i trudnym rozumowaniu; odpowiedni do złożonych zadań lub zadań, w których liczy się jakość, ale droższy.",
+  "option.loadError": "Nie udało się wczytać katalogu: {message}",
+  "status.loading": "Odświeżanie listy modeli…",
+  "trigger.aria": "Wybierz model, bieżący: {model}",
+  "trigger.ariaEffort": "Wybierz model, bieżący: {model}, nakład rozumowania: {effort}",
+  "trigger.fallback": "Wybierz model",
+  "trigger.loading": "Wczytywanie modeli…",
+  "trigger.selectAria": "Wybierz model",
+  "warning.groupLoad": "Nie udało się wczytać {name}: {message}"
+}

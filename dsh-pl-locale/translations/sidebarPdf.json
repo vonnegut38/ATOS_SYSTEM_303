@@ -1,0 +1,11 @@
+{
+  "failed": "Nie można wyświetlić pliku PDF: {message}",
+  "loading": "Otwieranie pliku PDF…",
+  "pageImage": "Strona {page} pliku PDF",
+  "password": "Ten plik PDF wymaga hasła; podgląd plików chronionych hasłem nie jest obsługiwany.",
+  "rendering": "Renderowanie strony…",
+  "retry": "Ponów",
+  "title": "PDF",
+  "unsupported": "Podgląd pliku PDF wymaga pełnej zawartości pliku.",
+  "workerFailed": "Proces renderowania pliku PDF nie mógł być kontynuowany. Spróbuj ponownie."
+}

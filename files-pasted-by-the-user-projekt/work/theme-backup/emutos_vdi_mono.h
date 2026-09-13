@@ -1,0 +1,17 @@
+#ifndef ASF_EMUTOS_VDI_MONO_H
+#define ASF_EMUTOS_VDI_MONO_H
+#include <stdint.h>
+
+void emutos_vdi_mono_fill(volatile uint16_t *words,uint16_t line_words,
+                          uint16_t x,uint16_t y,uint16_t width,uint16_t height,
+                          uint8_t color);
+void emutos_vdi_mono_copy_words(volatile uint16_t *words,uint16_t line_words,
+                                uint16_t source_x,uint16_t source_y,
+                                uint16_t width,uint16_t height,
+                                uint16_t destination_x,uint16_t destination_y);
+void emutos_vdi_mono_copy_shifted(volatile uint16_t *words,uint16_t line_words,
+                                  uint16_t source_x,uint16_t source_y,
+                                  uint16_t width,uint16_t height,
+                                  uint16_t destination_x,uint16_t destination_y);
+
+#endif

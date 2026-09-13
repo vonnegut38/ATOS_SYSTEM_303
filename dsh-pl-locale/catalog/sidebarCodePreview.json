@@ -1,0 +1,13 @@
+{
+  "en": {
+    "copied": "Copied",
+    "copy": "Copy",
+    "title": "Code"
+  },
+  "source": "dsh-client-ui-sidebar-documentpreview",
+  "zh": {
+    "copied": "已复制",
+    "copy": "复制",
+    "title": "代码"
+  }
+}

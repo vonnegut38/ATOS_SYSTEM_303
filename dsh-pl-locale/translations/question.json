@@ -1,0 +1,17 @@
+{
+  "action.next": "Dalej",
+  "action.skip": "Pomiń to pytanie",
+  "custom.placeholder": "Wpisz odpowiedź",
+  "error.incomplete": "Najpierw uzupełnij to pytanie.",
+  "error.unanswered": "Wybierz opcję lub wpisz własną odpowiedź.",
+  "nav.cancel": "Odrzuć wszystkie pytania",
+  "nav.maximize": "Rozwiń kartę pytania",
+  "nav.minimize": "Zwiń kartę pytania",
+  "nav.next": "Następne pytanie",
+  "nav.prev": "Poprzednie pytanie",
+  "option.recommended": "Zalecane",
+  "plan.approve": "Zatwierdź",
+  "plan.decline": "Odrzuć",
+  "plan.discuss": "Omów na czacie",
+  "plan.header": "Przegląd planu"
+}

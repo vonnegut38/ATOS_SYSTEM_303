@@ -1,0 +1,23 @@
+EmuTOS-derived graphics components
+==================================
+
+The files identified with SPDX-License-Identifier: GPL-2.0-or-later contain
+code or data adapted from EmuTOS revision
+e0f0c2333d39a487e73d8b17f62b70a95441cd32.
+
+Upstream: https://github.com/emutos/emutos
+License: GNU General Public License version 2 or (at your option) any later
+version. The complete text is available in upstream doc/license.txt.
+
+Copyright 2001-2026 The EmuTOS development team and the individual upstream
+copyright holders named by EmuTOS.
+
+Additional imported resources and paths (same revision):
+- desk/icons.c: original 32x32 hard disk/floppy/folder/trash mask/data.
+- bios/fnt_st_8x16.c: original 256-character font, transposed to glyph-major data.
+- vdi/vdi_line.c: WM_REPLACE swblit_rect_common with 68000 DBRA loop and solid vertical_line.
+- vdi/vdi_fill.c: DITHER patterns 2 and 4.
+- aes/gemwmlib.c: W_CLOSER/W_SIZER character IDs and active W_NAME pattern.
+- desk/deskapp.c: default mono/colour background style.
+- vdi/vdi_col.c: ST RGB palette values; our hardware pen indices retain black=0/white=1.
+Full GPL text: licenses/emutos-GPL-2.0.txt.

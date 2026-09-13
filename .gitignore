@@ -1,0 +1,18 @@
+# Large disk images, archives, media
+*.img
+*.zip
+*.webp
+# Generated build trees and old outputs
+**/build/
+**/outputs/
+# Workspace data (extracted distros, test images) - not source
+atari-030-port/disk/
+# Third-party source trees that carry their own git repo
+atari-030-port/hatari-src/
+files-pasted-by-the-user-projekt/work/emutos-reference/
+# Emulator bundle/binary and vendored python toolchain
+atari-030-port/Hatari.app/
+atari-030-port/hatari-tf536
+atari-030-port/tools/py/
+# macOS
+.DS_Store
