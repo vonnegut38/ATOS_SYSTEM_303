@@ -724,9 +724,15 @@ void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
             int32_t x=c.x,y=c.y,w=c.w,h=c.h;
             if(clip_intersect(&x,&y,&w,&h))kgfx_fill_rect(x,y,w,h,c.color);
             break;}
-        case GUI_FRAME:
-            if(clip_hits(c.x,c.y,c.w,c.h))kgfx_frame_rect(c.x,c.y,c.w,c.h,c.color);
-            break;
+        case GUI_FRAME:{
+            /* Ramka z 4 odcinkow, kazdy ciety do regionu — inaczej czesc
+               ramki zamalowalaby okno wyzej. */
+            int32_t a,b,cw,ch;
+            a=c.x;b=c.y;cw=c.w;ch=1;if(clip_intersect(&a,&b,&cw,&ch))kgfx_fill_rect(a,b,cw,ch,c.color);
+            a=c.x;b=c.y+c.h-1;cw=c.w;ch=1;if(clip_intersect(&a,&b,&cw,&ch))kgfx_fill_rect(a,b,cw,ch,c.color);
+            a=c.x;b=c.y;cw=1;ch=c.h;if(clip_intersect(&a,&b,&cw,&ch))kgfx_fill_rect(a,b,cw,ch,c.color);
+            a=c.x+c.w-1;b=c.y;cw=1;ch=c.h;if(clip_intersect(&a,&b,&cw,&ch))kgfx_fill_rect(a,b,cw,ch,c.color);
+            break;}
         case GUI_TEXT:{
             /* Clipping po znaku: tekst czesciowo poza regionem nie moze
                zamalowac okna wyzej (XaAES rysuje w widocznym regionie). */

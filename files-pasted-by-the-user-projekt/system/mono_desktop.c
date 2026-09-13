@@ -423,7 +423,7 @@ int app_main(void){gui_message_t m;unsigned i;int registered=0,captured=0;uint32
  if(!launch(0,"\\SYSTEM\\APP\\COUNT.APP")){fault=34;goto done;}
  if(!launch(1,"\\SYSTEM\\APP\\NOTE.APP")){fault=35;goto done;}
  dirty=1;
- while(!quitting&&!fault){for(i=0;i<8&&receive(&m,0)==0;i++)handle(&m);reap();if(dirty)render();pause_tick();}
+ while(!quitting&&!fault){for(i=0;i<32&&receive(&m,0)==0;i++)handle(&m);reap();if(dirty)render();pause_tick();}
 done:
  for(i=0;i<WM_MAX;++i)if(state.win[i].open&&state.win[i].kind!=3&&state.win[i].pid)
   reliable(state.win[i].pid,WM_QUIT,0,0,0);
