@@ -66,6 +66,36 @@ Mysz w GUI dziala dopiero, gdy emulator przechwytuje hosta: **`--grab`**
 Sciezka w systemie jest poprawna: GUI service op 6 -> syscall 47 (trwale
 przechwycenie) -> KMOUSE do desktopu -> `mouse()`.
 
+
+### G3c — kursor plynny i wyglad okien (sesja naprawcza)
+
+**Przyczyna skokow kursora** (znaleziona): `kernel_user_gui_keyboard_wake()`
+wołało `kernel_user_yield()` **przed** obsługą myszy — scheduler wpuszczał
+desktop do rysowania, więc wskaznik czekał na cały render i skakał o zebraną
+delte. Naprawa: `kernel_user_tick_now()` (odczyt ticku bez oddawania
+sterowania).
+
+**Regression, którą sam wprowadziłem i naprawiłem**: próba 'pompy' kursora
+zmieniła `kgfx_cursor_move()` tak, że po `kgfx_enter_desktop` (które chowa
+kursor) wskaznik **nigdy** się nie pokazywał. Przywrócone oryginalne
+`kgfx_cursor_move()`.
+
+**Artefakty okien**: przy odświeżeniu treści niższego okna (`dirty>=2`)
+zamalowywane było okno wyżej. Naprawa: po `content(i)` rysowane są też
+wszystkie okna **nad** nim w kolejności Z.
+
+**Wygląd okien**: aktywny pasek tytułu = czarne tło + biały tekst (czytelne w
+mono), nieaktywny = białe tło + czarny tekst. Ramka i sizer bez zmian (styl
+EmuTOS).
+
+**Kursor na ET4000 sprzętowo?** Nie. ET4000 (VGA) nie ma kursora
+sprite'owego — tylko kursor tekstowy, bezużyteczny w trybie graficznym;
+Shifter ST też nie ma. Właściwa droga to programowy XOR 16x16 w stylu EmuTOS
+`vdi/vdi_mouse.c` (tani). Wąskim gardłem był scheduler/render, nie rysowanie.
+
+**Pozostaje (jeśli nadal rwie)**: 'pompa' kursora wołana wewnątrz pętli
+rysowania (teraz bezpieczna, bo `kgfx_cursor_move` jest poprawione).
+
 ## Ważne ustalenie o ścieżce obrazu
 
 - GUI jądra rysuje do **ekranu ST** (`SCREEN_BASE=0x10000` /
