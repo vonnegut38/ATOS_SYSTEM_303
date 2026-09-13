@@ -38,7 +38,8 @@ static void kernel_startup_services(const boot_handoff_t *h,
     static const startup_service_t table[]={
         {"\\SYSTEM\\KERNEL\\INIT.APP","SYSTEM.INIT",250u},
         {"\\SYSTEM\\KERNEL\\GFX.APP","SYSTEM.GFX",250u},
-        {"\\SYSTEM\\KERNEL\\GUI.APP","SYSTEM.GUI",250u}
+        {"\\SYSTEM\\KERNEL\\GUI.APP","SYSTEM.GUI",250u},
+        {"\\SYSTEM\\APP\\MONODESK.APP","SYSTEM.WM",400u}
     };
     uint8_t i;uint32_t pid,start,now;int32_t result;
     h->console_puts("STARTUP SERVICES: ");
