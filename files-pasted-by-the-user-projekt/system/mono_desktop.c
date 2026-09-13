@@ -99,6 +99,7 @@ static void add(unsigned kind,int x,int y,int w,int h,unsigned color,const char 
  c->color=(uint16_t)color;c->background=1;
  if(text)copytext(c->text,text,sizeof(c->text));}
 static void text(int x,int y,const char *s){add(GUI_TEXT,x,y,0,0,0,s);}
+static int submit(unsigned count){return rpc(gfx,18,(uint32_t)(uintptr_t)list,count,0);}
 
 static int slot_of(uint32_t pid){int i;for(i=0;i<WM_MAX;++i)if(state.win[i].open&&state.win[i].pid==pid)return i;return -1;}
 static const char *kind_name(unsigned kind){return kind==2?"NOTATKA":kind==1?"LICZNIK":kind==3?"SYSTEM":"OKNO";}
@@ -253,13 +254,13 @@ static void render(void){
    for(k=0;k<state.count;++k)if(state.order[k]==i){p=k;break;}
    if(p>=0)for(k=p+1;k<state.count;++k){int j=state.order[k];if(state.win[j].open)window(j);}
   }
-  if(rpc(gfx,18,(uint32_t)(uintptr_t)list,used,0))fault=18;
+  if(submit(used))fault=18;
   return;}
  if(state.full>=0){int f=state.full;
   add(GUI_FILL,0,0,640,400,1,0);
   text(8,1,"F10: powrot do okien");
   content(f);dirty=0;
-  if(rpc(gfx,18,(uint32_t)(uintptr_t)list,used,0))fault=18;
+  if(submit(used))fault=18;
   return;}
  add(GUI_BG,0,0,640,400,0,0);
  add(GUI_FILL,0,0,640,MENUBAR_H,1,0);add(GUI_FRAME,0,0,640,MENUBAR_H,0,0);
@@ -280,7 +281,7 @@ static void render(void){
   if(i==state.active)add(GUI_FRAME,6+k*TASKBAR_SLOT_W,379,TASKBAR_SLOT_W-4,19,0,0);
  }
  if(status)text(8,381+0,status);
- dirty=0;if(rpc(gfx,18,(uint32_t)(uintptr_t)list,used,0))fault=18;}
+ dirty=0;if(submit(used))fault=18;}
 
 static void close_window(int i){
  if(!wm_is_open(&state,i))return;
