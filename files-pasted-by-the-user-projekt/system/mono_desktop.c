@@ -33,6 +33,8 @@ static void dmg_add(int32_t x,int32_t y,int32_t w,int32_t h){
   dmg_w=x1-dmg_x;dmg_h=y1-dmg_y;}
 }
 static void mark_window(int i){wm_rect r=wm_bounds(&state,i);dmg_add(r.x,r.y,r.w,r.h);dirty=2+i;}
+static void dmg_chrome(void){dmg_add(0,0,360,300);}
+static void dmg_tasks_area(void){dmg_add(0,0,640,19);dmg_add(TASKS_DROP_X,19,TASKS_DROP_W,230);}
 static void handle(const gui_message_t *);
 static void close_window(int i);
 
@@ -283,10 +285,10 @@ static void key(const gui_message_t *m){unsigned packed=m->v[1],scan=packed&127,
  if((packed>>24)!=1)return;
  if(dialog){dialog=0;dirty=1;return;}
  if(menu_open>=0){
-  if(scan==1){menu_open=-1;dirty=1;return;}
-  if(scan==0x48||scan==0x50){menu_highlight=step_item(menu_open,menu_highlight,scan==0x48?-1:1);dirty=1;return;}
-  if(scan==0x4b||scan==0x4d){menu_open=(menu_open+(scan==0x4d?1:MENU_COUNT-1))%MENU_COUNT;menu_highlight=first_item(menu_open);dirty=1;return;}
-  if(scan==0x1c){if(menu_highlight>=0)execute(menu_open,menu_highlight);menu_open=-1;dirty=1;return;}
+  if(scan==1){menu_open=-1;dmg_chrome();dirty=1;return;}
+  if(scan==0x48||scan==0x50){menu_highlight=step_item(menu_open,menu_highlight,scan==0x48?-1:1);dmg_chrome();dirty=1;return;}
+  if(scan==0x4b||scan==0x4d){menu_open=(menu_open+(scan==0x4d?1:MENU_COUNT-1))%MENU_COUNT;menu_highlight=first_item(menu_open);dmg_chrome();dirty=1;return;}
+  if(scan==0x1c){if(menu_highlight>=0)execute(menu_open,menu_highlight);menu_open=-1;dmg_chrome();dirty=1;return;}
  }
  if(scan==1){quitting=1;return;}
  if(tasks_open&&(scan==0x48||scan==0x50)){
@@ -294,8 +296,8 @@ static void key(const gui_message_t *m){unsigned packed=m->v[1],scan=packed&127,
    for(k=0;k<n;++k)if(taskbar_slot(k)==cur)break;
    k=(k+(scan==0x48?n-1:1))%n;wm_select(&state,taskbar_slot(k));dirty=1;}
   return;}
- if(scan>=0x3b&&scan<=0x3e){menu_open=(int)(scan-0x3b);menu_highlight=first_item(menu_open);tasks_open=0;status=0;dirty=1;return;}
- if(scan==0x3f){tasks_open=!tasks_open;menu_open=-1;dirty=1;return;}
+ if(scan>=0x3b&&scan<=0x3e){menu_open=(int)(scan-0x3b);menu_highlight=first_item(menu_open);tasks_open=0;status=0;dmg_chrome();dirty=1;return;}
+ if(scan==0x3f){tasks_open=!tasks_open;menu_open=-1;dmg_tasks_area();dirty=1;return;}
  if(scan==0x0f&&(mods&8)){wm_cycle(&state);dirty=1;return;}
  if(scan==0x44){if(state.active>=0){state.full=state.full<0?state.active:-1;state.gesture=0;dirty=1;}return;}
  if(scan==0x3e&&(mods&8)){close_window(state.active);return;}
@@ -311,17 +313,18 @@ static void mouse(const gui_message_t *m){int x=m->v[1]>>16,y=m->v[1]&65535,butt
    if(x>=TASKS_X){tasks_open=!tasks_open;menu_open=-1;}
    else{int mi=-1,k;for(k=0;k<MENU_COUNT;++k)if(x>=menu_x[k]&&x<menu_x[k]+menu_w[k])mi=k;
     if(mi>=0){if(menu_open==mi)menu_open=-1;else{menu_open=mi;menu_highlight=first_item(mi);}tasks_open=0;}}
-   dirty=1;
+   dmg_chrome();dirty=1;
   } else {
    int mi=-1,k;for(k=0;k<MENU_COUNT;++k)if(x>=menu_x[k]&&x<menu_x[k]+menu_w[k])mi=k;
-   if(mi>=0&&menu_open>=0&&mi!=menu_open){menu_open=mi;menu_highlight=first_item(mi);dirty=1;}
+   if(mi>=0&&menu_open>=0&&mi!=menu_open){menu_open=mi;menu_highlight=first_item(mi);dmg_chrome();dirty=1;}
   }
   state.buttons=down;return;
  }
  if(menu_open>=0){
   int it=item_at(menu_open,x,y);
   if(it>=0){if(press){execute(menu_open,it);menu_open=-1;}else if(it!=menu_highlight){menu_highlight=it;dirty=1;}}
-  else if(press){menu_open=-1;dirty=1;}
+  else if(press){menu_open=-1;}
+  dmg_chrome();dirty=1;
   state.buttons=down;return;
  }
  if(tasks_open){
