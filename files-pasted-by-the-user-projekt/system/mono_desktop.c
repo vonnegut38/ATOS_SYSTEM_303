@@ -33,6 +33,7 @@ static void dmg_add(int32_t x,int32_t y,int32_t w,int32_t h){
   dmg_w=x1-dmg_x;dmg_h=y1-dmg_y;}
 }
 static void mark_window(int i){wm_rect r=wm_bounds(&state,i);dmg_add(r.x,r.y,r.w,r.h);dirty=2+i;}
+
 static void dmg_chrome(void){dmg_add(0,0,360,300);}
 static void dmg_tasks_area(void){dmg_add(0,0,640,19);dmg_add(TASKS_DROP_X,19,TASKS_DROP_W,230);}
 static void handle(const gui_message_t *);
@@ -246,8 +247,9 @@ static void render(void){
  else add(GUI_CLIP,0,0,640,400,0,0);
  dmg_valid=0;
  if(dirty>=2){
-  /* Zmienione okno plus wszystkie okna NAD nim w kolejnosci Z: inaczej
-     odswiezenie tresci nizszego okna zamalowuje wyzsze (artefakty). */
+  /* Zmienione okno, a po nim wszystkie okna NAD nim w kolejnosci Z: inaczej
+     odswiezenie tresci nizszego okna zamalowuje wyzsze. (XaAES robi to
+     regionem widocznym; u nas to dziala i jest proste.) */
   int i=(int)dirty-2;int p=-1;dirty=0;
   if(wm_is_open(&state,i)){
    content(i);

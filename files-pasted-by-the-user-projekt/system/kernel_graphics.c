@@ -728,9 +728,16 @@ void kgfx_draw_batch(const gui_draw_t *list,uint32_t count)
             if(clip_hits(c.x,c.y,c.w,c.h))kgfx_frame_rect(c.x,c.y,c.w,c.h,c.color);
             break;
         case GUI_TEXT:{
-            int32_t tw=8;const char *p=c.text;
-            while(*p){if(*p!='\n')tw+=8;++p;}
-            if(clip_hits(c.x,c.y,tw,16))kgfx_text(c.x,c.y,c.text,c.color,c.background,1);
+            /* Clipping po znaku: tekst czesciowo poza regionem nie moze
+               zamalowac okna wyzej (XaAES rysuje w widocznym regionie). */
+            const char *p=c.text;int32_t cx=c.x,cy=c.y;char one[2];
+            one[1]='\0';
+            while(*p){
+                if(*p=='\n'){cx=c.x;cy+=16;++p;continue;}
+                one[0]=*p;
+                if(clip_hits(cx,cy,8,16))kgfx_text(cx,cy,one,c.color,c.background,1);
+                cx+=8;++p;
+            }
             break;}
         case GUI_WINDOW:{
             uint16_t limit;
