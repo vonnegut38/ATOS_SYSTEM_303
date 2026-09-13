@@ -289,7 +289,12 @@ int32_t kernel_user_yield(void)
 {
     const kernel_timer_service_t *timer=(const kernel_timer_service_t *)kernel_find_service(KERNEL_SERVICE_TIMER,KERNEL_TIMER_VERSION);
     const kernel_proc_service_t *proc=(const kernel_proc_service_t *)kernel_find_service(KERNEL_SERVICE_PROC,KERNEL_PROC_VERSION);
+    extern void kernel_user_gui_cursor_pump(void);
     (void)kernel_dispatch_queued_user();
+    /* Kursor aktualizujemy przy KAZDYM oddaniu sterowania: inaczej proces
+       spiac w kernel_user_sleep (pause_tick) blokuje petle glowna i wskaznik
+       rusza sie tylko wtedy, gdy okno sie odswieza. */
+    kernel_user_gui_cursor_pump();
     if(!timer||!proc||!timer->poll||!timer->ticks||!timer->switch_pending||
        !timer->acknowledge_switch||!proc->timer_tick||!proc->cooperate)return -1;
     timer->poll();

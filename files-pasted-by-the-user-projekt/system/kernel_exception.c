@@ -603,6 +603,31 @@ int kernel_user_terminal_active(void){return terminal_owner_pid!=0u;}
 
 int kernel_user_gui_keyboard_active(void){return gui_keyboard_pid!=0u;}
 
+/* Pompa kursora: czyta JEDEN pakiet myszy, przesuwa wskaznik i zapamietuje
+ * zdarzenie dla petli komunikatow. Wolana z kernel_user_yield(), czyli za
+ * kazdym razem gdy proces oddaje sterowanie — dlatego kursor nie czeka na
+ * render ani na faze ksiezyca. (XaAES: k_mouse.c czyta pakiety z kolejki.) */
+static uint32_t pump_buttons;
+static int32_t pump_dx,pump_dy;
+static uint8_t pump_ready;
+
+void kernel_user_gui_cursor_pump(void)
+{
+    uint32_t buttons;int32_t delta_x,delta_y;const kgfx_info_t *gfx;
+    if(!gui_keyboard_persistent||!gui_keyboard_pid||gui_keyboard_ready_tick)return;
+    if(!kernel_user_mouse_event(&buttons,&delta_x,&delta_y))return;
+    gfx=kgfx_get_info();
+    gui_mouse_x+=delta_x;gui_mouse_y+=delta_y;
+    if(gui_mouse_x<0)gui_mouse_x=0;
+    else if((uint32_t)gui_mouse_x>=gfx->width)gui_mouse_x=(int32_t)(gfx->width-1u);
+    if(gui_mouse_y<0)gui_mouse_y=0;
+    else if((uint32_t)gui_mouse_y>=gfx->height)gui_mouse_y=(int32_t)(gfx->height-1u);
+    kgfx_cursor_move(gui_mouse_x,gui_mouse_y);
+    pump_buttons=buttons;
+    pump_dx+=delta_x;pump_dy+=delta_y;
+    pump_ready=1;
+}
+
 int kernel_user_gui_keyboard_wake(void)
 {
     uint8_t i;int32_t now,delta_x,delta_y;uint32_t type,scan,modifiers,character,buttons;
@@ -629,14 +654,10 @@ int kernel_user_gui_keyboard_wake(void)
         kernel_user_mouse_flush();
         gui_keyboard_ready_tick=0;return 0;
     }
-    if(gui_keyboard_persistent&&kernel_user_mouse_event(&buttons,&delta_x,&delta_y)){
-        const kgfx_info_t *gfx=kgfx_get_info();
-        gui_mouse_x+=delta_x;gui_mouse_y+=delta_y;
-        if(gui_mouse_x<0)gui_mouse_x=0;
-        else if((uint32_t)gui_mouse_x>=gfx->width)gui_mouse_x=(int32_t)(gfx->width-1u);
-        if(gui_mouse_y<0)gui_mouse_y=0;
-        else if((uint32_t)gui_mouse_y>=gfx->height)gui_mouse_y=(int32_t)(gfx->height-1u);
-        kgfx_cursor_move(gui_mouse_x,gui_mouse_y);
+    kernel_user_gui_cursor_pump();
+    if(pump_ready){
+        buttons=pump_buttons;delta_x=pump_dx;delta_y=pump_dy;
+        pump_ready=0;pump_dx=0;pump_dy=0;
         if(target->state==USER_PROCESS_MESSAGE&&target->wait_message_pointer){
             message=target->wait_message_pointer;target->wait_message_pointer=0;
             target->saved_registers[0]=0;target->state=USER_PROCESS_READY;

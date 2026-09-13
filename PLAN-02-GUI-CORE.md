@@ -116,6 +116,27 @@ Wdrożone u nas:
   `REDRAW_TIMEOUT`: wiele drobnych zmian trafia w jedno odświeżenie).
 - clipping tekstu po znaku (z poprzedniego kroku).
 
+
+### G5 — kursor: naprawa zagłodzenia pętli głównej — ZROBIONE
+
+Objaw (od użytkownika): kursor rusza się **tylko** przy odświeżaniu okien.
+
+Przyczyna: desktop śpi przez `pause_tick()` → `kernel_user_sleep()` → pętla
+`kernel_user_yield()`. Pętla główna jądra (a więc i wywołanie obsługi myszy
+`kernel_user_gui_keyboard_wake()`) **nie dostawała sterowania** między
+klatkami — kursor aktualizował się tylko wtedy, gdy desktop akurat rysował.
+
+Naprawa (wzorzec z XaAES: pakiety myszy czytane z kolejki):
+- `kernel_user_gui_cursor_pump()` — czyta **jeden** pakiet myszy, przesuwa
+  wskaźnik i zapamiętuje zdarzenie dla pętli komunikatów,
+- wołana z **`kernel_user_yield()`**, czyli przy każdym oddaniu sterowania
+  przez dowolny proces (a to dzieje się często), zamiast czekać na pętlę główną,
+- `kernel_user_gui_keyboard_wake()` najpierw pompuje, potem doręcza komunikat.
+
+Uwaga metodyczna: lokalnie **nie mogłem tego zweryfikować** — macOS blokuje
+`CGEventPost` bez uprawnień Accessibility, więc syntetyczne ruchy/kliknięcia
+myszy nie docierają do Hatari. Wnioski opieram na obserwacji użytkownika.
+
 ## Ważne ustalenie o ścieżce obrazu
 
 - GUI jądra rysuje do **ekranu ST** (`SCREEN_BASE=0x10000` /
