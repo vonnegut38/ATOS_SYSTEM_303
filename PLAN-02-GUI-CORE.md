@@ -96,6 +96,26 @@ Shifter ST też nie ma. Właściwa droga to programowy XOR 16x16 w stylu EmuTOS
 **Pozostaje (jeśli nadal rwie)**: 'pompa' kursora wołana wewnątrz pętli
 rysowania (teraz bezpieczna, bo `kgfx_cursor_move` jest poprawione).
 
+
+## G4 — rysowanie jak XaAES (źródła FreeMiNT) — ZROBIONE
+
+Zbadane źródła: `xaaes/src.km/rectlist.c` (`build_rect_list`), `k_mouse.c`,
+`c_mouse.c`. Sedno XaAES: **lista prostokątów = widoczny region okna**
+(obszar minus okna leżące wyżej) + rysowanie tylko zniszczeń + łączenie
+odświeżeń w czasie (`REDRAW_TIMEOUT`); kursor rysowany przez VDI
+`v_show_c/v_hide_c` z save-under, niezależnie od okien.
+
+Wdrożone u nas:
+- **G4-1**: `rg_sub()` w desktopie — widoczny region okna (obszar minus okna
+  wyżej w kolejności Z). Zmienione okno rysowane tylko w odsłoniętych
+  prostokątach; okien wyżej **nie trzeba przerysowywać**.
+- naturalna kolejność Z: okno SYSTEM otwierane pierwsze (na spodzie).
+- **G4-2**: ramka rysowana jako 4 odcinki, każdy cięty do regionu (wcześniej
+  ramka wchodziła w obszar okna wyżej).
+- **G4-3**: batching — do 32 komunikatów na klatkę (odpowiednik
+  `REDRAW_TIMEOUT`: wiele drobnych zmian trafia w jedno odświeżenie).
+- clipping tekstu po znaku (z poprzedniego kroku).
+
 ## Ważne ustalenie o ścieżce obrazu
 
 - GUI jądra rysuje do **ekranu ST** (`SCREEN_BASE=0x10000` /
