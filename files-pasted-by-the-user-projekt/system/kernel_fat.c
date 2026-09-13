@@ -119,44 +119,77 @@ enum fat_file_state kfat_load_system_file(const char name[11],void *destination,
     return FAT_FILE_FOUND;
 }
 
-static int path_component(const char **path,char name[11])
+/* Returns the 8.3 form in name[11] and the raw (uppercased) component in raw
+ * so long file names can be matched against LFN entries as well. */
+static int path_component(const char **path,char name[11],char *raw,uint8_t rawcap)
 {
-    uint8_t base=0,ext=0,i;const char *p=*path;int in_ext=0;
+    uint8_t base=0,ext=0,i,rn=0;const char *p=*path;int in_ext=0;
     while(*p=='\\'||*p=='/')++p;
-    if(!*p){*path=p;return 0;}
+    if(!*p){*path=p;if(raw)raw[0]='\0';return 0;}
     for(i=0;i<11u;++i)name[i]=' ';
     while(*p&&*p!='\\'&&*p!='/'){
         char c=*p++;if(c>='a'&&c<='z')c=(char)(c-'a'+'A');
-        if(c=='.'){if(in_ext)return -1;in_ext=1;continue;}
+        if(c=='.'){if(in_ext)return -1;in_ext=1;if(raw&&rn+1u<rawcap)raw[rn++]='.';continue;}
         if(c<=' '||c=='*'||c=='?'||c==':'||c=='"'||c=='<'||c=='>'||c=='|')return -1;
-        if(!in_ext){if(base>=8u)return -1;name[base++]=c;}
-        else {if(ext>=3u)return -1;name[8u+ext++]=c;}
+        if(raw&&rn+1u<rawcap)raw[rn++]=c;
+        if(!in_ext){if(base<8u)name[base++]=c;}
+        else {if(ext<3u)name[8u+ext++]=c;}
     }
+    if(raw)raw[rn]='\0';
     if(!base)return -1;
     while(*p=='\\'||*p=='/')++p;
     *path=p;
     return 1;
 }
 
-static int scan_any_sector(uint32_t lba,const char name[11],uint32_t *cluster,
+/* Rebuild the long name stored in the LFN slots that precede entry idx. */
+static int lfn_matches(const uint8_t *sector,int idx,const char *want)
+{
+    static const uint8_t offs[13]={1,3,5,7,9,14,16,18,20,22,24,28,30};
+    char buf[256];uint8_t have=0;int j;const char *a,*b;
+    for(j=0;j<256;++j)buf[j]=0;
+    for(j=idx-1;j>=0;--j){
+        const uint8_t *e=sector+(uint16_t)j*32u;
+        uint16_t base,k;uint8_t seq;
+        if((e[11]&0x3Fu)!=0x0Fu)break;
+        seq=(uint8_t)(e[0]&0x1Fu);if(!seq)break;
+        base=(uint16_t)((uint16_t)(seq-1u)*13u);
+        for(k=0u;k<13u;++k){
+            uint16_t c=(uint16_t)(e[offs[k]]|((uint16_t)e[offs[k]+1u]<<8));
+            if((uint16_t)(base+k)>=255u)continue;
+            buf[base+k]=(c==0u||c==0xFFFFu)?'\0':(c<0x80u?(char)c:'?');
+        }
+        have=1;
+    }
+    if(!have)return 0;
+    a=buf;b=want;
+    while(*a&&*b){char ca=*a,cb=*b;
+        if(ca>='a'&&ca<='z')ca=(char)(ca-32);
+        if(cb>='a'&&cb<='z')cb=(char)(cb-32);
+        if(ca!=cb)return 0;
+        ++a;++b;}
+    return *a=='\0'&&*b=='\0';
+}
+
+static int scan_any_sector(uint32_t lba,const char name[11],const char *raw,uint32_t *cluster,
                            uint32_t *size,uint8_t *attributes)
 {
     uint8_t i;if(!kblock_read(lba,1u,sector_buffer))return -1;
     for(i=0;i<16u;++i){const uint8_t *e=sector_buffer+(uint16_t)i*32u;
         if(e[0]==0)return 0;
         if(e[0]==0xe5u||(e[11]&0x0fu)==0x0fu||(e[11]&0x08u))continue;
-        if(same_name(e,name)){*cluster=(fat32?(((uint32_t)le16(e+20)<<16)|le16(e+26)):le16(e+26));*size=le32(e+28);*attributes=e[11];return 1;}
+        if(same_name(e,name)||(raw&&lfn_matches(sector_buffer,i,raw))){*cluster=(fat32?(((uint32_t)le16(e+20)<<16)|le16(e+26)):le16(e+26));*size=le32(e+28);*attributes=e[11];return 1;}
     }
     return 2;
 }
 
-static enum fat_file_state find_in_directory(uint32_t directory,const char name[11],
+static enum fat_file_state find_in_directory(uint32_t directory,const char name[11],const char *raw,
                                               uint32_t *cluster,uint32_t *size,uint8_t *attributes)
 {
     uint32_t i;uint32_t current=directory,next,s;int result;
-    if(!directory){for(i=0;i<root_physical_sectors;++i){result=scan_any_sector(root_start+i,name,cluster,size,attributes);if(result<0)return FAT_FILE_IO_FAILED;if(result==0)return FAT_FILE_NOT_FOUND;if(result==1)return FAT_FILE_FOUND;}return FAT_FILE_NOT_FOUND;}
+    if(!directory){for(i=0;i<root_physical_sectors;++i){result=scan_any_sector(root_start+i,name,raw,cluster,size,attributes);if(result<0)return FAT_FILE_IO_FAILED;if(result==0)return FAT_FILE_NOT_FOUND;if(result==1)return FAT_FILE_FOUND;}return FAT_FILE_NOT_FOUND;}
     for(i=0;i<256u;++i){if(current<2u||(uint32_t)current>cluster_count+1u)return FAT_FILE_CORRUPT;
-        for(s=0;s<cluster_physical_sectors;++s){result=scan_any_sector(data_start+(uint32_t)(current-2u)*cluster_physical_sectors+s,name,cluster,size,attributes);if(result<0)return FAT_FILE_IO_FAILED;if(result==0)return FAT_FILE_NOT_FOUND;if(result==1)return FAT_FILE_FOUND;}
+        for(s=0;s<cluster_physical_sectors;++s){result=scan_any_sector(data_start+(uint32_t)(current-2u)*cluster_physical_sectors+s,name,raw,cluster,size,attributes);if(result<0)return FAT_FILE_IO_FAILED;if(result==0)return FAT_FILE_NOT_FOUND;if(result==1)return FAT_FILE_FOUND;}
         if(!read_fat_entry(current,&next))return FAT_FILE_IO_FAILED;
         if(next>=eoc_min())return FAT_FILE_NOT_FOUND;
         if(next<2u||next==cluster_bad())return FAT_FILE_CORRUPT;
@@ -168,10 +201,10 @@ static enum fat_file_state find_in_directory(uint32_t directory,const char name[
 static enum fat_file_state resolve_path(const char *path,uint32_t *cluster,
                                         uint32_t *size,uint8_t *attributes)
 {
-    char name[11];uint32_t directory=0,found=0;uint32_t found_size=0;uint8_t attr=0,depth=0;int part;
+    char name[11],raw[64];uint32_t directory=0,found=0;uint32_t found_size=0;uint8_t attr=0,depth=0;int part;
     enum fat_file_state state;if(!logical_sector_size||!path)return FAT_FILE_CORRUPT;
-    while((part=path_component(&path,name))>0){if(++depth>8u)return FAT_FILE_CORRUPT;
-        state=find_in_directory(directory,name,&found,&found_size,&attr);if(state!=FAT_FILE_FOUND)return state;
+    while((part=path_component(&path,name,raw,sizeof(raw)))>0){if(++depth>8u)return FAT_FILE_CORRUPT;
+        state=find_in_directory(directory,name,raw,&found,&found_size,&attr);if(state!=FAT_FILE_FOUND)return state;
         if(*path){if(!(attr&0x10u))return FAT_FILE_NOT_FOUND;directory=found;}
     }
     if(part<0)return FAT_FILE_CORRUPT;
@@ -339,21 +372,21 @@ static int scan_parent(uint32_t parent,const char name[11],fat_entry_loc_t *loc,
 }
 static int split_path(const char *path,uint32_t *parent,char name[11])
 {
-    char cur[11];
+    char cur[11],curraw[64];
     uint32_t dir=0u,found=0u;uint32_t size=0u;uint8_t attr=0u;
-    int p=path_component(&path,cur);
+    int p=path_component(&path,cur,curraw,sizeof(curraw));
     if(p<=0)return 0;
     while(p>0){
-        char next[11];
-        int q=path_component(&path,next);
+        char next[11],nextraw[64];
+        int q=path_component(&path,next,nextraw,sizeof(nextraw));
         if(q<=0){
             int i;*parent=dir;for(i=0;i<11;i++)name[i]=cur[i];
             return 1;
         }
-        {enum fat_file_state st=find_in_directory(dir,cur,&found,&size,&attr);
+        {enum fat_file_state st=find_in_directory(dir,cur,curraw,&found,&size,&attr);
          if(st!=FAT_FILE_FOUND||!(attr&0x10u))return 0;
          dir=found;}
-        {int i;for(i=0;i<11;i++)cur[i]=next[i];}
+        {int i;for(i=0;i<11;i++)cur[i]=next[i];for(i=0;i<64;i++)curraw[i]=nextraw[i];}
         p=q;
     }
     return 0;

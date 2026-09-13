@@ -150,35 +150,74 @@ def main():
         wr(slot, entry)
         print("katalog", dirname, "-> klaster", c)
         return c
-    def write_file(dc, name11, payload):
-        slot = None
+    def lfn_checksum(short11):
+        s = 0
+        for c in short11:
+            s = (((s & 1) << 7) + (s >> 1) + c) & 0xFF
+        return s
+
+    def lfn_entries(long_name, short11):
+        offs = [1,3,5,7,9,14,16,18,20,22,24,28,30]
+        chk = lfn_checksum(short11)
+        codes = [ord(c) for c in long_name]
+        n = (len(codes) + 12) // 13
+        out = []
+        for i in range(n):
+            e = bytearray(32)
+            e[0] = (i + 1) | (0x40 if i == n - 1 else 0)
+            e[11] = 0x0F
+            e[13] = chk
+            chunk = codes[i*13:(i+1)*13]
+            for k in range(13):
+                v = chunk[k] if k < len(chunk) else (0 if k == len(chunk) else 0xFFFF)
+                struct.pack_into("<H", e, offs[k], v)
+            out.append(bytes(e))
+        out.reverse()
+        return out
+
+    def make_short_name(up_name):
+        stem, _, ext = up_name.partition(".")
+        clean = lambda s: "".join(c for c in s if c.isalnum() or c in "_-")
+        stem = (clean(stem)[:6] or "FILE") + "~1"
+        return ((stem.ljust(8)[:8]) + (clean(ext)[:3].ljust(3))).encode("ascii")
+
+    def write_file(dc, short11, long_name, payload):
+        lfn = lfn_entries(long_name, short11) if long_name else []
+        need = len(lfn) + 1
         for o, e in dir_slots(dc):
-            if e[:11] == name11: slot = o; break
-            if slot is None and e[0] in (0, 0xE5): slot = o
-        if slot is None: raise SystemExit("katalog pelny")
-        old = rd(slot, 32)
-        if old[0] not in (0, 0xE5) and old[:11] == name11:
-            free_chain(ent_cluster(old))
+            if e[:11] == short11 and e[0] not in (0, 0xE5):
+                free_chain(ent_cluster(e))
+                d = bytearray(e); d[0] = 0xE5; wr(o, d)
+        slots = []
+        for o, e in dir_slots(dc):
+            if e[0] in (0, 0xE5):
+                slots.append(o)
+                if len(slots) == need: break
+        if len(slots) < need: raise SystemExit("katalog pelny")
+        for i, ent in enumerate(lfn):
+            wr(slots[i], ent)
         needed = (len(payload) + cluster_bytes - 1) // cluster_bytes
         chain = [alloc() for _ in range(needed)]
         for i, c in enumerate(chain):
             fat_set(c, chain[i + 1] if i + 1 < len(chain) else eoc)
             chunk = payload[i * cluster_bytes:(i + 1) * cluster_bytes]
             wr(coff(c), chunk + b"\0" * (cluster_bytes - len(chunk)))
-        e = bytearray(32); e[:11] = name11; e[11] = 0x20
+        e = bytearray(32); e[:11] = short11; e[11] = 0x20
         set_ent_cluster(e, chain[0])
         struct.pack_into("<I", e, 28, len(payload))
-        wr(slot, e)
-        print("plik", name11.decode(), len(payload), "B, klaster", chain[0])
+        wr(slots[-1], e)
+        print("plik", long_name or short11.decode(), "->", short11.decode(), len(payload), "B")
     dc = 0
     for comp in comps:
         dc = create_dir(dc, comp)
     for src in files:
         payload = src.read_bytes()
-        stem, _, ext = src.name.upper().partition(".")
-        if len(stem) > 8 or len(ext) > 3:
-            raise SystemExit(f"{src.name}: nazwa musi byc 8.3")
-        write_file(dc, (stem.ljust(8) + ext.ljust(3))[:11].encode("ascii"), payload)
+        up = src.name.upper()
+        stem, _, ext = up.partition(".")
+        if stem and len(stem) <= 8 and len(ext) <= 3 and src.name == up:
+            write_file(dc, (stem.ljust(8) + ext.ljust(3))[:11].encode("ascii"), None, payload)
+        else:
+            write_file(dc, make_short_name(up), src.name, payload)
     disk.flush(); disk.close()
     print("FS:", "FAT32" if fat32 else "FAT16")
     print("gotowe")
