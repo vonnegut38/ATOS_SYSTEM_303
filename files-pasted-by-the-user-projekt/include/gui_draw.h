@@ -1,7 +1,7 @@
 #ifndef GUI_DRAW_H
 #define GUI_DRAW_H
 #include <stdint.h>
-#define GUI_DRAW_MAX 32u
+#define GUI_DRAW_MAX 96u
 /* Inline text: the privileged renderer never follows nested user pointers. */
 typedef struct {
     uint16_t kind;
