@@ -303,7 +303,47 @@ Pozostaje (B9b): LFN (długie nazwy) w FAT32 — na razie tylko 8.3.
   osobnym repo `atari-030-port/hatari-src` i trzeba je zacommitować tam
   osobno — inaczej znikną przy `git clean` w tamtym drzewie.
 
-### B9b — LFN — ODŁOŻONE z uzasadnieniem
+### 15. B9b — LFN — CZĘŚCIOWO (weryfikacja e2e NIEUDANA)
+
+- **tools/install_path_ahdi.py**: tworzy wpisy LFN (porcje po 13 znaków,
+  checksum, krótka nazwa ~1). Sprawdzone: obraz zawiera poprawne wpisy
+  (seq 0x42/0x01, offsety i checksum zgadzają się).
+- **system/kernel_fat.c**: lfn_matches() składa długą nazwę z wpisów LFN;
+  path_component/resolve_path przepuszczają surowy komponent obok nazwy 8.3.
+- **NIEUDANE**: `type longfilename.txt` w shellu daje PATH NOT FOUND.
+  Debug w jądrze pokazał, że lfn_matches składa poprawne
+  "LongFileName.TXT" i want="LONGFILENAME.TXT", ale porównanie nie kończy
+  się dopasowaniem. Do dokończenia w osobnej sesji.
+- 8.3 działa bez zmian (`type hello.txt` wypisuje zawartość), więc zmiana
+  jest bezpieczna, ale funkcja LFN nie jest gotowa.
+
+### 15a. B9b — LFN: warstwa FAT jądra DZIAŁA (dowód z sondy startowej)
+
+Po dodaniu tymczasowej sondy w kernel_main (usuniętej po teście) okazało się:
+
+    LFN MIX: FOUND     (\LongFileName.TXT)
+    LFN LOW: FOUND     (\longfilename.txt)
+    LFN REL: FOUND     (LongFileName.TXT)
+
+Host test tej samej funkcji na prawdziwym sektorze z obrazu też daje 1:
+`lfn_matches(sector,3,"LONGFILENAME.TXT")==1`.
+
+Czyli:
+- tools/install_path_ahdi.py — wpisy LFN poprawne,
+- system/kernel_fat.c — lfn_matches + resolve_path radzą sobie z długimi nazwami.
+
+**Pozostaje**: shell `type longfilename.txt` daje PATH NOT FOUND, mimo że ta sama
+ścieżka działa w jądrze. VFS offset 16 -> vfs_stat_path -> API stat_path ->
+kfat_stat_path wygląda poprawnie, a `type hello.txt` (8.3) działa. Problem jest
+więc w warstwie shell/VFS/usługa, nie w FAT. Do dokończenia osobno.
+
+Praktyczny wniosek: aplikacje używające kfat_stat_path/load_path mają LFN już
+teraz; zostaje integracja z shellem.
+
+Wniosek: LFN to więcej pracy niż wyglądało (jądro + shell/VFS + debug),
+i wymaga spokojnej sesji. Reszta systemu działa i jest zacommitowana.
+
+### B9b — LFN — notatka historyczna
 
 Struktura wpisu katalogu dla natywnego shella (`user_dir_entry_t`, name[13])
 jest częścią ABI czytanego przez SHELL.SYS (asembler). Rozszerzenie na
