@@ -290,6 +290,26 @@ sprawdzić most Hatari albo dodać sterownik.
 
 Pozostaje (B9b): LFN (długie nazwy) w FAT32 — na razie tylko 8.3.
 
+### 14. M0 (reszta) — wersjonowanie repo — ZROBIONE
+
+- **git init** w korzeniu projektu. `.gitignore` wyklucza: obrazy dysków
+  (*.img), archiwa (*.zip), media, `**/build/`, `**/outputs/`,
+  `atari-030-port/disk/` (dane), `atari-030-port/Hatari.app/`, binarkę
+  `hatari-tf536`, vendored `tools/py/` oraz drzewa z własnym `.git`
+  (`hatari-src`, `work/emutos-reference`).
+- **Pierwszy commit**: 406 plików, ~19 MB `.git` (bez obrazów i zależności).
+  Hash 7ca126e.
+- Uwaga: modyfikacje forka Hatari (vofa.c, tf536, graphics-card) siedzą w
+  osobnym repo `atari-030-port/hatari-src` i trzeba je zacommitować tam
+  osobno — inaczej znikną przy `git clean` w tamtym drzewie.
+
+### B9b — LFN — ODŁOŻONE z uzasadnieniem
+
+Struktura wpisu katalogu dla natywnego shella (`user_dir_entry_t`, name[13])
+jest częścią ABI czytanego przez SHELL.SYS (asembler). Rozszerzenie na
+name[64] wymaga skoordynowanej zmiany jądra i shella, więc LFN robimy jako
+osobny, świadomy krok, a nie przy okazji.
+
 Podsumowanie graficznego BIOS-u: pasek tytułu, ramka pól, licznik
 "REDRAW: n RECT p PX" na każdym ekranie; interaktywne ekrany (menu, F1, F4,
 F5) odświeżają wyłącznie zmienione wiersze, pełny rysunek tylko raz przy
