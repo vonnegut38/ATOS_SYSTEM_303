@@ -339,6 +339,29 @@ więc w warstwie shell/VFS/usługa, nie w FAT. Do dokończenia osobno.
 
 Praktyczny wniosek: aplikacje używające kfat_stat_path/load_path mają LFN już
 teraz; zostaje integracja z shellem.
+### 15b. B9b — gdzie dokładnie stoi LFN (stan na koniec sesji)
+
+Sprawdzone i poprawne:
+- `tools/install_path_ahdi.py` — wpisy LFN w obrazie (zrzut bajtów zgodny).
+- `lfn_matches()` — test hostowy na prawdziwym sektorze: 1 dla obu wariantów.
+- `kfat_stat_path()` — sonda startowa w kernel_main: FOUND dla
+  \LongFileName.TXT, \longfilename.txt i LongFileName.TXT.
+- `system/kernel_fat.c` resolve_path/path_component przepuszczają długą nazwę.
+
+Sprawdzone i poprawne strukturalnie (ale wynik zły):
+- `system/vfs_module.S`: offset 16 = vfs_stat_path -> API offset 64 = stat_path,
+- `system/kernel_module.c`: stat_path -> kfat_stat_path==FAT_FILE_FOUND,
+- `system/shell_module.S`: type调用uje VFS offset 16 z shell_work_path,
+- `system/shell_path.c`: shell_build_path(\, longfilename.txt) = \longfilename.txt.
+
+Objaw: `type longfilename.txt` -> PATH NOT FOUND, mimo że ta sama ścieżka
+działa wywołana z jądra. `type hello.txt` (8.3) działa. Wniosek: na granicy
+shell/modul do kfat_stat_path trafia inny łańcuch niż drukowany (podejrzenie:
+niewidoczny znak albo różnica bajtowa).
+
+Następny krok (osobna sesja): zalogować bajty ścieżki w `stat_path`
+(kernel_module.c) i porównać z shell_work_path; ewentualnie test hostowy
+przechodzący całą ścieżkę shell_path.c -> VFS.
 
 Wniosek: LFN to więcej pracy niż wyglądało (jądro + shell/VFS + debug),
 i wymaga spokojnej sesji. Reszta systemu działa i jest zacommitowana.
