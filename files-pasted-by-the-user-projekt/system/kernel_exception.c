@@ -108,6 +108,7 @@ extern int kernel_user_mouse_event(uint32_t *,int32_t *,int32_t *);
 extern void kernel_user_mouse_flush(void);
 extern void kernel_user_terminal_reset_modifiers(void);
 extern int32_t kernel_user_yield(void);
+extern int32_t kernel_user_tick_now(void);
 extern uint32_t kernel_user_clock(void);
 extern int32_t kernel_user_sleep(uint32_t ticks);
 extern int32_t kernel_user_system_info(uint32_t *info);
@@ -613,7 +614,7 @@ int kernel_user_gui_keyboard_wake(void)
        process_table[i].state!=USER_PROCESS_TERMINATED){target=&process_table[i];break;}
     if(!target){kgfx_cursor_hide();gui_keyboard_pid=0;gui_keyboard_ready_tick=0;
         gui_keyboard_dropped=0;gui_keyboard_persistent=0;return 0;}
-    now=kernel_user_yield();
+    now=kernel_user_tick_now();
     if(gui_keyboard_ready_tick&&
        (now<0||(int32_t)((uint32_t)now-gui_keyboard_ready_tick)<0)){
         /* This runs after the main loop has polled IKBD, unlike syscall 45.

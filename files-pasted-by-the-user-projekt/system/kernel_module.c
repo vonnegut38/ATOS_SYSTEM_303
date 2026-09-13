@@ -297,6 +297,16 @@ int32_t kernel_user_yield(void)
     return (int32_t)timer->ticks();
 }
 
+/* Odczyt ticku BEZ oddawania sterowania. Uzywany przez petle kursora:
+ * kernel_user_yield() wpuszcza scheduler (a wiec i render desktopu), przez co
+ * wskaznik myszy czeka i porusza sie skokowo. */
+int32_t kernel_user_tick_now(void)
+{
+    const kernel_timer_service_t *timer=(const kernel_timer_service_t *)kernel_find_service(KERNEL_SERVICE_TIMER,KERNEL_TIMER_VERSION);
+    if(!timer||!timer->ticks)return -1;
+    return (int32_t)timer->ticks();
+}
+
 int32_t kernel_user_sleep(uint32_t ticks)
 {
     int32_t start,current;
