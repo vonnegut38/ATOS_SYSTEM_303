@@ -29,7 +29,7 @@ typedef struct {
     uint8_t clock_known;
     uint8_t blitter_present;
     uint8_t blitter_enabled;
-    uint8_t reserved0;
+    uint8_t video_card;      /* 0 = brak, 1 = ET4000 (liniowy 8bpp) */
     uint8_t reserved1;
     uint32_t st_ram_bytes;
     uint32_t tt_ram_bytes;

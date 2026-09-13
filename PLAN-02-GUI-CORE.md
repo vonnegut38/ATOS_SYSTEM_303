@@ -137,6 +137,25 @@ Uwaga metodyczna: lokalnie **nie mogłem tego zweryfikować** — macOS blokuje
 `CGEventPost` bez uprawnień Accessibility, więc syntetyczne ruchy/kliknięcia
 myszy nie docierają do Hatari. Wnioski opieram na obserwacji użytkownika.
 
+
+## G6 — GUI wprost na ET4000 (Shifter nie bierze udziału) — ZROBIONE
+
+- **handoff**: nowe pole `video_card` (BIOS ustawia, gdy wykryje ET4000);
+  wskaźnik `video_enter` już tam był.
+- **kgfx, tryb liniowy 8bpp** (`g_linear`, `g_linear_stride`): piksel = bajt,
+  bez planów i read-modify-write; paleta GUI→VGA (`g_linear_palette`).
+- **kursor**: w trybie liniowym zapis/odtworzenie bajtów 16x16.
+- **tło / wypełnienia / ramki / tekst**: ścieżka liniowa; blitter pomijany.
+- **`kgfx_enter_desktop`**: gdy karta obecna → `video8_enter()` (640x480x8
+  chain-4) i buforem GUI jest **VRAM karty `0xC00000`** (stride 640).
+  Bez karty — dotychczasowy Shifter (fallback).
+- **tekst**: wiersz glifu zapisywany **dwoma longwordami** (uwaga: m68k jest
+  big-endian — pierwszy bajt to najbardziej znaczący) zamiast 128 operacji
+  na piksel.
+- **`--gfx-chip et4000w32i`**: Hatari obsługuje, ale akceleracji W32i
+  (BitBlt/ROP) **nie emuluje** — tylko identyfikację. Na realnej karcie to
+  byłby dodatkowy skok (sprzętowy Blit/Fill/Line).
+
 ## Ważne ustalenie o ścieżce obrazu
 
 - GUI jądra rysuje do **ekranu ST** (`SCREEN_BASE=0x10000` /

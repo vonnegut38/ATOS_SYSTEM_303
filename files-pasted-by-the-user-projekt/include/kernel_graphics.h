@@ -24,7 +24,8 @@ typedef struct {
     volatile uint8_t *framebuffer;
 } kgfx_info_t;
 
-int kgfx_init(uint8_t mode,uint8_t blitter_present,uint8_t blitter_enabled);
+int kgfx_init(uint8_t mode,uint8_t blitter_present,uint8_t blitter_enabled,uint8_t card,
+              void (*video_enter)(void));
 int kgfx_self_test(void);
 const kgfx_info_t *kgfx_get_info(void);
 void kgfx_emutos_background(int32_t,int32_t,int32_t,int32_t);

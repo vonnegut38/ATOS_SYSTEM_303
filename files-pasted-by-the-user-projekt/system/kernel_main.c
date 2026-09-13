@@ -123,7 +123,7 @@ void kernel_main(const boot_handoff_t *h)
     h->console_puts("MEMORY MANAGER: READY\n");
     h->console_puts("BOOT DEVICE: ");h->console_puts((h->boot_acsi_id&0x80u)?"IDE / BIOS FALLBACK":"ACSI");h->console_puts("\n");
     h->console_puts("GRAPHICS BACKEND: SHIFTER ");
-    if(kgfx_init(h->video_mode,h->blitter_present,h->blitter_enabled)&&kgfx_self_test()&&
+    if(kgfx_init(h->video_mode,h->blitter_present,h->blitter_enabled,h->video_card,h->video_enter)&&kgfx_self_test()&&
        kgfx_get_service()->magic==KGFX_SERVICE_MAGIC){
         const kgfx_info_t *gfx=kgfx_get_info();h->console_put_u32(gfx->width);
         h->console_puts("X");h->console_put_u32(gfx->height);

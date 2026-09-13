@@ -1,4 +1,11 @@
 #include "kernel_graphics.h"
+
+/* Jadro linkujemy bez libc; GCC potrafi wygenerowac memcpy dla wiekszych
+ * kopii (np. wiersza glifu w trybie liniowym). */
+void *memcpy(void *destination,const void *source,unsigned length)
+{uint8_t *d=(uint8_t *)destination;const uint8_t *s=(const uint8_t *)source;
+ while(length--){*d++=*s++;}
+ return destination;}
 #include "kernel_blitter.h"
 #include "kernel_memory.h"
 #include "emutos_vdi_mono.h"
@@ -8,9 +15,19 @@
 
 typedef struct {volatile uint16_t *words;uint16_t width,height,line_words;uint8_t planes;} surface_t;
 static kgfx_info_t graphics;
+/* Tryb liniowy (ET4000): 1 bajt na piksel, stride = bajty/linia. Uklad
+ * liniowy 8bpp pozwala pisac piksele bezposrednio, bez planow i bez
+ * read-modify-write. */
+static uint8_t g_linear;
+static uint8_t g_card8;      /* ET4000 obecny: GUI rysuje do VRAM karty */
+static void (*g_video_enter)(void);
+static uint16_t g_linear_stride;
+/* Mapowanie kolorow GUI (0..15) na indeksy palety VGA karty. */
+static const uint8_t g_linear_palette[16]={0,15,7,8,1,9,3,11,2,10,4,12,5,13,6,14};
 static kgfx_rect_t dirty[KGFX_DIRTY_MAX];
 static uint8_t dirty_count;
 static volatile uint16_t cursor_mono_background[16u*2u*4u];
+static uint8_t cursor_linear_background[16u*16u];
 static int16_t cursor_x,cursor_y;
 static uint8_t cursor_width,cursor_height,cursor_is_visible;
 static volatile uint8_t *desktop_framebuffer;
@@ -87,7 +104,9 @@ static void mark_dirty(int32_t x,int32_t y,int32_t width,int32_t height)
 
 static uint8_t surface_pixel_get(const surface_t *surface,uint16_t x,uint16_t y)
 {
-    uint16_t group=(uint16_t)(x>>4),mask=(uint16_t)(0x8000u>>(x&15u));
+    uint16_t group,mask;
+    if(g_linear)return ((const volatile uint8_t *)surface->words)[(uint32_t)y*g_linear_stride+x];
+    group=(uint16_t)(x>>4);mask=(uint16_t)(0x8000u>>(x&15u));
     volatile uint16_t *word=surface->words+(uint32_t)y*surface->line_words+
                             (uint32_t)group*surface->planes;
     uint8_t plane,color=0;
@@ -97,7 +116,9 @@ static uint8_t surface_pixel_get(const surface_t *surface,uint16_t x,uint16_t y)
 
 static void surface_pixel_set(const surface_t *surface,uint16_t x,uint16_t y,uint8_t color)
 {
-    uint16_t group=(uint16_t)(x>>4),mask=(uint16_t)(0x8000u>>(x&15u));
+    uint16_t group,mask;
+    if(g_linear){((volatile uint8_t *)surface->words)[(uint32_t)y*g_linear_stride+x]=g_linear_palette[color&15u];return;}
+    group=(uint16_t)(x>>4);mask=(uint16_t)(0x8000u>>(x&15u));
     volatile uint16_t *word=surface->words+(uint32_t)y*surface->line_words+
                             (uint32_t)group*surface->planes;
     uint8_t plane;
@@ -127,6 +148,18 @@ static void surface_fill(const surface_t *surface,uint16_t x,uint16_t y,
                          uint16_t width,uint16_t height,uint8_t color)
 {
     static const uint16_t solid[1]={0xffffu};
+    if(g_linear){
+        volatile uint8_t *fb=(volatile uint8_t *)surface->words;uint16_t row;
+        uint8_t v=g_linear_palette[color&15u];
+        if(!width||!height)return;
+        for(row=0;row<height;++row){
+            volatile uint8_t *p=fb+(uint32_t)(y+row)*g_linear_stride+x;
+            uint16_t n=width;
+            while(n>=4u){*p=v;p[1]=v;p[2]=v;p[3]=v;p+=4;n-=4u;}
+            while(n--){*p++=v;}
+        }
+        return;
+    }
     emutos_vdi_planar_fill(surface->words,surface->line_words,surface->planes,
         x,y,width,height,color,0,solid,0);
 }
@@ -243,9 +276,11 @@ static cursor_guard_t cursor_guard_begin(int32_t x,int32_t y,int32_t width,int32
 static void cursor_guard_end(cursor_guard_t guard)
 {if(guard.active)kgfx_cursor_show(guard.x,guard.y);}
 
-int kgfx_init(uint8_t mode,uint8_t blitter_present,uint8_t blitter_enabled)
+int kgfx_init(uint8_t mode,uint8_t blitter_present,uint8_t blitter_enabled,uint8_t card,
+              void (*video_enter)(void))
 {
     if(mode>2u)return 0;
+    g_card8=(uint8_t)(card!=0u);g_video_enter=video_enter;
     graphics.mode=mode;graphics.framebuffer=(volatile uint8_t *)(uintptr_t)SCREEN_BASE;
     if(mode==0u){graphics.width=320u;graphics.height=200u;graphics.planes=4u;graphics.line_bytes=160u;}
     else if(mode==1u){graphics.width=640u;graphics.height=200u;graphics.planes=2u;graphics.line_bytes=160u;}
@@ -374,7 +409,7 @@ void kgfx_pixel(int32_t x,int32_t y,uint8_t color)
 void kgfx_fill_rect(int32_t x,int32_t y,int32_t width,int32_t height,uint8_t color)
 {surface_t surface;cursor_guard_t guard;if(!clip_rect(&x,&y,&width,&height))return;
  guard=cursor_guard_begin(x,y,width,height);surface=active_surface();
- if(!kblit_fill_planar(surface.words,surface.line_words,surface.planes,(uint16_t)x,(uint16_t)y,
+ if(g_linear||!kblit_fill_planar(surface.words,surface.line_words,surface.planes,(uint16_t)x,(uint16_t)y,
                        (uint16_t)width,(uint16_t)height,color))
      surface_fill(&surface,(uint16_t)x,(uint16_t)y,(uint16_t)width,(uint16_t)height,color);
  mark_dirty(x,y,width,height);cursor_guard_end(guard);}
@@ -488,6 +523,36 @@ void kgfx_text(int32_t x,int32_t y,const char *text,uint8_t foreground,
     guard.x=cursor_x;guard.y=cursor_y;guard.active=cursor_is_visible;
     if(guard.active)kgfx_cursor_hide();
     surface=active_surface();
+    if(g_linear){
+        /* 8bpp liniowo: wiersz glifu to 8 bajtow. Przy parzystym x zapisujemy
+           dwa slowa 32-bit zamiast 8 osobnych bajtow (bez planow). */
+        uint8_t fg=g_linear_palette[foreground&15u],bg=g_linear_palette[background&15u];
+        while(*text){
+            uint8_t code,row8[8],b;int32_t k;
+            if(*text=='\n'){x=origin;y+=16;text++;continue;}
+            code=(uint8_t)*text++;
+            glyph=(desktop_is_active&&code!=0xf6u&&code!=0xf7u)?
+                emutos_system_font[code]:font_glyph((char)code,1u);
+            for(row=0;row<16u;++row){
+                volatile uint8_t *p=(volatile uint8_t *)surface.words+
+                    (uint32_t)(y+row)*g_linear_stride+x;
+                b=glyph[row];
+                if(opaque)for(k=0;k<8;++k)row8[k]=(b&(uint8_t)(0x80u>>k))?fg:bg;
+                else{for(k=0;k<8;++k)row8[k]=p[k];
+                     for(k=0;k<8;++k)if(b&(uint8_t)(0x80u>>k))row8[k]=fg;}
+                if(!(x&1)){
+                    /* m68k jest big-endian: pierwszy bajt to najbardziej znaczacy. */
+                    *(volatile uint32_t *)p=((uint32_t)row8[0]<<24)|((uint32_t)row8[1]<<16)|
+                        ((uint32_t)row8[2]<<8)|(uint32_t)row8[3];
+                    *(volatile uint32_t *)(p+4)=((uint32_t)row8[4]<<24)|((uint32_t)row8[5]<<16)|
+                        ((uint32_t)row8[6]<<8)|(uint32_t)row8[7];
+                } else {for(k=0;k<8;++k)p[k]=row8[k];}
+            }
+            mark_dirty(x,y,8,16);x+=8;
+        }
+        cursor_guard_end(guard);
+        return;
+    }
     while(*text){if(*text=='\n'){x=origin;y+=16;text++;continue;}{
         uint8_t code=(uint8_t)*text++;
         glyph=(desktop_is_active&&code!=0xf6u&&code!=0xf7u)?
@@ -509,7 +574,17 @@ void kgfx_cursor_hide(void)
 {
     surface_t surface;uint16_t row,plane,group,shift,index=0;
     if(!cursor_is_visible)return;
-    surface=active_surface();group=(uint16_t)cursor_x>>4;shift=(uint16_t)cursor_x&15u;
+    surface=active_surface();
+    if(g_linear){
+        volatile uint8_t *fb=(volatile uint8_t *)surface.words;uint16_t r,i;uint32_t idx=0;
+        for(r=0;r<cursor_height;++r){
+            volatile uint8_t *p=fb+(uint32_t)(cursor_y+r)*g_linear_stride+cursor_x;
+            for(i=0;i<cursor_width;++i)p[i]=cursor_linear_background[idx++];
+        }
+        mark_dirty(cursor_x,cursor_y,cursor_width,cursor_height);
+        cursor_is_visible=0;cursor_width=cursor_height=0;return;
+    }
+    group=(uint16_t)cursor_x>>4;shift=(uint16_t)cursor_x&15u;
     for(row=0;row<cursor_height;++row){
         volatile uint16_t *word=surface.words+(uint32_t)(cursor_y+row)*surface.line_words+group*surface.planes;
         for(plane=0;plane<surface.planes;++plane){
@@ -534,7 +609,21 @@ void kgfx_cursor_show(int32_t x,int32_t y)
     cursor_width=(uint8_t)(remaining<16u?remaining:16u);
     remaining=(uint16_t)(graphics.height-(uint16_t)y);
     cursor_height=(uint8_t)(remaining<16u?remaining:16u);
-    surface=active_surface();group=(uint16_t)x>>4;shift=(uint16_t)x&15u;
+    surface=active_surface();
+    if(g_linear){
+        volatile uint8_t *fb=(volatile uint8_t *)surface.words;uint16_t r,i;uint32_t idx=0;
+        for(r=0;r<cursor_height;++r){
+            volatile uint8_t *p=fb+(uint32_t)(y+r)*g_linear_stride+x;
+            uint16_t bits=cursor_shape[r];
+            for(i=0;i<cursor_width;++i){
+                cursor_linear_background[idx]=p[i];
+                if(bits&(uint16_t)(0x8000u>>i))p[i]=0;
+                ++idx;
+            }
+        }
+        cursor_is_visible=1;mark_dirty(x,y,cursor_width,cursor_height);return;
+    }
+    group=(uint16_t)x>>4;shift=(uint16_t)x&15u;
     for(row=0;row<cursor_height;++row){
         volatile uint16_t *word=surface.words+(uint32_t)(y+row)*surface.line_words+group*surface.planes;
         uint16_t left=(uint16_t)(cursor_shape[row]>>shift);
@@ -557,6 +646,20 @@ int kgfx_cursor_visible(void){return cursor_is_visible!=0u;}
 int kgfx_enter_desktop(void)
 {
     uint32_t i;volatile uint32_t *destination;
+    if(g_card8){
+        /* ET4000 8bpp liniowo: GUI rysuje wprost do VRAM karty (0xC00000),
+           bez planow i bez udzialu Shiftera. */
+        volatile uint8_t *fb=(volatile uint8_t *)(uintptr_t)0x00c00000UL;
+        kgfx_cursor_hide();
+        if(g_video_enter)g_video_enter();   /* 640x480x8 chain-4 na karcie */
+        g_linear=1u;g_linear_stride=640u;
+        graphics.width=640u;graphics.height=400u;graphics.line_bytes=640u;
+        graphics.planes=8u;graphics.mode=2u;
+        for(i=0u;i<640u*400u;++i)fb[i]=0u;
+        graphics.framebuffer=fb;kgfx_dirty_reset();
+        desktop_is_active=1;
+        return 1;
+    }
     if(!desktop_framebuffer)return 0;
     kgfx_cursor_hide();destination=(volatile uint32_t *)desktop_framebuffer;
     if(!desktop_is_active){
@@ -573,6 +676,7 @@ int kgfx_enter_desktop(void)
 void kgfx_restore_console(void)
 {
     uint16_t i;
+    g_linear=0u;
     kgfx_cursor_hide();
     if(desktop_is_active)for(i=0;i<16;i++)REG16(SHIFTER_PALETTE+i*2)=console_palette[i];
     graphics.framebuffer=(volatile uint8_t *)(uintptr_t)SCREEN_BASE;
@@ -625,6 +729,17 @@ void kgfx_emutos_background(int32_t x,int32_t y,int32_t w,int32_t h)
     surface_t s;cursor_guard_t guard;
     if(!clip_rect(&x,&y,&w,&h))return;
     guard=cursor_guard_begin(x,y,w,h);s=active_surface();
+    if(g_linear){
+        volatile uint8_t *fb=(volatile uint8_t *)s.words;int32_t row,i;
+        uint8_t a=g_linear_palette[0],b=g_linear_palette[1];
+        for(row=0;row<h;++row){
+            volatile uint8_t *p=fb+(uint32_t)(y+row)*g_linear_stride+x;
+            uint8_t f=((y+row)&1)?b:a,sec=((y+row)&1)?a:b;
+            for(i=0;i<w-1;i+=2){p[i]=f;p[i+1]=sec;}
+            if(i<w)p[i]=f;
+        }
+        mark_dirty(x,y,w,h);cursor_guard_end(guard);return;
+    }
     emutos_vdi_planar_fill(s.words,s.line_words,s.planes,x,y,w,h,
         s.planes==1?0:2,1,pattern,3);
     theme_icon(&s,x,y,w,h,24,30,rs_iconmask0,rs_icondata0,"DISK C");
