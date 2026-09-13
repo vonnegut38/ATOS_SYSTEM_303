@@ -317,6 +317,27 @@ Pozostaje (B9b): LFN (długie nazwy) w FAT32 — na razie tylko 8.3.
 - 8.3 działa bez zmian (`type hello.txt` wypisuje zawartość), więc zmiana
   jest bezpieczna, ale funkcja LFN nie jest gotowa.
 
+### 16. M1 — BIOS ZAMKNIĘTE
+
+Funkcje zrealizowane i zweryfikowane w Hatari:
+- graficzny interfejs (pasek tytułu, ramki, licznik REDRAW) na ET4000,
+- rysowanie przyrostowe (damage tracking) — REDRAW pokazuje koszt w px,
+- Setup (F1): data/godzina, video, blitter, BOOT DEVICE, zapis konfiguracji,
+- F4 Boot Device: lista urządzeń IDE/ACSI, wybór partycji, zapis,
+- F3 Hardware: CPU/RAM/ALT-RAM/VOFA/IDE/ACSI/NetUSBee/ROM kartridża,
+- F5 Diagnostyka, F6 GFX, F2 TOS (odłożone ładowanie),
+- konfiguracja w \BIOS\BIOS.CFG (katalog tworzony automatycznie),
+- partycje AHDI: GEM/BGM/F32 oraz łańcuchy XGM (16 slotów),
+- boot: \SYSTEM\BOOT\BOOT.SYS -> \SYSTEM\KERNEL\KERNEL.SYS,
+- detekcja ROM kartridża (magic 0xABCD) w F3/F4.
+
+Świadomie POZA zakresem BIOS-u (osobne zadania):
+- LFN (długie nazwy) — warstwa jądra gotowa, integracja z shellem do zrobienia,
+- NetUSBee (sieć + dysk USB) — wymaga realnego sprzętu,
+- ładowanie TOS/EmuTOS przez MMU — odłożone (PLAN-01 par. 8).
+
+Zrzut końcowy: atari-030-port/bios-final-main.png.
+
 ### 15a. B9b — LFN: warstwa FAT jądra DZIAŁA (dowód z sondy startowej)
 
 Po dodaniu tymczasowej sondy w kernel_main (usuniętej po teście) okazało się:
