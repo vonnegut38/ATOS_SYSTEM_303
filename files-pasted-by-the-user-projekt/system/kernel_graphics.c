@@ -19,7 +19,10 @@ static kgfx_info_t graphics;
  * liniowy 8bpp pozwala pisac piksele bezposrednio, bez planow i bez
  * read-modify-write. */
 static uint8_t g_linear;
-static uint8_t g_card8;      /* ET4000 obecny: GUI rysuje do VRAM karty */
+static uint8_t g_card8;      /* 0 = brak karty, inaczej 1+indeks trybu karty */
+static const struct { uint16_t w,h,stride; } card_modes[4]={
+    { 640, 400, 640},{ 640, 480, 640},{ 800, 600, 800},{1024, 768,1024}
+};
 static void (*g_video_enter)(void);
 static uint16_t g_linear_stride;
 /* Mapowanie kolorow GUI (0..15) na indeksy palety VGA karty. */
@@ -280,7 +283,7 @@ int kgfx_init(uint8_t mode,uint8_t blitter_present,uint8_t blitter_enabled,uint8
               void (*video_enter)(void))
 {
     if(mode>2u)return 0;
-    g_card8=(uint8_t)(card!=0u);g_video_enter=video_enter;
+    g_card8=card;g_video_enter=video_enter;
     graphics.mode=mode;graphics.framebuffer=(volatile uint8_t *)(uintptr_t)SCREEN_BASE;
     if(mode==0u){graphics.width=320u;graphics.height=200u;graphics.planes=4u;graphics.line_bytes=160u;}
     else if(mode==1u){graphics.width=640u;graphics.height=200u;graphics.planes=2u;graphics.line_bytes=160u;}
@@ -651,11 +654,14 @@ int kgfx_enter_desktop(void)
            bez planow i bez udzialu Shiftera. */
         volatile uint8_t *fb=(volatile uint8_t *)(uintptr_t)0x00c00000UL;
         kgfx_cursor_hide();
-        if(g_video_enter)g_video_enter();   /* 640x480x8 chain-4 na karcie */
-        g_linear=1u;g_linear_stride=640u;
-        graphics.width=640u;graphics.height=480u;graphics.line_bytes=640u;
+        uint8_t cm=(uint8_t)(g_card8-1u);uint16_t cw,ch,cs;
+        if(cm>3u)cm=1u;
+        cw=card_modes[cm].w;ch=card_modes[cm].h;cs=card_modes[cm].stride;
+        if(g_video_enter)g_video_enter();
+        g_linear=1u;g_linear_stride=cs;
+        graphics.width=cw;graphics.height=ch;graphics.line_bytes=cs;
         graphics.planes=8u;graphics.mode=2u;
-        for(i=0u;i<640u*480u;++i)fb[i]=0u;
+        for(i=0u;i<(uint32_t)cw*(uint32_t)ch;++i)fb[i]=0u;
         graphics.framebuffer=fb;kgfx_dirty_reset();
         desktop_is_active=1;
         return 1;

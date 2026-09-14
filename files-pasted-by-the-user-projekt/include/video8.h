@@ -18,5 +18,9 @@ void video8_text(int x,int y,const char *s,uint8_t fg,uint8_t bg);
 void video8_blit(int sx,int sy,int w,int h,int dx,int dy);
 void video8_demo(void);
 int  video8_is_w32i(void);
+uint8_t  video8_mode(void);
+uint16_t video8_width(void);
+uint16_t video8_height(void);
+uint16_t video8_stride(void);
 
 #endif

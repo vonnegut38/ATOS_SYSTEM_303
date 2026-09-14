@@ -6,9 +6,24 @@
 
 #define V8_IO      0x00d00000UL
 #define V8_MEM     0x00c00000UL
-#define V8_W       640
-#define V8_H       480
-#define V8_STRIDE  640
+/* Tryby VGA karty (8 bpp, liniowo). Odpowiadaja standardowym trybom VGA,
+ * ktorych uzywa sterownik RAVEN/ET4000: 0x2F / 0x2E / 0x30 / 0x38. */
+typedef struct { uint16_t width,height,stride; uint8_t vdisp,end; } v8_mode_t;
+static const v8_mode_t v8_modes[4]={
+    { 640, 400, 640, 0x8fu, 0x3eu},   /* 0x2F */
+    { 640, 480, 640, 0xdfu, 0x3eu},   /* 0x2E */
+    { 800, 600, 800, 0x57u, 0x7cu},   /* 0x30: 599=0x257 -> bit9 (0x07.6), bit8=0 */
+    {1024, 768,1024, 0xffu, 0x7cu}    /* 0x38: 767=0x2FF -> bit9 (0x07.6), bit8=0 */
+};
+#ifndef V8_MODE_DEFAULT
+#define V8_MODE_DEFAULT 1   /* test: 640x400 */
+#endif
+static uint8_t  v8_mode = V8_MODE_DEFAULT;
+static uint16_t v8_w = 640, v8_h = 480, v8_stride = 640;
+
+#define V8_W       v8_w
+#define V8_H       v8_h
+#define V8_STRIDE  v8_stride
 #define V8_CELL    16
 
 static volatile uint8_t *const v8_fb = (volatile uint8_t *)(uintptr_t)V8_MEM;
@@ -38,11 +53,18 @@ static void v8_palette(void)
 
 int video8_is_w32i(void){return g_system.nova_chipset==NOVA_CHIP_ET4000_FAMILY;}
 
+uint8_t video8_mode(void){return v8_mode;}
+uint16_t video8_width(void){return v8_w;}
+uint16_t video8_height(void){return v8_h;}
+uint16_t video8_stride(void){return v8_stride;}
+
 void video8_enter(void)
 {
     /* Unlock the Tseng extended registers, then program a 640x480x8 chain-4
      * mode.  CRTC 0x13 counts 32-bit units (doubleword, CRTC 0x14 bit 6):
      * 160 units * 4 = 640 bytes per line. */
+    v8_w=v8_modes[v8_mode].width;v8_h=v8_modes[v8_mode].height;
+    v8_stride=v8_modes[v8_mode].stride;
     v8_reg(0x3bfu,0x03u);
     v8_seq(0x00u,0x01u);v8_delay();
     v8_seq(0x00u,0x03u);
@@ -53,11 +75,11 @@ void video8_enter(void)
 
     v8_crtc(0x11u,0x00u);         /* unlock CRTC */
     v8_crtc(0x00u,0x5fu);v8_crtc(0x01u,0x4fu);v8_crtc(0x02u,0x50u);v8_crtc(0x03u,0x82u);
-    v8_crtc(0x04u,0x54u);v8_crtc(0x05u,0x80u);v8_crtc(0x06u,0x0bu);v8_crtc(0x07u,0x3eu);
+    v8_crtc(0x04u,0x54u);v8_crtc(0x05u,0x80u);v8_crtc(0x06u,0x0bu);v8_crtc(0x07u,v8_modes[v8_mode].end);
     v8_crtc(0x08u,0x00u);v8_crtc(0x09u,0x40u);v8_crtc(0x0au,0x00u);v8_crtc(0x0bu,0x00u);
     v8_crtc(0x0cu,0x00u);v8_crtc(0x0du,0x00u);v8_crtc(0x0eu,0x00u);v8_crtc(0x0fu,0x00u);
-    v8_crtc(0x10u,0xeau);v8_crtc(0x11u,0x0cu);v8_crtc(0x12u,0xdfu); /* 480 linii */
-    v8_crtc(0x13u,0xa0u);         /* 160 dwords = 640 B/line */
+    v8_crtc(0x10u,0xeau);v8_crtc(0x11u,0x0cu);v8_crtc(0x12u,v8_modes[v8_mode].vdisp);
+    v8_crtc(0x13u,(uint8_t)(V8_STRIDE/8u)); /* offset: stride/8 (RAVEN/ET4000) */
     v8_crtc(0x14u,0x40u);         /* doubleword addressing */
     v8_crtc(0x15u,0xe7u);v8_crtc(0x16u,0x04u);v8_crtc(0x17u,0xc3u);v8_crtc(0x18u,0xffu);
     {uint8_t t=v8_crtc_get(0x11u);v8_crtc(0x11u,(uint8_t)(t|0x80u));} /* lock CRTC */
