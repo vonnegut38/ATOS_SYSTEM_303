@@ -653,9 +653,9 @@ int kgfx_enter_desktop(void)
         kgfx_cursor_hide();
         if(g_video_enter)g_video_enter();   /* 640x480x8 chain-4 na karcie */
         g_linear=1u;g_linear_stride=640u;
-        graphics.width=640u;graphics.height=400u;graphics.line_bytes=640u;
+        graphics.width=640u;graphics.height=480u;graphics.line_bytes=640u;
         graphics.planes=8u;graphics.mode=2u;
-        for(i=0u;i<640u*400u;++i)fb[i]=0u;
+        for(i=0u;i<640u*480u;++i)fb[i]=0u;
         graphics.framebuffer=fb;kgfx_dirty_reset();
         desktop_is_active=1;
         return 1;

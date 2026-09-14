@@ -20,7 +20,7 @@ int main(void)
     assert(wm_cycle(&s));assert(s.active==1);
     assert(wm_next_open(&s,0)==1);
 
-    s.full=2;assert(wm_bounds(&s,2).w==640&&wm_bounds(&s,2).h==400);
+    s.full=2;assert(wm_bounds(&s,2).w==640&&wm_bounds(&s,2).h==480);
     assert(wm_hit(&s,320,200)==2);
     s.full=-1;
     assert(wm_bounds(&s,2).w<640);
@@ -32,9 +32,9 @@ int main(void)
     for(i=0;i<10000;i++){
         int px=(int)(i*127u%2000)-700,py=(int)(i*79u%1400)-500;
         s.gesture=1;s.dx=20;s.dy=5;wm_motion(&s,px,py);
-        {wm_rect r=s.win[s.active].rect;assert(r.x>=0&&r.y>=20&&r.x+r.w<=640&&r.y+r.h<=376);}
+        {wm_rect r=s.win[s.active].rect;assert(r.x>=0&&r.y>=20&&r.x+r.w<=640&&r.y+r.h<=456);}
         s.gesture=2;s.dx=6;s.dy=6;wm_motion(&s,px,py);
-        {wm_rect r=s.win[s.active].rect;assert(r.w>=240&&r.h>=160&&r.x+r.w<=640&&r.y+r.h<=376);}
+        {wm_rect r=s.win[s.active].rect;assert(r.w>=240&&r.h>=160&&r.x+r.w<=640&&r.y+r.h<=456);}
     }
 
     {int n=0;while(wm_open(&s,1,"X")>=0){++n;if(n>WM_MAX+1)break;}assert(n==WM_MAX-3);}

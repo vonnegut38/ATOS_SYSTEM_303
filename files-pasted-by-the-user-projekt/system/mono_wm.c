@@ -38,7 +38,7 @@ int wm_is_open(const wm_state *s,int i)
 
 wm_rect wm_bounds(const wm_state *s,int i)
 {
-    if(s->full==i)return (wm_rect){0,0,640,400};
+    if(s->full==i)return (wm_rect){0,0,640,480};
     return s->win[i].rect;
 }
 
@@ -128,10 +128,10 @@ void wm_motion(wm_state *s,int x,int y)
     r=&s->win[s->active].rect;
     if(s->gesture==1){
         r->x=(int16_t)clamp(x-s->dx,0,640-r->w);
-        r->y=(int16_t)clamp(y-s->dy,20,376-r->h);
+        r->y=(int16_t)clamp(y-s->dy,20,456-r->h);
     }
     if(s->gesture==2){
         r->w=(int16_t)clamp(x-r->x+s->dx,240,640-r->x);
-        r->h=(int16_t)clamp(y-r->y+s->dy,160,376-r->y);
+        r->h=(int16_t)clamp(y-r->y+s->dy,160,456-r->y);
     }
 }

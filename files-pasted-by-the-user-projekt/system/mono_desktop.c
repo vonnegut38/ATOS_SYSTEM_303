@@ -264,7 +264,7 @@ static void render(void){
  int k,maxs;char label[24];
  used=0;
  if(dmg_valid)add(GUI_CLIP,dmg_x,dmg_y,dmg_w,dmg_h,0,0);
- else add(GUI_CLIP,0,0,640,400,0,0);
+ else add(GUI_CLIP,0,0,640,480,0,0);
  dmg_valid=0;
  if(dirty>=2){
   /* XaAES: rysujemy zmienione okno tylko w jego WIDOCZNYM regionie, wiec nie
@@ -286,19 +286,19 @@ static void render(void){
   if(submit(used))fault=18;
   return;}
  if(state.full>=0){int f=state.full;
-  add(GUI_FILL,0,0,640,400,1,0);
+  add(GUI_FILL,0,0,640,480,1,0);
   text(8,1,"F10: powrot do okien");
   content(f);dirty=0;
   if(submit(used))fault=18;
   return;}
- add(GUI_BG,0,0,640,400,0,0);
+ add(GUI_BG,0,0,640,480,0,0);
  add(GUI_FILL,0,0,640,MENUBAR_H,1,0);add(GUI_FRAME,0,0,640,MENUBAR_H,0,0);
  render_menu_bar();
  for(k=0;k<state.count;++k){int i=state.order[k];if(state.win[i].open)window(i);}
  if(menu_open>=0)render_dropdown(menu_open);
  if(tasks_open)render_tasks();
  if(dialog)info_dialog_render();
- add(GUI_FILL,0,377,640,23,1,0);add(GUI_FRAME,0,377,640,23,0,0);
+ add(GUI_FILL,0,457,640,23,1,0);add(GUI_FRAME,0,457,640,23,0,0);
  maxs=taskbar_count();if(maxs>6)maxs=6;
  for(k=0;k<maxs;++k){
   int i=taskbar_slot(k);unsigned j,b=0;
@@ -306,10 +306,10 @@ static void render(void){
   label[b++]=(char)('1'+k);label[b++]=' ';
   {const char *nm=kind_name(state.win[i].kind);for(j=0;nm[j]&&b<20;++j)label[b++]=nm[j];}
   label[b]=0;
-  text(8+k*TASKBAR_SLOT_W,381,label);
-  if(i==state.active)add(GUI_FRAME,6+k*TASKBAR_SLOT_W,379,TASKBAR_SLOT_W-4,19,0,0);
+  text(8+k*TASKBAR_SLOT_W,461,label);
+  if(i==state.active)add(GUI_FRAME,6+k*TASKBAR_SLOT_W,459,TASKBAR_SLOT_W-4,19,0,0);
  }
- if(status)text(8,381+0,status);
+ if(status)text(8,461,status);
  dirty=0;if(submit(used))fault=18;}
 
 static void close_window(int i){
@@ -375,7 +375,7 @@ static void mouse(const gui_message_t *m){int x=m->v[1]>>16,y=m->v[1]&65535,butt
   dirty=1;if(!down)state.gesture=0;state.buttons=down;return;}
  state.buttons=down;if(!press)return;
  if(state.full>=0)return;
- if(y>=377){int k=(x-6)/TASKBAR_SLOT_W;i=taskbar_slot(k);if(i>=0){wm_select(&state,i);dirty=1;}return;}
+ if(y>=457){int k=(x-6)/TASKBAR_SLOT_W;i=taskbar_slot(k);if(i>=0){wm_select(&state,i);dirty=1;}return;}
  i=wm_hit(&state,x,y);if(i<0)return;wm_select(&state,i);dirty=1;r=wm_bounds(&state,i);
  if(y<r.y+19){
   if(x<r.x+18){close_window(i);return;}
@@ -418,7 +418,7 @@ int app_main(void){gui_message_t m;unsigned i;int registered=0,captured=0;uint32
  if(rpc(gui,6,0,0,0)){fault=6;goto done;}
  captured=1;
  if(rpc(gfx,13,0,0,0)){fault=13;goto done;}
- if(rpc(gfx,1,0,0,0)!=(int32_t)((640u<<16)|400u)){fault=43;goto done;}
+ if(rpc(gfx,1,0,0,0)!=(int32_t)((640u<<16)|480u)){fault=43;goto done;}
  wm_open(&state,INTERNAL_PID,"SYSTEM");state.win[slot_of(INTERNAL_PID)].kind=3;
  if(!launch(0,"\\SYSTEM\\APP\\COUNT.APP")){fault=34;goto done;}
  if(!launch(1,"\\SYSTEM\\APP\\NOTE.APP")){fault=35;goto done;}
