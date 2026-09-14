@@ -21,8 +21,8 @@ static void place(wm_state *s,int i)
 {
     /* Kaskada: kazde kolejne okno przesuniete i nieco mniejsze. */
     int step=i%4;
-    s->win[i].rect=(wm_rect){(int16_t)(40+step*28),(int16_t)(36+step*24),
-                             (int16_t)(320-step*16),(int16_t)(200-step*10)};
+    s->win[i].rect=(wm_rect){(int16_t)(64+step*45),(int16_t)(69+step*46),
+                             (int16_t)(512-step*26),(int16_t)(384-step*19)};
 }
 
 void wm_init(wm_state *s)
@@ -38,7 +38,7 @@ int wm_is_open(const wm_state *s,int i)
 
 wm_rect wm_bounds(const wm_state *s,int i)
 {
-    if(s->full==i)return (wm_rect){0,0,640,480};
+    if(s->full==i)return (wm_rect){0,0,1024,768};
     return s->win[i].rect;
 }
 
@@ -127,11 +127,11 @@ void wm_motion(wm_state *s,int x,int y)
     if(s->active<0||s->full>=0)return;
     r=&s->win[s->active].rect;
     if(s->gesture==1){
-        r->x=(int16_t)clamp(x-s->dx,0,640-r->w);
-        r->y=(int16_t)clamp(y-s->dy,20,456-r->h);
+        r->x=(int16_t)clamp(x-s->dx,0,1024-r->w);
+        r->y=(int16_t)clamp(y-s->dy,20,744-r->h);
     }
     if(s->gesture==2){
-        r->w=(int16_t)clamp(x-r->x+s->dx,240,640-r->x);
-        r->h=(int16_t)clamp(y-r->y+s->dy,160,456-r->y);
+        r->w=(int16_t)clamp(x-r->x+s->dx,240,1024-r->x);
+        r->h=(int16_t)clamp(y-r->y+s->dy,160,744-r->y);
     }
 }

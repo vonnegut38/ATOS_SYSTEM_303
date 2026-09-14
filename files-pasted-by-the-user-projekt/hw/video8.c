@@ -16,7 +16,7 @@ static const v8_mode_t v8_modes[4]={
     {1024, 768,1024, 0xffu, 0x7cu}    /* 0x38: 767=0x2FF -> bit9 (0x07.6), bit8=0 */
 };
 #ifndef V8_MODE_DEFAULT
-#define V8_MODE_DEFAULT 1   /* test: 640x400 */
+#define V8_MODE_DEFAULT 3   /* test: 640x400 */
 #endif
 static uint8_t  v8_mode = V8_MODE_DEFAULT;
 static uint16_t v8_w = 640, v8_h = 480, v8_stride = 640;
