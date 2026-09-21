@@ -16,3 +16,8 @@ atari-030-port/hatari-tf536
 atari-030-port/tools/py/
 # macOS
 .DS_Store
+
+# ATOS v10: workspace disk images in commander trees
+commander-v9/work/
+commander-v10/work/
+*.img.bak-recon
