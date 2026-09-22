@@ -68,6 +68,7 @@ extern void kernel_wm_console_present(void);
 extern void kernel_wm_damage_all(void);
 extern void kernel_wm_set_desktop_session(int session);
 extern void kernel_wm_frame_tick(uint32_t now);
+extern void kernel_wm_applet_bar(uint32_t now);
 extern void kernel_wm_debug(int *count,int *flags,int *hidden,int *damage);
 
 /* Video output device (kernel_video.c/kernel_video_boot.c). */
@@ -348,6 +349,7 @@ void kernel_main(const boot_handoff_t *h)
             ksessions_pump();
             if(!kernel_wm_console_visible())kconsole_flush();
             kernel_wm_frame_tick(timer_service->ticks());
+            kernel_wm_applet_bar(timer_service->ticks());
             if(!kgfx_desktop_active())ksessions_paint();
             kvideo_flush();
         }

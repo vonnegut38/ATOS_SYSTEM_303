@@ -97,8 +97,8 @@ build/system/kernel_wm.o: system/kernel_wm.c include/kernel_wm.h include/wm_core
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
 
-build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
 	$(OBJCOPY) -O binary build/system/kernel.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -863,7 +863,7 @@ build/%.o: %.S
 	@mkdir -p $(@D)
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
-check: check-machine check-lang check-config check-exception check-irq check-video-driver check-video-backends check-cpu-ops
+check: check-machine check-lang check-config check-exception check-irq check-video-driver check-video-backends check-cpu-ops check-desktop-module check-mod-clock
 	python3 -m unittest discover -s tests -v
 
 .PHONY: check-video-backends
@@ -871,6 +871,18 @@ check-video-backends:
 	@mkdir -p build/tests
 	$(HOSTCC) -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_backends.c system/video_driver.c video/shifter.c video/et4000.c -o build/tests/test_video_backends
 	build/tests/test_video_backends
+
+.PHONY: check-mod-clock
+check-mod-clock:
+	@mkdir -p build/tests
+	$(HOSTCC) -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_mod_clock.c system/mod_clock.c system/video_driver.c -o build/tests/test_mod_clock
+	build/tests/test_mod_clock
+
+.PHONY: check-desktop-module
+check-desktop-module:
+	@mkdir -p build/tests
+	$(HOSTCC) -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_desktop_module.c system/desktop_module.c -o build/tests/test_desktop_module
+	build/tests/test_desktop_module
 
 .PHONY: check-cpu-ops
 check-cpu-ops:

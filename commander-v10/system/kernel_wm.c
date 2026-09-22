@@ -4,7 +4,9 @@
 #include "kernel_sessions.h"
 #include "kernel_video.h"
 #include "video_driver.h"
+#include "desktop_module.h"
 #include "wm_core.h"
+extern desktop_module_t desktop_mod_clock;
 #include "wm_blit.h"
 
 #define WM_SURFACE_MAX 4u
@@ -203,6 +205,15 @@ void kernel_wm_frame_tick(uint32_t now)
        and bpp (1bpp card vs 8bpp surface), so a value cached at init made the
        decorations and the desktop dither use the wrong path. */
     wm_framebuffer=wm_get_fb(&wm_pitch,&wm_bpp);
+    /* v10: draw the applet bar early (Shifter framebuffer is screen memory). */
+    {static uint8_t applets_ready;
+     if(!applets_ready){desktop_module_register(&desktop_mod_clock);desktop_module_init_all(0);applets_ready=1u;}
+     desktop_module_tick_all(now);
+     {video_surface_t vs;
+      vs.width=(uint16_t)wm.screen_w;vs.height=(uint16_t)wm.screen_h;vs.pitch=wm_pitch;
+      vs.format=(uint8_t)((wm_bpp==8u)?VIDEO_FMT_CHUNKY_8BPP:VIDEO_FMT_PLANAR_1BPP);
+      vs.pixels=wm_framebuffer;
+      desktop_module_draw_all(&vs,(int)wm.screen_w-66,1,64,7);}}
     /* Register the console window as soon as the desktop takes over, even if
        nothing was printed since: otherwise the first full-screen desktop
        paint would leave no console at all. */
@@ -243,6 +254,16 @@ void kernel_wm_frame_tick(uint32_t now)
         wm_damage_pixels+=(uint32_t)wm.damage[d].w*(uint32_t)wm.damage[d].h;}}
     ++wm_frames;
     wm_recompose(&wm,glue_blit,0);
+    /* v10: desktop applet modules (clock) on the top bar.  Drawn after window
+       composition so it is not erased; the final flush below carries it. */
+    {static uint8_t applets_ready;
+     if(!applets_ready){desktop_module_register(&desktop_mod_clock);desktop_module_init_all(0);applets_ready=1u;}
+     desktop_module_tick_all(now);
+     {video_surface_t vs;
+      vs.width=(uint16_t)wm.screen_w;vs.height=(uint16_t)wm.screen_h;vs.pitch=wm_pitch;
+      vs.format=(uint8_t)((wm_bpp==8u)?VIDEO_FMT_CHUNKY_8BPP:VIDEO_FMT_PLANAR_1BPP);
+      vs.pixels=wm_framebuffer;
+      desktop_module_draw_all(&vs,(int)wm.screen_w-66,1,64,7);}}
     /* Window decorations: border + title bar. Cheap (a few spans) and drawn
        every frame so they survive the desktop application's own painting. */
     {wm_fb_t d;unsigned i;
@@ -263,6 +284,25 @@ void kernel_wm_frame_tick(uint32_t now)
     kvideo_damage(0,0,(int32_t)wm.screen_w,(int32_t)wm.screen_h);
     kvideo_flush();
 }
+/* v10: draw the desktop applet bar directly to the active framebuffer and
+   flush, independent of sessions/windows.  Called from the kernel main loop. */
+void kernel_wm_applet_bar(uint32_t now)
+{
+    static uint8_t applets_ready;
+    uint16_t pitch=0u;uint8_t bpp=0u;uint8_t *fb;
+    video_surface_t vs;
+    if(!applets_ready){desktop_module_register(&desktop_mod_clock);desktop_module_init_all(0);applets_ready=1u;}
+    fb=kgfx_framebuffer(&pitch,&bpp);
+    if(!fb||!pitch)return;
+    desktop_module_tick_all(now);
+    vs.width=(uint16_t)wm.screen_w;vs.height=(uint16_t)wm.screen_h;vs.pitch=pitch;
+    vs.format=(uint8_t)((bpp==8u)?VIDEO_FMT_CHUNKY_8BPP:VIDEO_FMT_PLANAR_1BPP);
+    vs.pixels=fb;
+    desktop_module_draw_all(&vs,(int)wm.screen_w-66,1,64,7);
+    kvideo_damage((int32_t)wm.screen_w-66,1,64,7);
+    kvideo_flush();
+}
+
 int kernel_wm_enabled(void){return wm_ready?1:0;}
 void kernel_wm_debug(int *count,int *flags,int *hidden,int *damage){if(count)*count=(int)wm.count;if(flags)*flags=wm.count>0u?(int)wm.win[0].flags:-1;if(hidden)*hidden=(int)console_hidden;if(damage)*damage=(int)wm.damage_count;}
 
