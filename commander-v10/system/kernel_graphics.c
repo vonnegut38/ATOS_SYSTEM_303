@@ -627,7 +627,9 @@ int kgfx_enter_desktop(void)
         for(i=0;i<16;i++){console_palette[i]=REG16(SHIFTER_PALETTE+i*2);
             if(graphics.mode!=2u)REG16(SHIFTER_PALETTE+i*2)=colors[i];}
     }
-    for(i=0;i<SCREEN_BYTES/4u;++i)destination[i]=0;
+    /* v10: clear only on a real mode entry; re-entering must not wipe the
+       already composed desktop (that caused a full-frame black/gray flicker). */
+    if(!desktop_is_active)for(i=0;i<SCREEN_BYTES/4u;++i)destination[i]=0;
     /* MagiC-style: when the ET4000 is active, draw straight into the card
        VRAM (v_bas_ad), with no intermediate buffer - that buffer was where the
        composed desktop got lost. */
