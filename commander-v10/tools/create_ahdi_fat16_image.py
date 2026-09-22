@@ -83,6 +83,7 @@ def main():
             root[offset + 1:offset + 4] = b"BGM"
             struct.pack_into(">I", root, offset + 4, start)
             struct.pack_into(">I", root, offset + 8, total)
+        struct.pack_into(">I", root, 0x1C2, next_sector)  # hd_siz: EmuTOS VALID_PARTITION needs it
         checksum = sum(struct.unpack(">256H", root)) & 0xFFFF
         struct.pack_into(">H", root, 510, (0x1234 - checksum) & 0xFFFF)
         write_sector(image, 0, root)

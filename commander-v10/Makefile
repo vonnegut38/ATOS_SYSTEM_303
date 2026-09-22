@@ -1202,6 +1202,6 @@ build/system/tos_start.o: system/tos_start.S
 
 .PHONY: desktop-gem
 desktop-gem: build/system/desktop_gem.o build/system/tos_start.o linker/tos-prg.ld tools/mk_tosprg.py
-	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/tos-prg.ld -Wl,--gc-sections -o build/system/desktop_gem.elf build/system/tos_start.o build/system/desktop_gem.o
+	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/tos-prg.ld -Wl,--gc-sections -Wl,--emit-relocs -o build/system/desktop_gem.elf build/system/tos_start.o build/system/desktop_gem.o
 	$(OBJCOPY) -O binary build/system/desktop_gem.elf build/system/desktop_gem.bin
 	python3 tools/mk_tosprg.py build/system/desktop_gem.elf build/system/DESKTOP.PRG

@@ -51,6 +51,11 @@ static void clock_text(char out[9])
 int _tos_main(void)
 {
     char clock[9];uint16_t last=0xffffu;int16_t w=640;
+    /* ATOS diagnostic: if AUTO runs at all, paint a marker straight into the
+       Shifter screen via XBIOS Physbase - no AES/VDI involvement. */
+    {uint32_t pb;uint32_t i;
+     __asm__ __volatile__("move.w #2,%%d0\n\ttrap #14\n\tmove.l %%d0,%0":"=r"(pb)::"d0","memory");
+     if(pb){uint8_t *scr=(uint8_t *)(uintptr_t)pb;for(i=0;i<8000u;++i)scr[i]=0xAAu;}}
     ap.contrl[0]=10; ap.contrl[3]=0; aes_call();      /* appl_init */
     vp.contrl[0]=1; vp.contrl[1]=0; vp.contrl[2]=0; vp.contrl[3]=0;
     vp.contrl[5]=1; vp.intin[0]=1;                     /* v_opnwk(device 1) */
