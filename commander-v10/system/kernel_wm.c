@@ -200,7 +200,12 @@ void kernel_wm_frame_tick(uint32_t now)
     /* Desktop session: paint the desktop background DIRECTLY every frame.
        wm_recompose only paints background for damaged rects, and with no
        window it produced nothing - the screen kept the console image. */
-    if(kernel_wm_desktop_session()){uint8_t *dfb=(uint8_t *)kgfx_framebuffer(&wm_pitch,&wm_bpp);if(dfb){int dy,db;for(dy=0;dy<400;++dy){uint8_t dpat=(dy&1)?0x55u:0xAAu;uint8_t *drow=dfb+(uint32_t)dy*wm_pitch;for(db=0;db<80;++db){if(db>=72&&dy<80)continue;if(drow[db]!=dpat)drow[db]=dpat;}}}}   /* write only what differs: static desktop, no flicker */
+    /* EmuTOS style: paint the desktop background ONCE per desktop entry, not
+       every frame.  Later changes come only from damage rectangles. */
+    {static uint8_t bg_done;
+     if(kernel_wm_desktop_session()){
+        if(!bg_done){uint8_t *dfb=(uint8_t *)kgfx_framebuffer(&wm_pitch,&wm_bpp);if(dfb){int dy,db;for(dy=0;dy<400;++dy){uint8_t dpat=(dy&1)?0x55u:0xAAu;uint8_t *drow=dfb+(uint32_t)dy*wm_pitch;for(db=0;db<80;++db){if(db>=72&&dy<80)continue;if(drow[db]!=dpat)drow[db]=dpat;}}}bg_done=1u;}
+     }else bg_done=0u;}
     /* Refresh the surface every frame: the graphics layer switches framebuffer
        and bpp (1bpp card vs 8bpp surface), so a value cached at init made the
        decorations and the desktop dither use the wrong path. */
@@ -294,6 +299,8 @@ void kernel_wm_applet_bar(uint32_t now)
     if(!applets_ready){desktop_module_register(&desktop_mod_clock);desktop_module_init_all(0);applets_ready=1u;}
     fb=kgfx_framebuffer(&pitch,&bpp);
     if(!fb||!pitch)return;
+    /* Only redraw the applet when the visible second changes (EmuTOS style). */
+    {static uint32_t last_sec=0xFFFFFFFFu;uint32_t sec=now/50u;if(sec==last_sec)return;last_sec=sec;}
     desktop_module_tick_all(now);
     vs.width=(uint16_t)wm.screen_w;vs.height=(uint16_t)wm.screen_h;vs.pitch=pitch;
     vs.format=(uint8_t)((bpp==8u)?VIDEO_FMT_CHUNKY_8BPP:VIDEO_FMT_PLANAR_1BPP);
