@@ -568,7 +568,7 @@ void kgfx_cursor_hide(void)
 {
     surface_t surface;uint16_t row,plane,group,shift,index=0;
     if(!cursor_is_visible)return;
-    surface=active_surface();surface.words=(volatile uint16_t *)(uintptr_t)((desktop_is_active&&!desktop_hidden)?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE);group=(uint16_t)cursor_x>>4;shift=(uint16_t)cursor_x&15u;
+    surface=active_surface();surface.words=(volatile uint16_t *)(uintptr_t)((kvideo_is_vofa()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE));group=(uint16_t)cursor_x>>4;shift=(uint16_t)cursor_x&15u;
     for(row=0;row<cursor_height;++row){
         volatile uint16_t *word=surface.words+(uint32_t)(cursor_y+row)*surface.line_words+group*surface.planes;
         for(plane=0;plane<surface.planes;++plane){
@@ -593,7 +593,7 @@ void kgfx_cursor_show(int32_t x,int32_t y)
     cursor_width=(uint8_t)(remaining<16u?remaining:16u);
     remaining=(uint16_t)(graphics.height-(uint16_t)y);
     cursor_height=(uint8_t)(remaining<16u?remaining:16u);
-    surface=active_surface();surface.words=(volatile uint16_t *)(uintptr_t)((desktop_is_active&&!desktop_hidden)?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE);group=(uint16_t)x>>4;shift=(uint16_t)x&15u;
+    surface=active_surface();surface.words=(volatile uint16_t *)(uintptr_t)((kvideo_is_vofa()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE));group=(uint16_t)x>>4;shift=(uint16_t)x&15u;
     for(row=0;row<cursor_height;++row){
         volatile uint16_t *word=surface.words+(uint32_t)(y+row)*surface.line_words+group*surface.planes;
         uint16_t left=(uint16_t)(cursor_shape[row]>>shift);
@@ -886,7 +886,7 @@ void kgfx_overlay_show(const term_cell_t *cells,unsigned rows)
  }
  kgfx_overlay_hide();kgfx_cursor_hide();
  if(!terminal_font_ready){term_font_prepare(terminal_font,emutos_system_font);terminal_font_ready=1;}
- overlay_screen=(volatile uint16_t *)(uintptr_t)(kgfx_desktop_active()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE);
+ overlay_screen=(volatile uint16_t *)(uintptr_t)(kvideo_is_vofa()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE);
  overlay_rows=rows;
  kvideo_damage(576,0,64,(int32_t)rows*16);
  for(x=0;x<rows*8;x++)overlay_cells[x]=cells[x];
