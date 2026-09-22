@@ -347,7 +347,9 @@ void kernel_main(const boot_handoff_t *h)
             if(kernel_dispatch_output_user()&&!kernel_user_terminal_active()&&!kernel_user_gui_keyboard_active())shell->redraw_prompt();
             kernel_handle_dispatch_completion(&runtime_handoff,shell);
             ksessions_pump();
-            if(!kernel_wm_console_visible())kconsole_flush();
+            /* v10: while the desktop view is active, the compositor is the
+               only painter - no console/session flush (that caused flicker). */
+            if(!kgfx_desktop_active()&&!kernel_wm_console_visible())kconsole_flush();
             kernel_wm_frame_tick(timer_service->ticks());
             kernel_wm_applet_bar(timer_service->ticks());
             if(!kgfx_desktop_active())ksessions_paint();
