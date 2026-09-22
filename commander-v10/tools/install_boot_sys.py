@@ -120,13 +120,45 @@ if system_cluster < 2:
     entry=bytearray(32);entry[:11]=b"SYSTEM     ";entry[11]=0x10
     struct.pack_into("<H",entry,26,system_cluster);write_at(root_slot,entry)
 
+def find_root_subdirectory(name):
+    wanted=name.ljust(11).encode("ascii")
+    for o in range(root_off, root_off+root_bytes, 32):
+        e=read_at(o,32)
+        if e[0]==0: return 0
+        if e[0]!=0xE5 and e[:11]==wanted and e[11]&0x10: return le16(e,26)
+    return 0
+
+def allocate_root_subdirectory(name):
+    try: new_cluster=next(c for c in range(2,max_clusters) if fat_get(c)==0)
+    except StopIteration: raise SystemExit("not enough free FAT clusters")
+    fat_set(new_cluster,0xFFFF)
+    block=bytearray(cluster_bytes)
+    block[0:11]=b".          "; block[11]=0x10
+    struct.pack_into("<H",block,26,new_cluster)
+    block[32:43]=b"..         "; block[43]=0x10
+    struct.pack_into("<H",block,58,0)
+    write_at(cluster_off(new_cluster),block)
+    wanted=name.ljust(11).encode("ascii")
+    for o in range(root_off, root_off+root_bytes, 32):
+        e=read_at(o,32)
+        if e[0] in (0,0xE5):
+            entry=bytearray(32);entry[:11]=wanted;entry[11]=0x10
+            struct.pack_into("<H",entry,26,new_cluster);write_at(o,entry)
+            return new_cluster
+    raise SystemExit("root directory has no free entry")
+
 target_directory=0
 directory_label=""
 if not args.root:
     components=[part.upper() for part in args.directory.replace("\\","/").split("/") if part]
-    if not components or components[0]!="SYSTEM":
-        raise SystemExit("destination directory must be SYSTEM or a subdirectory of SYSTEM")
-    target_directory=system_cluster;directory_label="SYSTEM"
+    if not components:
+        raise SystemExit("empty destination directory")
+    if components[0]=="SYSTEM":
+        target_directory=system_cluster;directory_label="SYSTEM"
+    else:
+        target_directory=find_root_subdirectory(components[0])
+        if target_directory<2: target_directory=allocate_root_subdirectory(components[0])
+        directory_label=components[0]
     for component in components[1:]:
         if len(component)>8 or not component.isascii():
             raise SystemExit("directory components must use ASCII 8.3 names")
