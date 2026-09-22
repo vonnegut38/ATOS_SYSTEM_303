@@ -1190,3 +1190,18 @@ check-sysinfo:
 	@mkdir -p build/tests
 	cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sysinfo.c system/text_terminal.c -o build/tests/test_sysinfo
 	build/tests/test_sysinfo
+
+# --- GEM desktop app (our desktop on the EmuTOS layer) ---
+build/system/desktop_gem.o: system/desktop_gem.c
+	@mkdir -p $(@D)
+	$(CC) -m68000 -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -std=gnu11 -Iinclude -c $< -o $@
+
+build/system/tos_start.o: system/tos_start.S
+	@mkdir -p $(@D)
+	$(CC) -m68000 -ffreestanding -c $< -o $@
+
+.PHONY: desktop-gem
+desktop-gem: build/system/desktop_gem.o build/system/tos_start.o linker/tos-prg.ld tools/mk_tosprg.py
+	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/tos-prg.ld -Wl,--gc-sections -o build/system/desktop_gem.elf build/system/tos_start.o build/system/desktop_gem.o
+	$(OBJCOPY) -O binary build/system/desktop_gem.elf build/system/desktop_gem.bin
+	python3 tools/mk_tosprg.py build/system/desktop_gem.elf build/system/DESKTOP.PRG
