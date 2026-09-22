@@ -1194,7 +1194,7 @@ check-sysinfo:
 # --- GEM desktop app (our desktop on the EmuTOS layer) ---
 build/system/desktop_gem.o: system/desktop_gem.c
 	@mkdir -p $(@D)
-	$(CC) -m68000 -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -std=gnu11 -mpcrel -fno-jump-tables -Iinclude -c $< -o $@
+	$(CC) -m68000 -Os -ffreestanding -fomit-frame-pointer -Wall -Wextra -std=gnu11 -Iinclude -c $< -o $@
 
 build/system/tos_start.o: system/tos_start.S
 	@mkdir -p $(@D)
