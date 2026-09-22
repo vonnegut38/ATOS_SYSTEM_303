@@ -3,7 +3,7 @@
     .section .text.startup,"ax"
     .globl _tos_start
 _tos_start:
-    jsr     _tos_main
+    bsr     _tos_main
     move.w  #0,-(%sp)
     move.w  #0x4c,%d0
     trap    #1                  /* Pterm(0) */
