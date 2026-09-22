@@ -636,7 +636,7 @@ int kgfx_enter_desktop(void)
        buffer nobody shows (screen kept the stale console image). Use VOFA VRAM
        only when the ET4000 path is active, otherwise the Shifter screen. */
     graphics.framebuffer=(volatile uint8_t *)(uintptr_t)(kvideo_is_vofa()?(uintptr_t)desktop_framebuffer:(uintptr_t)SCREEN_BASE);kgfx_dirty_reset();
-    if(!desktop_hidden)kvideo_select(desktop_framebuffer);
+    if(!desktop_hidden)kvideo_select((const volatile uint8_t *)(uintptr_t)(kvideo_is_vofa()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE));
     desktop_is_active=1;return 1;
 }
 
@@ -660,7 +660,7 @@ void kgfx_session_view(int show)
  uint8_t hidden=!show;
  if(hidden==desktop_hidden)return;
  kgfx_overlay_hide();kgfx_cursor_hide();desktop_hidden=hidden;
- kvideo_select((desktop_is_active&&!desktop_hidden)?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE);
+ kvideo_select((const volatile uint8_t *)(uintptr_t)(kvideo_is_vofa()?desktop_framebuffer:(volatile uint8_t *)(uintptr_t)SCREEN_BASE));
 }
 
 const kgfx_service_t *kgfx_get_service(void)
