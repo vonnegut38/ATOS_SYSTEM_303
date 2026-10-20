@@ -3,6 +3,8 @@ from pathlib import Path
 import struct
 import subprocess
 
+from toolchain import tool
+
 for name,elf in [('SYSINFO','sysinfo_app'),('MONODESK','monodesk'),('COUNT','mono_count'),('NOTE','mono_note'),('COMMAND','commander'),('FATWRITE','fat_write_test'),('COMTEST','commander_test'),('CACHETST','cache_test'),('TRASHTST','trash_test'),('TERMTST','terminal_test')]:
     p=Path('build/system')/(name+'.APP');b=p.read_bytes()
     file_size,memory,entry,stack,checksum=struct.unpack_from('>5I',b,12)
@@ -10,7 +12,7 @@ for name,elf in [('SYSINFO','sysinfo_app'),('MONODESK','monodesk'),('COUNT','mon
     assert memory>=file_size and 32<=entry<file_size and stack>=1024,name
     assert sum(b[:28]+b[32:])&0xffffffff==checksum,name+' checksum'
     assert b[-12:-8]==b'APW2',name+' policy'
-    disasm=subprocess.check_output(['m68k-elf-objdump','-d',str(p.with_name(elf+'.elf'))],text=True)
+    disasm=subprocess.check_output([tool('objdump'),'-d',str(p.with_name(elf+'.elf'))],text=True)
     for line in disasm.splitlines():
         if '\tjsr ' in line or '\tjmp ' in line:
             target=line.split('\t')[-1].split()[1]

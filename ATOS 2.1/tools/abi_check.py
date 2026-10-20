@@ -8,6 +8,8 @@ Any callee-saved register (d2-d7/a2-a6) written inside a function that never
 saves it is an ABI violation."""
 import subprocess, re, sys
 
+from toolchain import tool
+
 CALLEE = {("d", i) for i in range(2, 8)} | {("a", i) for i in range(2, 7)}
 
 def norm(op):
@@ -39,7 +41,7 @@ def is_stack(op):
     return "@" in o and "%a7" in o
 
 def parse(elf):
-    out = subprocess.run(["m68k-elf-objdump", "-m68030", "-d", "--no-show-raw-insn", elf],
+    out = subprocess.run([tool("objdump"), "-m68030", "-d", "--no-show-raw-insn", elf],
                          capture_output=True, text=True).stdout
     funcs, cur = [], None
     for ln in out.splitlines():

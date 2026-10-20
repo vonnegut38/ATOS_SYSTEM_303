@@ -12,6 +12,7 @@ from pathlib import Path
 REAL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REAL / "atos2-tools"))
 from atos2_auto import Hatari
+from toolchain import tool
 
 HEADLESS = "--headless" in sys.argv
 SECONDS = 120
@@ -22,7 +23,7 @@ IMG = str(REAL / "work/atos-tree-full.img")
 BIOS = str(REAL / "work/audio-baseline/BIOS-tree.bin")
 
 symbols = {}
-nm = subprocess.run(["m68k-elf-nm", str(REAL / "build/system/kernel.elf")],
+nm = subprocess.run([tool("nm"), str(REAL / "build/system/kernel.elf")],
                     capture_output=True, text=True).stdout
 for line in nm.splitlines():
     p = line.split()

@@ -16,8 +16,9 @@ import struct
 import subprocess
 import sys
 
-BASE = 0  # text is linked from address 0 (standard GEMDOS PRG)
+from toolchain import tool
 
+BASE = 0  # text is linked from address 0 (standard GEMDOS PRG)
 
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
@@ -25,13 +26,13 @@ def run(cmd):
 
 def section_bytes(elf, section):
     out = "/tmp/mk_tosprg_%s.bin" % section.strip(".")
-    subprocess.run(["m68k-elf-objcopy", "-O", "binary", "-j", section, elf, out], check=True)
+    subprocess.run([tool("objcopy"), "-O", "binary", "-j", section, elf, out], check=True)
     with open(out, "rb") as handle:
         return handle.read()
 
 
 def section_size(elf, section):
-    for line in run(["m68k-elf-size", "-A", elf]).splitlines():
+    for line in run([tool("size"), "-A", elf]).splitlines():
         parts = line.split()
         if len(parts) >= 2 and parts[0] == section:
             return int(parts[1], 0)
@@ -40,7 +41,7 @@ def section_size(elf, section):
 
 def text_base(elf):
     """Address the linker placed the text at (the loader's load base + 0x100)."""
-    for line in run(["m68k-elf-nm", elf]).splitlines():
+    for line in run([tool("nm"), elf]).splitlines():
         parts = line.split()
         if len(parts) == 3 and parts[2] == "_tos_start":
             return int(parts[0], 16)
@@ -56,7 +57,7 @@ def section_layout(elf):
     call of a correctly linked program (a fault also reports -2, which looked
     like "file not found")."""
     layout = {}
-    for line in run(["m68k-elf-objdump", "-h", elf]).splitlines():
+    for line in run([tool("objdump"), "-h", elf]).splitlines():
         parts = line.split()
         if len(parts) >= 4 and parts[1].startswith(".") and parts[0].isdigit():
             try:
@@ -71,7 +72,7 @@ def section_layout(elf):
 def relocations(elf, base):
     """Absolute-longword sites, as offsets from the start of the text."""
     offsets = []
-    for line in run(["m68k-elf-readelf", "-r", elf]).splitlines():
+    for line in run([tool("readelf"), "-r", elf]).splitlines():
         parts = line.split()
         if len(parts) >= 3 and parts[2].startswith("R_68K_32"):
             offsets.append(int(parts[0], 16) - base)
