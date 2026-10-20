@@ -22,7 +22,9 @@ jobs:
       - name: Build (TOS=1)
         working-directory: "ATOS 2.1"
         run: |
-          make CROSS=m68k-linux-gnu- TOS=1 -j"$(nproc)" 2>&1 | tail -40
+          set -o pipefail
+          m68k-linux-gnu-gcc --version | head -1
+          make CROSS=m68k-linux-gnu- TOS=1 -j"$(nproc)"
           ls -la build/system/KERNEL.SYS build/system/DESKTOP.APP build/system/SETTINGS.APP build/system/GFX.APP build/system/ICONS.DAT
 
       - name: Testy hostowe - grafika (ikony, tapeta, planar)
