@@ -1244,14 +1244,19 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    STATUS TESTU: kod dziala/sie buduje, ale test END-TO-END NIE PRZESZEDL -
    nie udalo sie UTWORZYC katalogu z >28 pozycjami przez wpisywanie polecen
    w oknie terminala (patrz nizej).  Trzeba najpierw rozwiazac blad COPY.
-   NOWY ZNALEZIONY BLAD (potwierdzony dwa razy): COPY z celem ABSOLUTNYM nie
-   dziala - "copy \NOTES.TXT \TMP\B.TXT" daje INVALID PATH, a
-   "copy \NOTES.TXT TMP\A.TXT" (cel wzgledny, to samo miejsce przy cwd=\) dziala.
-   Podejrzenie: shell_build_path() albo resolve_path() dla celu absolutnego.
-   To blokuje tez test stronicowania (nie da sie napelnic katalogu).
-   JAK TESTOWAC STRONICOWANIE PO NAPRAWIE COPY: display-demo: 30x
-   "copy \NOTES.TXT P%02D.TXT" w oknie terminala (KLIK W OKNO przed pisaniem,
-   inaczej klawiatura zostaje na pulpicie), ESC, F7, potem Right/Right/Left/Left
-   - zrzuty musza sie roznic miedzy stronami i wrocic do strony 1.
+   UWAGA - SPROSTOWANIE (wazne, zeby nie gonil falszywego bledu): NIE ma
+   potwierdzonego bledu COPY.  W dwoch przebiegach testu pliki P01..P30 NIE
+   POWSTALY (sprawdzone po zamknieciu emulatora: 0 plikow i w \, i w \SYSTEM),
+   ale NIE wiadomo jeszcze dlaczego - komunikaty z okna terminala nie sa
+   czytane w tekscie.  Wczesniejszy "INVALID PATH" tlumaczyl sie ZLYM ZRODLEM
+   (\SYSTEM\NOTES.TXT zamiast \NOTES.TXT), wiec tamten trop byl slepy.
+   W KONSOLI (pulpit zamkniety) copy DZIALA - dowod w 10z (COPY \NOTES.TXT
+   TMP\A.TXT -> A.TXT 42 -> TYPE -> MOVE -> DEL).
+   JAK TESTOWAC STRONICOWANIE (obejscie, ktore na pewno zadziala): NAPELNIC
+   KATALOG W KONSOLI, gdzie copy dziala: zamknac pulpit (FILE->CLOSE), wpisac
+   30x "copy \NOTES.TXT TMP\Pxx.TXT" (TMP utworzyc przez "mkdir tmp"),
+   wystartowac pulpit (\SYSTEM\APP\DESKTOP.APP), F7, wejsc do TMP (dwuklik
+   wiersza) i testowac Right/Right/Left/Left.  Zrzuty musza sie roznic miedzy
+   stronami i wrocic do strony 1.
    UWAGA: klik w ikone TERMINAL to (48,190), nie (78,198) - (78,198) trafia
    obok i terminal sie nie otwiera (tracone 2 przebiegi testu).
