@@ -545,7 +545,12 @@ int kernel_tos_async_keyboard(void)
        trzymal klawiature (kernel_tos_async_owns) i slot procesu, a jedynym
        wyjsciem byl restart maszyny.  Klawisz jest konsumowany (nie idzie do
        goscia). */
-    if(t==1u&&s==0x01u&&(m&4u)&&(m&8u)){tos_async_cancel=1u;return 1;}
+    {extern uint32_t kdbg_ksw_async_keys,kdbg_ksw_async_esc,kdbg_ksw_async_mods;
+     ++kdbg_ksw_async_keys;
+     if(t==1u&&s==0x01u){++kdbg_ksw_async_esc;kdbg_ksw_async_mods=m;}}
+    if(t==1u&&s==0x01u&&(m&4u)&&(m&8u)){
+        {extern uint32_t kdbg_ksw_async_chord; ++kdbg_ksw_async_chord;}
+        tos_async_cancel=1u;return 1;}
     i=tos_async_key_tail++%TOS_ASYNC_EVENTS;
     tos_async_keys[i].type=t;tos_async_keys[i].scan=s;
     tos_async_keys[i].mods=m;tos_async_keys[i].ch=c;
@@ -621,6 +626,9 @@ void tos_poll_input(void)
             else if(sc==0x44&&tos_kb_shift&&tos_kb_alt){
                 tos_kb_shift=0u;tos_kb_alt=0u;ksessions_hotkey_cycle();}
             tos_key_update((uint8_t)sc);
+            {extern uint32_t kdbg_ksw_hook_keys,kdbg_ksw_hook_esc,kdbg_ksw_hook_mods;
+             ++kdbg_ksw_hook_keys;
+             if((uint8_t)sc==0x01u){++kdbg_ksw_hook_esc;kdbg_ksw_hook_mods=tos_kbshift;}}
             /* Ctrl+Alt+Esc = kill-switch takze w trybie SYNCHRONICZNYM (program
                uruchomiony z konsoli poleceniem 'tos').  W trybie async robi to
                kernel_tos_async_keyboard (tos_async_cancel), ale ta sciezka -
@@ -628,6 +636,7 @@ void tos_poll_input(void)
                programu i SYSINFO pokazywal "Exit SysInfo ?" zamiast wrocic do
                powloki.  Klawisz jest konsumowany, nie trafia do goscia. */
             if((uint8_t)sc==0x01u&&(tos_kbshift&4u)&&(tos_kbshift&8u)){
+                {extern uint32_t kdbg_ksw_hook_chord; ++kdbg_ksw_hook_chord;}
                 tos_exit_request=1u;continue;}
             a=tos_key_ascii((uint8_t)sc,tos_shift,tos_caps);
             if(!a){
@@ -2897,6 +2906,13 @@ int kernel_tos_running(void)
 void kernel_tos_request_exit(void)
 {
     tos_exit_request=1u;
+    /* Program konczy sie w asf_tos_exit(), ale okno na ekranie zostaje jako
+       "widmo" ostatniej klatki - dokladnie tak wygladalo "kill-switch nie
+       dziala" w testach: tos_active spadalo do 0, a pulpit nie byl
+       przemalowany.  Zamkniecie okna z pulpitu robi to samo przez
+       kernel_tos_window_closed(). */
+    tos_desktop_repaint=1u;
+    tos_band_valid=0u;
 }
 
 void kernel_tos_window_closed(void)

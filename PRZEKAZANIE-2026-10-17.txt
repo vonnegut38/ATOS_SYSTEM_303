@@ -1144,3 +1144,32 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
       odpowiada na 'dir'.
    UWAGA: dopoki to nie dziala, do zamykania programow TOS z konsoli uzywac
    zamkniecia okna mysza (dziala) albo uruchamiac z pulpitu.
+
+10ah. KILL-SWITCH TOS - DIAGNOZA WYKONANA, PROGRAM JUZ GINIE (20.10):
+   Diagnostyka (liczniki kdbg_ksw_* w trzech wejsciach klawiatury + odczyt
+   stanu tos_active/tos_async_state/tos_exit_request/tos_kbshift memdumpem)
+   pokazala JEDNOZNACZNIE:
+     PRZED chordem:  async=0 active=1 exit_req=0 kbshift=0
+     PO chordzie:    kdbg_ksw_wm_esc 0->1 (mods=0x0c = Ctrl+Alt)
+                     kdbg_ksw_wm_chord 0->1
+                     async=0 active=0 exit_req=1
+   Czyli: ESC DOCIERA do kernel_wm_key z modyfikatorami 0x0c, chord sie wykonuje,
+   a program KONCZY SIE (tos_active 1->0).  Wczesniejsze "nie dziala" bylo
+   zludzeniem: program umieral, ale NA EKRANIE zostawala jego ostatnia klatka
+   (widmo okna), bo sciezka chorda nie prosila pulpitu o przemalowanie.
+   POPRAWKA: kernel_tos_request_exit() ustawia teraz takze tos_desktop_repaint=1
+   i tos_band_valid=0 (to samo, co robi zamkniecie okna z pulpitu przez
+   kernel_tos_window_closed()).
+   EFEKT PO POPRAWCE: po Ctrl+Alt+Esc dol ekranu wraca do konsoli (czarny),
+   ale GORNA czesc nadal trzyma stara klatke pulpitu+SYSINFO - czyli
+   przemalowanie jest CZESCIOWE.  To ostatni brakujacy element.
+   NASTEPNY KROK (jedno miejsce): tos_composite_work() wola
+   kernel_wm_compose_now() tylko gdy `tos_desktop_repaint && !tos_client_surface`
+   (tos_prg.c:3212), a przy samobojczym wyjsciu programu tos_client_surface
+   nie jest zerowane.  Mozliwosci: (a) zerowac tos_client_surface przy wyjsciu
+   programu, (b) po zakonczeniu programu TOS wymusic pelny refresh warstwy
+   wideo (nie ma dzis eksportowanego "full refresh"; trzeba dodac np.
+   kvideo_request_full()), (c) po wyjsciu zawolac pelne przemalowanie konsoli.
+   DIAGNOSTYKA ZOSTAJE W KODZIE (liczniki kdbg_ksw_*) - nie usuwac, dopoki
+   temat nie jest zamkniety; po zamknieciu mozna je zostawic (koszt: 15 slow
+   BSS) albo usunac.

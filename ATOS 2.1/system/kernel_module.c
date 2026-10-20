@@ -139,6 +139,26 @@ static int get_cpu_info(kernel_cpu_info_t *info)
     info->reserved[0]=info->reserved[1]=info->reserved[2]=0;return 1;
 }
 
+/* --- Diagnostyka kill-switcha TOS (Ctrl+Alt+Esc) -------------------------
+   Kazde wejscie klawiatury liczy zdarzenia osobno, zeby po JEDNYM przebiegu
+   testu bylo widac, dokad kombinacja dociera, a gdzie ginie.  Czytane
+   memdumpem po symbolach (m68k-elf-nm), bez zapisow na obraz. */
+uint32_t kdbg_ksw_funnel_keys;   /* zdarzenia klawiszy w funnela           */
+uint32_t kdbg_ksw_funnel_esc;    /* ESC (down) w funnela                   */
+uint32_t kdbg_ksw_funnel_mods;   /* user_shift_state przy tym ESC          */
+uint32_t kdbg_ksw_funnel_chord;  /* ile razy chord zadzialal w funnela     */
+uint32_t kdbg_ksw_wm_esc;        /* ESC w kernel_wm_key                    */
+uint32_t kdbg_ksw_wm_mods;       /* mods przy tym ESC                      */
+uint32_t kdbg_ksw_wm_chord;      /* chord zadzialal w kernel_wm_key        */
+uint32_t kdbg_ksw_hook_keys;     /* zdarzenia w hooku terminala (sync)     */
+uint32_t kdbg_ksw_hook_esc;      /* ESC w hooku                            */
+uint32_t kdbg_ksw_hook_mods;     /* tos_kbshift przy ESC w hooku           */
+uint32_t kdbg_ksw_hook_chord;    /* chord zadzialal w hooku                */
+uint32_t kdbg_ksw_async_keys;    /* zdarzenia w kernel_tos_async_keyboard  */
+uint32_t kdbg_ksw_async_esc;     /* ESC tam                                */
+uint32_t kdbg_ksw_async_mods;    /* mody przy ESC tam                      */
+uint32_t kdbg_ksw_async_chord;   /* chord zadzialal tam                    */
+
 int kernel_user_keyboard_event(uint32_t *event_type,uint32_t *scan_code,
                                uint32_t *modifiers,uint32_t *character)
 {
@@ -161,6 +181,10 @@ int kernel_user_keyboard_event(uint32_t *event_type,uint32_t *scan_code,
     else if(type==KERNEL_INPUT_KEY_DOWN&&scan<64u){
         if(user_shift_state&4u){if(scan==0x2eu)ascii=3u;else if(scan==0x2cu)ascii=26u;}
         else ascii=(user_shift_state&3u)?user_key_shifted[scan]:user_key_plain[scan];}
+    if(type==KERNEL_INPUT_KEY_DOWN){
+        ++kdbg_ksw_funnel_keys;
+        if(scan==0x01u){++kdbg_ksw_funnel_esc;kdbg_ksw_funnel_mods=user_shift_state;}
+    }
     *event_type=type;*scan_code=scan;*modifiers=user_shift_state;*character=ascii;
     /* Ctrl+Alt+Esc = kill-switch programu TOS, niezaleznie od tego, kto go
        uruchomil.  Wczesniej dzialal tylko przez pulpit (zamkniecie okna ->
@@ -171,7 +195,7 @@ int kernel_user_keyboard_event(uint32_t *event_type,uint32_t *scan_code,
     if(type==KERNEL_INPUT_KEY_DOWN&&scan==0x01u&&(user_shift_state&12u)==12u){
         extern int kernel_tos_running(void);
         extern void kernel_tos_request_exit(void);
-        if(kernel_tos_running()){kernel_tos_request_exit();return 0;}
+        if(kernel_tos_running()){++kdbg_ksw_funnel_chord;kernel_tos_request_exit();return 0;}
     }
     /* Shift+Alt+F10 must switch sessions even when a TOS GUI owns the keyboard
        (the shell module only handles it when the shell has focus). */
