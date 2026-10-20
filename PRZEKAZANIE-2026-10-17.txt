@@ -1173,3 +1173,20 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    DIAGNOSTYKA ZOSTAJE W KODZIE (liczniki kdbg_ksw_*) - nie usuwac, dopoki
    temat nie jest zamkniety; po zamknieciu mozna je zostawic (koszt: 15 slow
    BSS) albo usunac.
+
+10ai. KILL-SWITCH TOS - DZIALA (20.10, ZAMKNIETE):
+   Po diagnostyce z 10ah poprawka: epilog programu TOS (tos_prg.c, po
+   tos_close_window()) wola teraz kconsole_invalidate() + kconsole_flush() oraz
+   kernel_wm_compose_now() (gdy pulpit jest aktywny).  Funkcja
+   kconsole_invalidate() juz istniala w kernel_console.c - nie dopisywac
+   drugiej (blad "redefinition").
+   DOWOD (przebieg diagnostyczny): po Ctrl+Alt+Esc
+     kdbg_ksw_wm_chord 0->1, mods=0x0c, tos_active 1->0, exit_req=1,
+     a na ekranie: "TOS TASKS LEFT: 0", "DISK CACHE: ...", prompt "tts1 C:\>"
+     i "[PID 3 EXIT 1]" - konsola wrocila i powloka odpowiada.
+   ZOSTAJE KOSMETYKA: po prawej stronie ekranu zostaje pionowy pas starej klatki
+   (obszar TLA pulpitu) - odmalowuje sie przy nastepnym zdarzeniu pulpitu, bo tlo
+   rysuje DESKTOP.APP, a nie kompozytor.  Gdyby przeszkadzalo: trzeba dac
+   pulpitowi kanal "przemaluj sie" (np. flaga pollowana przez pulpit) - nie
+   robione, bo nie wplywa na dzialanie.
+   Liczniki kdbg_ksw_* zostaja w kodzie jako diagnostyka.

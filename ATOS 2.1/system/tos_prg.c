@@ -3846,6 +3846,14 @@ int32_t kernel_tos_run_program(const char *path)
         tos_force_present=1u;
         tos_composite_work();
         tos_close_window();
+        /* Program mogl rysowac bezposrednio po ekranie (takze gdy zostal
+           zabity Ctrl+Alt+Esc).  Wymuszamy pelne przemalowanie konsoli i
+           kompozycje okien, inaczej na ekranie zostaje ostatnia klatka
+           programu ("widmo okna") - patrz przekazanie, punkt 10ah. */
+        {extern void kconsole_invalidate(void);extern void kconsole_flush(void);
+         extern void kernel_wm_compose_now(void);
+         kconsole_invalidate();kconsole_flush();
+         if(kgfx_desktop_active())kernel_wm_compose_now();}
         tos_task_free(slot);
         for(k=0u;k<13u;++k)vec[vidx[k]]=tos_saved_vec[k];
         tos_vec_snapshot_restore();   /* nothing may point into freed TPA */
