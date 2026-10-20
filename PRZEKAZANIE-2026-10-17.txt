@@ -972,3 +972,64 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    UWAGA NA PRZYSZLOSC: przeniesienie do TRASH na TYM SAMYM wolumenie NIE
    zwalnia miejsca - trzeba kasowac albo przenosic na inny dysk.  Dlatego
    harnessy powinny po sobie kasowac swoje klony obrazow (kazdy to 768 MB).
+
+10ab. SNAPSHOT DO GITA (20.10) - PRACA WRESZCIE MA PUNKT ODTWORZENIA:
+   Problem: `git ls-files "ATOS 2.1"` zwracalo 0 - caly projekt (zrodla, ikony v5,
+   testy, harnessy, raporty) byl poza repozytorium, ostatni commit z 6.10.
+   ZROBIONE (3 commity, bez push - repo nie ma remote):
+     a927a49  .gitignore: TRASH/, *.avi, work/, PRZEKAZANIE_DEEPSEEK/, *.tar.gz,
+              ATOS_AKTUALNY/, ATOS_KOPIA/, PRE2*/, binarki display-demo/hatari-*,
+              _claude_tmp/, *.jpeg
+     5aabfff  ATOS 2.1: 2505 plikow (zrodla jadra/systemu/aplikacji, testy,
+              narzedzia, docs) - stan po sesji 20.10
+     2cede62  display-demo + dokumenty przekazania: 679 plikow (harnessy
+              stress_*, test-wall-custom, test-icons-size, raporty, zrzuty)
+   ROZMIAR REPO: size-pack 2,78 MiB (obrazy, checkpointy .tar.gz i binarki
+   emulatora sa CELOWO poza gitem - sa odtwarzalne).
+   WERYFIKACJA: `git status --short "ATOS 2.1" display-demo` puste; kluczowe
+   pliki (Makefile, kernel_graphics.c, icons_ids.h, test_icons_dat_v5.py,
+   stress_atos.py, raporty) siedza w indeksie.
+   POZA SNAPSHOTEM (swiadomie): 86 nieutworzonych wpisow uzytkownika (xlsx,
+   .st, archiwa projektowe) oraz 8 zmodyfikowanych plikow ze STARSZEJ linii
+   v10 (atari-030-port/run-bios-vga.sh, commander-v9/v10, files-pasted-
+   by-the-user-projekt/{loader,system,tools}) - to nie jest praca tej sesji;
+   jesli maja byc w repo, to osobny commit "ATOS v10 stan z 6.10".
+   JAK WRACAC: `git log --oneline`, `git diff <commit>`, `git checkout <plik>`.
+   UWAGA: repo jest lokalne (brak remote) - kopia .git na inny dysk to jedyne
+   zabezpieczenie przed utrata; nie dalo sie jej zrobic automatycznie, bo
+   /Volumes/desktop-7o2jm9q jest poza sandboxem (wymaga zgody uzytkownika).
+
+10ac. KOPIA ZAPASOWA NA DYSKU D (20.10, ZROBIONE):
+   Cel: repo git nie ma remote, dysk jest jeden -> kopia na zewnetrznym wolumenie.
+   Miejsce: /Volumes/desktop-7o2jm9q/ATOS-BACKUP/2026-10-20/  (wolumen "D",
+   3,6 TB, 2,1 TB wolne; zapis wymagal zgody poza sandboxem).
+   ZAWARTOSC:
+     ATOS-20261020.bundle   22,6 MB - CALE repo (branch main, HEAD 2cede62),
+                            SHA-256 7325dba98445ecc3f341c51ccfe20ec50d1a152f8dbfcaffbcc9932f2d3e8bb5
+     PRZEKAZANIE-2026-10-17.txt, HANDOFF-20261014.txt, NAPRAWA-TRAP-4BPP-*,
+     ANALIZA-MAGIC-DRAG-*, 00-ZACZNIJ-TUTAJ.txt,
+     9 raportow z testow (stress/display/sesje/konsola/kopiowanie/tryby),
+     20261020-HDD-MANIFEST-SKASOWANE.txt (co skasowano przy sprzataniu),
+     README.txt (co to jest + jak odtworzyc).
+   WERYFIKACJA (nie tylko "skopiowane"): SHA-256 zgodne po obu stronach ORAZ
+   klon z pliku NA DYSKU D przetestowany - `git clone .../ATOS-20261020.bundle`
+   daje 2505 plikow ATOS 2.1 i pelna historie (HEAD 2cede62).
+   CZEGO NIE KOPIOWANO (swiadomie): obrazy .img (768 MB kazdy, odtwarzalne),
+   checkpointy .tar.gz i binarki hatari.  Jesli ktos chce kopii obrazu
+   demo-guard.img (kanoniczny obraz testowy) - to osobne 768 MB, do dodania.
+   ODTWORZENIE PO AWARII: git clone ATOS-20261020.bundle ATOS, potem w
+   display-demo `cp -c demo-guard.img` (lub odtworzenie obrazu z 5 plikow
+   systemu wg punktu 6) i `make TOS=1`.
+
+10ad. KOPIA ZAPASOWA - OBRAZY TESTOWE DOLOZONE (20.10, ZROBIONE):
+   Na prosbe uzytkownika kopia na dysku D zawiera teraz TAKZE obrazy:
+     /Volumes/desktop-7o2jm9q/ATOS-BACKUP/2026-10-20/obrazy/demo-guard.img
+       (768 MB, KANONICZNY obraz testowy, bootuje do pulpitu)
+     /Volumes/desktop-7o2jm9q/ATOS-BACKUP/2026-10-20/obrazy/ATOS-2026-10-16.img
+       (768 MB, kopia robocza; UWAGA: video_pending=1 w \BIOS\BIOS.CFG, wiec
+       bez resetu latcha nie startuje do pulpitu - patrz punkt 10u)
+   WERYFIKACJA: SHA-256 zgodne po obu stronach dla obu obrazow
+   (demo-guard 665f58c7..., ATOS-2026-10-16 e824f27c...).
+   README.txt w katalogu kopii opisuje zawartosc, sumy kontrolne iProcedure
+   odtworzenia repo i srodowiska testowego.
+   CALOSC KOPII: 22,6 MB (repo) + 1,5 GB (obrazy) + dokumenty/raporty.
