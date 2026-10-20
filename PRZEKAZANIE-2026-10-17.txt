@@ -1260,3 +1260,20 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    stronami i wrocic do strony 1.
    UWAGA: klik w ikone TERMINAL to (48,190), nie (78,198) - (78,198) trafia
    obok i terminal sie nie otwiera (tracone 2 przebiegi testu).
+
+   UZUPELNIENIE 10al - WYNIK PROB WERYFIKACJI (20.10):
+   - Copy W KONSOLI dziala i to jest potwierdzone: obraz demo-pages2.img ma
+     w \TMP pliki P01.TXT..P30.TXT po 42 B (widac je w "dir tmp" na zrzucie
+     f2-pulpit.png).  Czyli ZADNEGO bledu COPY nie ma - wczesniejsze niepowodzenia
+     to skutek braku fokusu w oknie terminala (klik w okno jest konieczny).
+   - Prob z stronicowaniem NIE udalo sie domknac, bo nie udalo sie WEJSC do
+     katalogu z 30 pozycjami: dwuklik w wiersz listy trafial w sasiedni katalog
+     (wiersze co 18 px, TMP to 8. wiersz), a okno pokazywalo ROOT z ~14 pozycjami,
+     wiec klawisze stronicowania (slusznie) nie mialy co robic.
+   - DOWOD POSREDNI, ze mechanizm przewijania WM dziala: okno plikow w ROOCIE
+     pokazuje PASEK PRZEWIJANIA (zrzut g1-tmp.png) - to ta sama sciezka
+     (gfx(29, content_h) + src_y), ktorej stronicowanie ma uzywac.
+   NASTEPNY KROK (nie zgadywac): (1) zbudowac wstrzykiwacz na opcode 25, zeby
+   kliki byly pewne, albo (2) dodac do pulpitu tymczasowy hook "wejdź do TMP"
+   (jak F7/F9) i nim testowac stronicowanie, albo (3) odczytywac tekst z ekranu
+   (OCR) - bez tego kazdy test UI konczy sie na "nie wiem, co bylo na ekranie".
