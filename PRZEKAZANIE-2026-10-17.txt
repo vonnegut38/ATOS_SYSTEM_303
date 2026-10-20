@@ -1110,3 +1110,37 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    opcode 49 albo czytane memdumpem po pracy) - wtedy pomiar robi sie jednym
    odczytem po 10 s pracy, bez wplywu narzutu FIFO.  To ~1 h pracy i dopiero
    potem sensowna decyzja o M9.
+
+10ag. KILL-SWITCH TOS - DIAGNOZA (20.10, NIE DOKONCZONE - CZYTAJ UWAZNIE):
+   ZADANIE: Ctrl+Alt+Esc ma konczyc program TOS tak samo z konsoli, jak z
+   pulpitu.  Stan: NIE DZIALA dla programu uruchomionego poleceniem 'tos'
+   z konsoli (program dalej zyje, SYSINFO nadal rysuje i odlicza zegar).
+   CO USTALONO (to jest cenne, nie powtarzac):
+   1) Kill-switch ISTNIEJE, ale tylko dla trybu ASYNC: tos_prg.c:548
+      (kernel_tos_async_keyboard) ustawia tos_async_cancel, ktory jest
+      konsumowany w tos_prg.c:3903.  Czyli program w oknie "normalnie"
+      (async) powinien sie zamykac.
+   2) Program z konsoli ('tos ...') idzie sciezka SYNCHRONICZNA
+      (kernel_tos_run_program) i - mimo ze dostaje OKNO na pulpicie - jego
+      klawisze ida przez hook terminala (tos_next_scancode, tos_prg.c:615),
+      a nie przez kernel_user_keyboard_event.
+   3) DODANE (nieszkodliwe, ale BEZ EFEKTU - sprawdzone testem):
+      - kernel_module.c: Ctrl+Alt+Esc w funnela (dla sciezki sync),
+      - kernel_wm.c: Ctrl+Alt+Esc w kernel_wm_key,
+      - tos_prg.c: Ctrl+Alt+Esc w sciezce hooka terminala (po tos_key_update),
+      - tos_prg.c: kernel_tos_running() (tos_active||tos_async_state)
+        i kernel_tos_request_exit().
+      Zaden z tych punktow nie zadzialal -> klawisze albo NIE dochodza do tych
+      miejsc, albo modyfikatory nie sa ustawione w chwili ESC.  Zloty zrzut
+      startowy nadal 0e821ede... (zmiany sa inertne, boot bez zmian).
+   4) NASTEPNY KROK (zrobic RAZ, nie zgadywac): dodac liczniki kdbg w KAZDYM
+      z trzech wejsc (funnel, kernel_wm_key, hook terminala) - "widziano
+      Ctrl+Alt+Esc" + snapshot tos_kbshift - i po JEDNYM przebiegu testu
+      odczytac je memdumpem (rd32 juz dziala, patrz 10af).  To wskaze, gdzie
+      kombinacja ginie.  Dopiero potem sensowna poprawka.
+   5) TEST: display-demo/k-*.png, skrypt /tmp/kill_console.py (do przeniesienia
+      do display-demo jako test-kill-console.py).  Kryterium sukcesu: po
+      Ctrl+Alt+Esc okno programu znika (bialy obszar < 30%%), a powloka
+      odpowiada na 'dir'.
+   UWAGA: dopoki to nie dziala, do zamykania programow TOS z konsoli uzywac
+   zamkniecia okna mysza (dziala) albo uruchamiac z pulpitu.

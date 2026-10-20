@@ -621,6 +621,14 @@ void tos_poll_input(void)
             else if(sc==0x44&&tos_kb_shift&&tos_kb_alt){
                 tos_kb_shift=0u;tos_kb_alt=0u;ksessions_hotkey_cycle();}
             tos_key_update((uint8_t)sc);
+            /* Ctrl+Alt+Esc = kill-switch takze w trybie SYNCHRONICZNYM (program
+               uruchomiony z konsoli poleceniem 'tos').  W trybie async robi to
+               kernel_tos_async_keyboard (tos_async_cancel), ale ta sciezka -
+               hook terminala - nie sprawdzala kombinacji, wiec ESC szedl do
+               programu i SYSINFO pokazywal "Exit SysInfo ?" zamiast wrocic do
+               powloki.  Klawisz jest konsumowany, nie trafia do goscia. */
+            if((uint8_t)sc==0x01u&&(tos_kbshift&4u)&&(tos_kbshift&8u)){
+                tos_exit_request=1u;continue;}
             a=tos_key_ascii((uint8_t)sc,tos_shift,tos_caps);
             if(!a){
                 uint8_t c=(uint8_t)sc;
@@ -2875,6 +2883,22 @@ static void (*vid_blit_planar)(const uint8_t *,int,int,uint8_t,int,uint32_t,int,
 static void (*console_clear_hook)(void);
 static volatile uint8_t tos_window_active;
 static uint8_t *tos_client_surface;
+/* Kill-switch z zewnatrz (Ctrl+Alt+Esc w kernel_user_keyboard_event).
+   Ustawia TYLKO prosbe wyjscia - te sama, ktorej uzywa zamkniecie okna pulpitu
+   (kernel_tos_window_closed), ale BEZ ruszania stanu powierzchni, bo program
+   uruchomiony z konsoli nie ma okna WM. */
+int kernel_tos_running(void)
+{
+    /* Program w oknie (async) NIE ustawia tos_active - to flaga sciezki
+       synchronicznej (kernel_tos_run_program).  Sprawdzamy oba. */
+    return (tos_active||tos_async_state)?1:0;
+}
+
+void kernel_tos_request_exit(void)
+{
+    tos_exit_request=1u;
+}
+
 void kernel_tos_window_closed(void)
 {
     tos_exit_request=1u;

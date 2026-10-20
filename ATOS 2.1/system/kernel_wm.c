@@ -790,6 +790,15 @@ static uint8_t zoom_key_down;
 int kernel_wm_key(uint32_t type,uint32_t scan,uint32_t mods)
 {
     int i;
+    /* Ctrl+Alt+Esc = kill-switch programu TOS.  Klawisze okna NIE przechodza
+       przez kernel_user_keyboard_event, wiec obsluga musi byc takze tutaj -
+       inaczej kombinacja trafiala do programu jako ESC (SYSINFO: "Exit
+       SysInfo ?") i nie dalo sie wrocic do pulpitu bez myszy. */
+    if(type==1u&&scan==0x01u&&(mods&12u)==12u){
+        extern int kernel_tos_running(void);
+        extern void kernel_tos_request_exit(void);
+        if(kernel_tos_running()){kernel_tos_request_exit();return 1;}
+    }
     if(scan!=0x1cu)return 0;
     if(zoom_key_down){if(type!=1u)zoom_key_down=0;return 1;}
     if(type!=1u||(mods&15u)!=12u||!wm_ready||kgame_owns_screen())return 0;
