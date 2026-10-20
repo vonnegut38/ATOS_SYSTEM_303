@@ -41,3 +41,6 @@ display-demo/mem-*.txt
 # Binarki emulatora (odtwarzalne ze zrodel: scalony/hatari-src, atari-030-port/hatari-src)
 display-demo/hatari-*
 display-demo/_claude_tmp/
+
+# Snapshot portable (git bundle) - artefakt, nie zrodlo
+*.bundle
