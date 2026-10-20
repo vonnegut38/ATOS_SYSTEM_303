@@ -9,6 +9,13 @@ on:
 
 jobs:
   build:
+    # Dwa profile: TOS=1 (obraz demo, warstwa GEMDOS/BIOS/XBIOS) i TOS=0
+    # (domyslny, oszczedny wariant jadra).  Ten sam kod zrodlowy, inny zestaw
+    # modulow - macierz lapie rozjazdy miedzy profilami.
+    strategy:
+      fail-fast: false
+      matrix:
+        tos: [ "1", "0" ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,23 +26,26 @@ jobs:
           sudo apt-get install -y --no-install-recommends gcc-m68k-linux-gnu python3 python3-pil
           m68k-linux-gnu-gcc --version
 
-      - name: Build (TOS=1)
+      - name: Build (TOS=${{ matrix.tos }})
         working-directory: "ATOS 2.1"
         run: |
           set -o pipefail
           m68k-linux-gnu-gcc --version | head -1
-          make CROSS=m68k-linux-gnu- TOS=1 -j"$(nproc)"
-          ls -la build/system/KERNEL.SYS build/system/DESKTOP.APP build/system/SETTINGS.APP build/system/GFX.APP build/system/ICONS.DAT
+          make CROSS=m68k-linux-gnu- TOS=${{ matrix.tos }} -j"$(nproc)"
+          ls -la build/system/KERNEL.SYS build/system/DESKTOP.APP build/system/GFX.APP build/system/ICONS.DAT
 
       - name: Testy hostowe - grafika (ikony, tapeta, planar)
+        if: matrix.tos == '1'
         working-directory: "ATOS 2.1"
         run: make CROSS=m68k-linux-gnu- TOS=1 check-graphics
 
       - name: Testy hostowe - wideo (tryby 1/4/8/16 bpp, guard)
+        if: matrix.tos == '1'
         working-directory: "ATOS 2.1"
         run: make CROSS=m68k-linux-gnu- TOS=1 check-video
 
       - name: Artefakty (jądro + aplikacje + ikony)
+        if: matrix.tos == '1'
         uses: actions/upload-artifact@v4
         with:
           name: atos21-system
