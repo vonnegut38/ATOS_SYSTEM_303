@@ -286,10 +286,32 @@ static void handle_mouse(uint32_t buttons,int32_t dx,int32_t dy)
  if(kernel_user_gui_keyboard_active())
   mouse_q_push(buttons,mouse_x,mouse_y,(uint8_t)(down!=prev_down));
 }
+/* --- Mailbox testowy: JEDEN zapis debuggera = jedno zdarzenie myszy ---
+   Host zapisuje x, y, buttons i seq (4 x 32 bit, jeden zapis 16 B); pump
+   wstrzykuje przez te sama droge co opcode 25 (ksessions_mouse_inject).
+   Wczesniej host musial wyslac 6 polecen debuggera na zdarzenie, a kazde z
+   nich pauzuje emulator - 2,2 s na klik.  Teraz wystarczy jedno. */
+uint32_t kdbg_test_mouse[4];        /* x, y, buttons, seq */
+uint32_t kdbg_test_mouse_done;      /* ostatnio wykonany seq */
+uint32_t kdbg_console_dump_req;     /* host ustawia 1 -> zrzut tekstu konsoli */
 void ksessions_pump(void)
 {
  uint32_t buttons;int32_t dx,dy;
  if(!enabled)return;
+ {extern void kconsole_dump_text(void);
+  if(kdbg_console_dump_req){kdbg_console_dump_req=0u;kconsole_dump_text();}
+  /* Mailbox w JEDNYM slowie 32-bitowym (jedno polecenie debuggera = jedno
+     zdarzenie myszy, ~0,15 s zamiast 2,2 s):
+       bity 0..7   seq (licznik zdarzen)
+       bity 8..9   buttons
+       bity 10..19 y (0..1023)
+       bity 20..29 x (0..1023) */
+  {uint32_t ev=kdbg_test_mouse[0],sq=ev&0xffu;
+   if(sq!=kdbg_test_mouse_done){
+       kdbg_test_mouse_done=sq;
+       ksessions_mouse_inject((int32_t)((ev>>20)&0x3ffu),(int32_t)((ev>>10)&0x3ffu),
+                              (ev>>8)&0x3u);
+   }}}
  /* Always fold raw IKBD mouse packets into the session state.  The old
     !forward_ready guard skipped handle_mouse() while a forward was pending;
     when the app could not receive it (full mailbox) the flag stayed set, so

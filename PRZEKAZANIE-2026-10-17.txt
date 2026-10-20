@@ -1277,3 +1277,28 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    kliki byly pewne, albo (2) dodac do pulpitu tymczasowy hook "wejdź do TMP"
    (jak F7/F9) i nim testowac stronicowanie, albo (3) odczytywac tekst z ekranu
    (OCR) - bez tego kazdy test UI konczy sie na "nie wiem, co bylo na ekranie".
+
+10am. NARZEDZIA TESTOWE: SZYBKI WSTRZYKIWACZ + ODCZYT TEKSTU (20.10, ZROBIONE):
+   PROBLEM: kazde zdarzenie myszy to 6 polecen "hatari-debug", a KAZDE z nich
+   pauzuje emulator -> 2,24 s na klik.  Dwa klikniecia nie miescily sie w oknie
+   dwukliku pulpitu (~0,98 s), wiec testy UI "gubily" zdarzenia.
+   ROZWIAZANIE (jadro + harness):
+   1) Mailbox w jadrze (kernel_sessions.c): kdbg_test_mouse[0] to JEDNO slowo
+      32-bitowe: bity 0-7 seq, 8-9 buttons, 10-19 y, 20-29 x.  ksessions_pump()
+      (50 Hz) widzi zmiane seq i wola ksessions_mouse_inject() - te sama droge,
+      ktora ma opcode 25.  Host pisze JEDNO polecenie "w l".
+   2) Harness (stress_atos.py): inject(x,y,buttons) = jeden zapis + ack przez
+      kdbg_test_mouse_done; click_fast()/dbl_fast() na tym oparte.
+   3) ODCZYT TEKSTU (kernel_console.c): kdbg_console_text[2000] + prosba
+      kdbg_console_dump_req; kconsole_dump_text() kopiuje 25x80 znakow konsoli,
+      host czyta JEDNYM memdumpem 2000 B.  Dziala dla KONSOLI (testy shell/FAT),
+      NIE daje tekstu okien pulpitu (te rysuje DESKTOP.APP w framebufferze).
+   ZMIERZONE: 0,32 s na zdarzenie (bylo 2,24 s = 7x szybciej), a dwuklik
+   otwiera okno aplikacji (dowod: zrzut inj1-po-dwukliku.png - SYSINFO 0.3
+   z panelem sprzetu, 800x600x256, VOFA+ET4000).
+   PULAPKI (zaplacone czasem):
+     - zapis 16-bajtowy ("w b ... 16 bajtow") NIE dziala - mailbox zostawal zerowy;
+       dziala "w l" (4 bajty) i pojedyncze bajty,
+     - 4 osobne zapisy (0,58 s/zdarzenie) to wciaz za wolno na dwuklik,
+     - kdbg_test_mouse_done CIAGLE nadpisuje pump, wiec odczyt "0" jest poprawny,
+     - rd32/memdump wymaga symboli z kernel.elf; static tez sa widoczne w nm.

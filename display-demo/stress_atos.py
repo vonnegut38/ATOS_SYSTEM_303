@@ -138,6 +138,82 @@ class Session:
                     return int("".join(groups[:4]), 16)
         return None
 
+    def write_bytes(self, name, data):
+        """Zapisuje ciag bajtow JEDNYM poleceniem debuggera (koszt = 1 pauza)."""
+        self.cmd("hatari-debug w b 0x%x %s" % (
+            S[name], " ".join("%02x" % (c & 0xff) for c in data)))
+
+    def memdump_bytes(self, name, count):
+        """Czyta 'count' bajtow spod symbolu (jedno polecenie + jeden odczyt)."""
+        pos = os.path.getsize("/tmp/stress_hatari.log")
+        self.cmd("hatari-debug memdump 0x%x %d" % (S[name], count))
+        deadline = time.time() + 3.0
+        out = []
+        while time.time() < deadline:
+            time.sleep(0.15)
+            with open("/tmp/stress_hatari.log", errors="replace") as f:
+                f.seek(pos)
+                text = f.read()
+            out = []
+            for line in text.splitlines():
+                if ":" not in line:
+                    continue
+                head, tail = line.split(":", 1)
+                head = head.strip().replace("0x", "")
+                if not head or any(c not in "0123456789abcdefABCDEF" for c in head):
+                    continue
+                for g in tail.split():
+                    if len(g) == 2 and all(c in "0123456789abcdefABCDEF" for c in g):
+                        out.append(int(g, 16))
+            if len(out) >= count:
+                return out[:count]
+        return out
+
+    def inject(self, x, y, buttons, timeout=1.0):
+        """Wstrzykuje stan myszy JEDNYM zapisem do mailboxa jadra.
+
+        Pole 32-bitowe: seq(8) | buttons(2) | y(10) | x(10).  Jedno polecenie
+        hatari-debug = jedna pauza emulatora (~0,15 s), wiec dwa klikniecia
+        mieszcza sie w oknie dwukliku pulpitu (~0,98 s) - czego nie dalo sie
+        osiagnac przy 4-6 zapisach.
+        """
+        self._inject_seq = (getattr(self, "_inject_seq", 0) + 1) & 0xff
+        seq = self._inject_seq
+        ev = (seq) | ((buttons & 0x3) << 8) | ((y & 0x3ff) << 10) | ((x & 0x3ff) << 20)
+        self.cmd("hatari-debug w l 0x%x 0x%08x" % (S["kdbg_test_mouse"], ev))
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            if self.rd32("kdbg_test_mouse_done") == seq:
+                return True
+            time.sleep(0.01)
+        return False
+
+    def click_fast(self, x, y, settle=0.15):
+        self.inject(x, y, 1)
+        time.sleep(0.06)
+        self.inject(x, y, 0)
+        time.sleep(settle)
+
+    def dbl_fast(self, x, y, settle=1.2):
+        self.click_fast(x, y, 0.12)
+        self.click_fast(x, y, settle)
+
+    def screen_text(self, wait=1.0):
+        """Zwraca tekst konsoli (25 wierszy x 80 znakow) bez OCR."""
+        before = self.rd32("kdbg_console_text_seq") or 0
+        self.write_bytes("kdbg_console_dump_req", b"\x00\x00\x00\x01")
+        t0 = time.time()
+        while time.time() - t0 < wait:
+            seq = self.rd32("kdbg_console_text_seq") or 0
+            if seq != before:
+                break
+            time.sleep(0.05)
+        raw = self.memdump_bytes("kdbg_console_text", 2000)
+        if len(raw) < 2000:
+            return None
+        return "\n".join("".join(chr(c) if 32 <= c < 127 else " " for c in raw[r*80:(r+1)*80])
+                         for r in range(25)).rstrip()
+
     def shot(self, name):
         path = "%s/%s.png" % (DEMO, name)
         if os.path.exists(path):

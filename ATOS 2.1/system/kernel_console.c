@@ -111,6 +111,21 @@ void kconsole_debug_state(void (*outs)(const char *),void (*outn)(uint32_t),
     outs(" scanout=");outn(d?d->scanout:0u);
     outs("\n");
 }
+/* --- Zrzut TEKSTU konsoli dla testow (bez OCR) --------------------------
+   Host pisze 1 do kdbg_console_dump_req, jadro kopiuje biezaca zawartosc
+   konsoli (25 wierszy x 80 znakow, tylko znaki) do kdbg_console_text, a host
+   czyta to JEDNYM memdumpem i ma pelny tekst ekranu.  Bez tego kazdy test UI
+   konczyl sie zgadywaniem, co bylo na zrzucie. */
+uint8_t kdbg_console_text[TERM_COLS*TERM_ROWS];
+uint32_t kdbg_console_text_seq;
+void kconsole_dump_text(void)
+{
+    unsigned i;
+    const text_terminal_t *t=consoles?&consoles[ksessions_current()]:0;
+    if(!t)return;
+    for(i=0;i<TERM_COLS*TERM_ROWS;++i)kdbg_console_text[i]=(uint8_t)(t->cells[i]&0xffu);
+    ++kdbg_console_text_seq;
+}
 void kconsole_invalidate(void)
 {if(active){term_display_invalidate(&display);dirty=1;}}
 /* Row of the output cursor (0 = top).  The shell window scrolls to it, so
