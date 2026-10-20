@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Toolchain m68k + Python/Pillow
+      - name: Toolchain m68k i Python/Pillow
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-m68k-linux-gnu python3 python3-pil
@@ -25,11 +25,11 @@ jobs:
           make CROSS=m68k-linux-gnu- TOS=1 -j"$(nproc)" 2>&1 | tail -40
           ls -la build/system/KERNEL.SYS build/system/DESKTOP.APP build/system/SETTINGS.APP build/system/GFX.APP build/system/ICONS.DAT
 
-      - name: Testy hostowe (grafika: ikony, tapeta, planar)
+      - name: Testy hostowe - grafika (ikony, tapeta, planar)
         working-directory: "ATOS 2.1"
         run: make CROSS=m68k-linux-gnu- TOS=1 check-graphics
 
-      - name: Testy hostowe (wideo: tryby 1/4/8/16 bpp, guard)
+      - name: Testy hostowe - wideo (tryby 1/4/8/16 bpp, guard)
         working-directory: "ATOS 2.1"
         run: make CROSS=m68k-linux-gnu- TOS=1 check-video
 
