@@ -188,14 +188,36 @@ class Session:
             time.sleep(0.01)
         return False
 
-    def click_fast(self, x, y, settle=0.15):
-        self.inject(x, y, 1)
-        time.sleep(0.06)
-        self.inject(x, y, 0)
+    def inject_nowait(self, x, y, buttons):
+        """Jak inject(), ale BEZ czekania na ack (jedno polecenie, ~0,15 s).
+
+        Dla kliknięć: press+release muszą nastąpić szybko, a czekanie na ack
+        podwajało czas zdarzenia i dwa kliknięcia wypadały poza okno dwukliku.
+        """
+        self._inject_seq = (getattr(self, "_inject_seq", 0) + 1) & 0xff
+        ev = (self._inject_seq) | ((buttons & 0x3) << 8) | \
+             ((y & 0x3ff) << 10) | ((x & 0x3ff) << 20)
+        self.cmd("hatari-debug w l 0x%x 0x%08x" % (S["kdbg_test_mouse"], ev))
+        return self._inject_seq
+
+    def wait_injected(self, seq, timeout=1.0):
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            if self.rd32("kdbg_test_mouse_done") == seq:
+                return True
+            time.sleep(0.01)
+        return False
+
+    def click_fast(self, x, y, settle=0.05):
+        """Klik: press, KROTKA przerwa (emulator musi ruszyc, inaczej pump widzi
+        tylko koncowy stan i nie ma zbocza press), release.  ~0,4 s na klik."""
+        self.inject_nowait(x, y, 1)
+        time.sleep(0.08)
+        self.inject_nowait(x, y, 0)
         time.sleep(settle)
 
     def dbl_fast(self, x, y, settle=1.2):
-        self.click_fast(x, y, 0.12)
+        self.click_fast(x, y, 0.06)
         self.click_fast(x, y, settle)
 
     def screen_text(self, wait=1.0):

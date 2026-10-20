@@ -1302,3 +1302,19 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
      - 4 osobne zapisy (0,58 s/zdarzenie) to wciaz za wolno na dwuklik,
      - kdbg_test_mouse_done CIAGLE nadpisuje pump, wiec odczyt "0" jest poprawny,
      - rd32/memdump wymaga symboli z kernel.elf; static tez sa widoczne w nm.
+
+   UZUPELNIENIE 10am - CO JESZCZE WYSZLO (20.10):
+   - Wstrzykiwacz DZIALA i jest 7x szybszy: 0,32 s/zdarzenie z ack, ~0,15 s
+     bez.  DOWOD: dwuklik otworzyl okno SYSINFO 0.3 (inj1-po-dwukliku.png).
+   - ODCZYT TEKSTU dziala dla konsoli (przykladowo odczytany ekran bootu:
+     "CPU: 68030", "LOADING COMPONENTS: ICONS.DAT", "[F1 SETUP]...").
+   - KLIKNIECIA W OKNO PLIKOW NADAL NIE REJESTRUJA SIE: nawet zaznaczenie
+     wiersza sie nie zmienia (hash ekranu bez zmian), choc F7 otwiera okno.
+     Podejrzenie: routing myszy do okna klienta (WM) vs fokus, albo pump nie
+     widzi zbocza press przy tej sciezce.  DIAGNOSTYKA NASTEPNA: po kliknieciu
+     odczytac kdbg_inject_calls, kdbg_inject_ok, kdbg_press_set,
+     kdbg_press_consumed - cztery liczby powiedza, czy zdarzenie weszlo do jadra
+     i czy ktokolwiek je skonsumowal (to 1 przebieg, ~2 min).
+   - Timing dwukliku: okno pulpitu to ~0,98 s (DBL_TICKS 12000), a klik przez
+     debugger kosztuje ~0,4 s, wiec dwa klikniecia mieszcza sie ledwo; nie
+     zwiekszac DBL_TICKS w produkcie - to tylko ograniczenie testu.
