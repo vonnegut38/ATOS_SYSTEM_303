@@ -110,21 +110,32 @@ class Session:
         self.cmd("hatari-debug w b 0x%x %s" % (S[name], " ".join("0x%02x" % b for b in data)))
 
     def rd32(self, name):
-        # memdump pisze na KONSOLE Hatari (stdout), nie do pliku --log-file
+        """Czyta 4 bajty (big-endian) spod symbolu jadra.
+
+        hatari-debug memdump pisze na KONSOLE Hatari (stdout -> log), a nie do
+        --log-file.  Wczesniejsza wersja wolala memdump z licznikiem 1 (jeden
+        bajt), wiec parser wymagajacy 4 grup hex zawsze zwracal None - dlatego
+        odczyty licznikow jadra "nie dzialaly".
+        """
         pos = os.path.getsize("/tmp/stress_hatari.log")
-        self.cmd("hatari-debug memdump 0x%x 1" % S[name])
-        time.sleep(0.5)
-        with open("/tmp/stress_hatari.log", errors="replace") as f:
-            f.seek(pos)
-            text = f.read()
-        for line in text.splitlines():
-            if ":" in line and line[0].isalnum():
-                parts = line.split(":", 1)[1].split()
-                if len(parts) >= 4:
-                    try:
-                        return int("".join(parts[:4]), 16)
-                    except ValueError:
-                        return None
+        self.cmd("hatari-debug memdump 0x%x 4" % S[name])
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            time.sleep(0.15)
+            with open("/tmp/stress_hatari.log", errors="replace") as f:
+                f.seek(pos)
+                text = f.read()
+            for line in text.splitlines():
+                if ":" not in line:
+                    continue
+                head, tail = line.split(":", 1)
+                head = head.strip().replace("0x", "")
+                if not head or any(c not in "0123456789abcdefABCDEF" for c in head):
+                    continue
+                groups = [g for g in tail.split() if len(g) == 2 and
+                          all(c in "0123456789abcdefABCDEF" for c in g)]
+                if len(groups) >= 4:
+                    return int("".join(groups[:4]), 16)
         return None
 
     def shot(self, name):

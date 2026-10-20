@@ -1077,3 +1077,36 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    tf536. Stare, niezwiązane repo z 23.09 (atos-desktop, Atos_desktop) sa
    ZARCHIWIZOWANE (archived=true, nie skasowane) - zeby nie mylily sie z linia
    ATOS 2.1. Archiwizacja jest odwracalna (PATCH archived=false).
+
+10af. POMIAR WYDAJNOSCI - PRZYGOTOWANIE DO DECYZJI O M9/W32i (20.10):
+   Narzedzie: display-demo/perf_probe.py (scenariusze idle/drag/icons, liczniki
+   jadra przez hatari-debug memdump).  Raport: display-demo/PERF-RAPORT-*.txt.
+   NAPRAWIONY BLAD NARZEDZI (wazny dla wszystkich przyszlych pomiarow):
+   stress_atos.Session.rd32 wolal "memdump 0xADDR 1" (JEDEN bajt), a parser
+   wymagal 4 grup hex -> zawsze zwracal None.  Dlatego wczesniejsze odczyty
+   licznikow jadra "nie dzialaly".  Teraz: "memdump 0xADDR 4" + odporny parser
+   (szuka linii z adresem i 4 bajtami, czeka do 2 s).  Odczyt dziala.
+   ZMIERZONE (800x600x8, ikony 48 px):
+     idle   - kdbg_blit_calls 0/s (pulpit nic nie komponuje, gdy stoi),
+     drag   - 6 blitow w 10 s, 510 720 px, ~85 120 px na blit (rozmiar okna
+              PLIKI), przepustowosc ~51 000 px/s,
+     icons  - 6 blitow w 7,7 s, 953 280 px, ~158 880 px na blit (pelny ekran).
+   WNIOSKI (kluczowe dla M9):
+    1) PULPIT RYSUJE BEZPOSREDNIO DO VRAM - kvideo_flush widzi front==card i nic
+       nie kopiuje (flush_words ~0), wiec liczniki jadra NIE obejmuja kosztu
+       rysowania pulpitu.  Koszt siedzi w DESKTOP.APP.
+    2) Kompozycja jadra (kdbg_blit_px) dotyczy okien - przy przeciaganiu okna
+       PLIKI to ~85 tys. px na ruch.
+    3) MOJA INJEKCJA MYSZY MA LIMIT ~1 krok/s (kazde "hatari-debug w" to
+       round-trip przez FIFO), wiec NIE da sie tak zmierzyc kosztu klatki -
+       "krokow/s" w raporcie to limit narzedzia, nie pulpitu.
+    4) Zrzut ekranu przez hatari-debug trwa ~0,75 s, wiec pomiar "do stabilnego
+       ekranu" (F9 -> 1,5 s) mierzy glownie koszt zrzutow, a nie operacji.
+   DECYZJA: NIE zaczynac akceleracji W32i na podstawie tych danych - nie ma
+   dowodu, ze jest potrzebna, a obecne narzedzia nie umieja zmierzyc kosztu
+   klatki po stronie aplikacji.  Zeby odpowiedziec na to uczciwie, trzeba
+   NAJPIERW dodac instrumentacje W SAMYM PULPICIE (np. kdbg_paint_calls i suma
+   tykniec w funkcji pelnego przemalowania, wystawione przez rozszerzony
+   opcode 49 albo czytane memdumpem po pracy) - wtedy pomiar robi sie jednym
+   odczytem po 10 s pracy, bez wplywu narzutu FIFO.  To ~1 h pracy i dopiero
+   potem sensowna decyzja o M9.

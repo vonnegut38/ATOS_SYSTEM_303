@@ -1,0 +1,13 @@
+POMIAR WYDAJNOSCI BLOATOWANIA - 2026-10-20 15:29
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-perf.img | liczniki jadra: kdbg_flush_calls/words/dmg_px (memdump)
+
+scenariusz dt      krokow/s blitow   pikseli    px/s      px/blit   pelny ekran uwagi
+idle     5.01    0        0        0          0         0         0.00 ms     tylko zegar
+drag48   10.01   1        6        510720     51046     85120     9403.24 ms  ikony 48 px, 800x600x8
+icons    7.66    1        6        953280     124430    158880    3857.59 ms  F9: 48->64->32
+
+'pikseli' = kdbg_blit_px (kompozycja okien w kernel_wm.c),
+'blitow' = kdbg_blit_calls.  px/s to przepustowosc kompozycji;
+'pelny ekran' to czas, w jakim ta przepustowosc odmalowalaby
+caly ekran 800x600 (480000 px).  To wlasnie ta czesc moglaby
+przyspieszyc akceleracja W32i.
