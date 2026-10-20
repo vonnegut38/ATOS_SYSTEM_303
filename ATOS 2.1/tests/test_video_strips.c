@@ -88,8 +88,8 @@ int main(void)
  kvideo_damage(0,0,(int32_t)W,(int32_t)H);kvideo_flush();
  if(!card_matches_front()){
   int x,y;for(y=0;y<(int)H;++y)for(x=0;x<(int)W;++x)
-   if(cbuf[1+y*W+x]!=fbuf[y*W+x^1u]){
-    printf("A init ROZJAZD (%d,%d) karta=%02x front=%02x\n",x,y,cbuf[1+y*W+x],fbuf[y*W+x^1u]);
+   if(cbuf[1+y*W+x]!=fbuf[(y*W+x)^1u]){
+    printf("A init ROZJAZD (%d,%d) karta=%02x front=%02x\n",x,y,cbuf[1+y*W+x],fbuf[(y*W+x)^1u]);
     return 1; }
  }
  scroll_front(fx,fy,fw,fh,dx,dy);
