@@ -1318,3 +1318,29 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    - Timing dwukliku: okno pulpitu to ~0,98 s (DBL_TICKS 12000), a klik przez
      debugger kosztuje ~0,4 s, wiec dwa klikniecia mieszcza sie ledwo; nie
      zwiekszac DBL_TICKS w produkcie - to tylko ograniczenie testu.
+
+10an. KLIKNIECIA W OKNO PLIKI - CO USTALONO (20.10, KONIEC BLOKU):
+   WSTRZYKIWANIE DZIALA (dowody): klik zmienia zaznaczenie wiersza (zrzut
+   k3-tmp.png - podswietlony TRASH), a dwuklik w ikone otworzyl okno SYSINFO
+   (inj1-po-dwukliku.png).  Koszt 0,32 s/zdarzenie.
+   CZEGO NIE UDALO SIE DOMKNAC:
+   1) WEJSCIE DO KATALOGU dwuklikiem nie dziala jak dwuklik - dwa klikniecia
+      sa rejestrowane jako dwa POJEDYNCZE (zaznaczenie zmienia sie, katalog sie
+      nie otwiera).  Okno dwukliku pulpitu to ~0,98 s; moje dwa klikniecia
+      (~0,75-1,1 s) sa na granicy.  Mozliwe rozwiazania: (a) zmniejszyc liczbe
+      zapisow do JEDNEGO na klik (nacisniecie i puszczenie w jednym slowie to
+      sie nie da - potrzebne 2 zdarzenia), (b) wyslac press i release bez
+      przerwy (0,08 s) i polegac na tym, ze pump (50 Hz) zobaczy oba - do
+      sprawdzenia, (c) dodac testowy hook w pulpicie "otworz katalog X"
+      (najprostsze i deterministyczne - tak jak F7/F9).
+   2) MAPOWANIE WIERSZY: wiersze listy zaczynaja sie od y=113 (nie 64), wiec
+      TMP to y~236, a nie 254; moj klik trafial w TRASH.  Do testow przyjac:
+      y = 113 + 18*indeks.
+   3) ODCZYT TEKSTU dziala tylko dla konsoli JADRA (boot), a NIE dla okna
+      terminala pulpitu: po starcie pulpitu kdbg_console_text nadal pokazuje
+      log bootu ("CPU: 68030", "LOADING COMPONENTS").  Shell w oknie pulpitu ma
+      wlasny bufor tekstu - jesli odczyt tekstu ma byc uzyteczny takze tam,
+      trzeba wystawic komorki shell-a (kernel_shell_service / terminal).
+   NASTEPNY KROK (najkrotsza droga do domkniecia PLIKI): wariant (c) - testowy
+   hook "otworz katalog" w pulpicie (np. F8 + sciezka z LAUNCH.CFG), wtedy test
+   stronicowania nie zalezy od dwukliku ani od trafiania w wiersz.
