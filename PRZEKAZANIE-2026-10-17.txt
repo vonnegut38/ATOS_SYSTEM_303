@@ -1071,3 +1071,9 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    UWAGA: repo publiczne zawiera tez archiwum starej linii v10 (commander-v9/v10,
    files-pasted-by-the-user-projekt, atari-030-port) - jesli ma byc czystsze,
    to osobny commit/przebudowa historii.
+   UZUPELNIENIE 10ae: repo na GitHubie ma opis "ATOS 2.1 - system dla Atari ST/TT
+   (m68000, TF536, ET4000/VOFA): jadro, kompozytor okien, pulpit, aplikacje" i
+   topics: atari-st, atari-tt, et4000, m68k, operating-system, retrocomputing,
+   tf536. Stare, niezwiązane repo z 23.09 (atos-desktop, Atos_desktop) sa
+   ZARCHIWIZOWANE (archived=true, nie skasowane) - zeby nie mylily sie z linia
+   ATOS 2.1. Archiwizacja jest odwracalna (PATCH archived=false).
