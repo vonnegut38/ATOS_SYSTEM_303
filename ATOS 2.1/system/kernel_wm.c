@@ -796,12 +796,14 @@ int kernel_wm_key(uint32_t type,uint32_t scan,uint32_t mods)
        SysInfo ?") i nie dalo sie wrocic do pulpitu bez myszy. */
     {extern uint32_t kdbg_ksw_wm_esc,kdbg_ksw_wm_mods;
      if(type==1u&&scan==0x01u){++kdbg_ksw_wm_esc;kdbg_ksw_wm_mods=mods;}}
+#if CONFIG_TOS
     if(type==1u&&scan==0x01u&&(mods&12u)==12u){
         extern int kernel_tos_running(void);
         extern void kernel_tos_request_exit(void);
         if(kernel_tos_running()){{extern uint32_t kdbg_ksw_wm_chord; ++kdbg_ksw_wm_chord;}
                                   kernel_tos_request_exit();return 1;}
     }
+#endif /* CONFIG_TOS: kill-switch istnieje tylko z warstwa TOS */
     if(scan!=0x1cu)return 0;
     if(zoom_key_down){if(type!=1u)zoom_key_down=0;return 1;}
     if(type!=1u||(mods&15u)!=12u||!wm_ready||kgame_owns_screen())return 0;

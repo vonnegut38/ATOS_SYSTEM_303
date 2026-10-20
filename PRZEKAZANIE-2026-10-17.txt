@@ -1220,3 +1220,16 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    gosciu (albo rozszerzenia hatari-event o mysz).  Wtedy jeden klik = 1-2
    polecenia, a nie 6, i testy przestana "gubic" zdarzenia.
    Liczniki kdbg_press_* zostaja w kodzie (4 slowa) jako diagnostyka.
+
+10ak. CI: MACIERZ TOS=1/TOS=0 + ZNALEZIONY BLAD PROFILU (20.10):
+   Workflow buduje teraz OBA profile jadra (matrix.tos), testy hostowe i
+   artefakty tylko dla TOS=1.  Macierz NATYCHMIAST znalazla blad: przy TOS=0
+   plik tos_prg.c NIE jest kompilowany, wiec moje nowe funkcje kill-switcha
+   (kernel_tos_running/kernel_tos_request_exit) nie mialy definicji i link
+   padal ("undefined reference").  Poprawka: oba wywolania (kernel_module.c,
+   kernel_wm.c) objete #if CONFIG_TOS / #endif.
+   PO POPRAWCE: TOS=0 buduje sie (KERNEL.SYS 168764 B), TOS=1 buduje sie
+   (222182 B, md5 0dcfdcac...), zloty zrzut startowy nadal 0e821ede...
+   Wniosek na przyszlosc: KAZDA nowa funkcja wolana z kodu wspolnego musi miec
+   definicje w obu profilach albo straznik #if CONFIG_TOS - inaczej CI (a nie
+   czlowiek) znajdzie to dopiero po pushu.
