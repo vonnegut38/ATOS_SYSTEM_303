@@ -152,19 +152,22 @@ class Session:
         return path, hashlib.sha256(raw).hexdigest()
 
     def mouse(self, x, y, b):
+        """Wstrzykuje stan myszy (sprawdzona, 6-poleceniowa wersja).
+
+        UWAGA - NIE skracac bez testu: proba zapisania y i x jednym poleceniem
+        8-bajtowym + mouse_buttons osobno (2 polecenia, 6x szybciej: 0,38 s/klik
+        zamiast 2,24 s) SPRAWDZILA SIE ZLE - kdbg_press_consumed nie rosl wcale,
+        czyli klikniecia przestaly docierac do pulpitu.  Sciezka scripted zalezy
+        od tej sekwencji zapisow (m.in. zerowania wskaznikow kolejki przy kazdym
+        zdarzeniu).  Zmiana wymaga zrozumienia ksessions_mouse_inject / opcode 25
+        - patrz przekazanie 10aj.
+        """
         self.w("mouse_scripted", b"\x01")
         self.w("mouse_q_tail", struct.pack(">I", 0))
         self.w("mouse_q_head", struct.pack(">I", 0))
         self.w("mouse_x", struct.pack(">I", x))
         self.w("mouse_y", struct.pack(">I", y))
         self.w("mouse_buttons", struct.pack(">I", b))
-        self.w("mouse_queue", struct.pack(">IIiiBB", b, 0, x, y, 1, 0))
-        if b:
-            self.w("mouse_press_x", struct.pack(">I", x))
-            self.w("mouse_press_y", struct.pack(">I", y))
-            self.w("mouse_press_pending", b"\x01")
-        self.w("mouse_q_tail", struct.pack(">I", 1))
-        time.sleep(0.3)
 
     def click(self, x, y, settle=0.9):
         self.mouse(x, y, 1)

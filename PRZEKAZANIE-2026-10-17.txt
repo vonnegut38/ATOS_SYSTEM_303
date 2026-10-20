@@ -1190,3 +1190,33 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    pulpitowi kanal "przemaluj sie" (np. flaga pollowana przez pulpit) - nie
    robione, bo nie wplywa na dzialanie.
    Liczniki kdbg_ksw_* zostaja w kodzie jako diagnostyka.
+
+10aj. B2 - ZGUBIONE KLIKNIECIA: NIE MA DOWODU NA WINE JADRA (20.10):
+   Instrumentacja (kernel_sessions.c): kdbg_press_set / kdbg_press_consumed -
+   ile razy jadro ustawilo press i ile razy zostal skonsumowany.  Oba sa
+   niepubliczne->nm je pokazuje, wiec odczyt memdumpem dziala bez zapisow na
+   obraz (rd32).
+   POMIAR 1 (10 klikniec w ikone TERMINAL, sprawdzona metoda wstrzykiwania):
+   press_set +0, press_consumed +10 -> WSZYSTKIE klikniecia zostaly obsluzone,
+   jadro ich NIE gubi.  (press_set nie rosnie, bo sciezka "scripted" nie idzie
+   przez zadne z trzech miejsc, ktore ustawiaja mouse_press_pending; press
+   ustawia dopiero konsument pulpitu/WM.)
+   POMIAR 2/3 (po proby optymalizacji): press_consumed +0, ale to zalezne od
+   CELU klikniecia (po pierwszym kliknieciu okno zaslania ikone), nie od
+   wstrzykiwania - metryka wymaga stalego celu, inaczej mierzy cos innego.
+   PROBA OPTYMALIZACJI (nie udana, ale pouczajaca): zamiast 6 polecen debuggera
+   na zdarzenie zapisac y+x jednym 8-bajtowym (leza obok siebie: mouse_y 0x562f8,
+   mouse_x 0x562fc) + mouse_buttons osobno = 2 polecenia, 6x szybciej
+   (0,38 s/klik zamiast 2,24 s).  EFEKT: klikniecia PRZESTALY docierac
+   (consumed +0).  Czyli sciezka "scripted" zalezy od SEKWENCJI zapisow
+   (m.in. zerowania mouse_q_head/mouse_q_tail przy KAZDYM zdarzeniu).
+   WNIOSEK: kod myszy wrocil do sprawdzonej wersji 6-poleceniowej.
+   KOSZT WSTRZYKIWANIA: ~2,2 s na zdarzenie myszy (6 pauz debuggera) - to jest
+   prawdziwe zrodlo "niestabilnych testow UI", nie jadro.  Kazde polecenie
+   hatari-debug pauzuje emulator.
+   NASTEPNY KROK DLA B2: uzyc PROJEKTOWANEGO API zamiast pisania po globalnych -
+   opcode 25 = ksessions_mouse_inject(x,y,buttons) (kernel_exception.c:2675),
+   opcode 26 = powrot do realnego IKBD.  Wymaga malego programu-wstrzykiwacza w
+   gosciu (albo rozszerzenia hatari-event o mysz).  Wtedy jeden klik = 1-2
+   polecenia, a nie 6, i testy przestana "gubic" zdarzenia.
+   Liczniki kdbg_press_* zostaja w kodzie (4 slowa) jako diagnostyka.

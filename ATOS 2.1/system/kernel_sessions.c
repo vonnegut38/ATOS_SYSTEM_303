@@ -58,6 +58,10 @@ int ksessions_mouse_x(void){return mouse_x;}
 uint32_t ksessions_mouse_buttons(void){return mouse_buttons;}
 int ksessions_mouse_y(void){return mouse_y;}
 static int32_t mouse_press_x=600,mouse_press_y=8;
+/* Diagnostyka B2: ile razy jadro USTAWILO press, a ile razy zostal on
+   SKONSUMOWANY.  Roznica = zdarzenia zagubione po drodze (klient nie zdazyl
+   odebrac, zanim przyszedl kolejny).  Czytane memdumpem (nm). */
+uint32_t kdbg_press_set,kdbg_press_consumed;
 static uint8_t mouse_press_pending;
 /* While a scripted self-test injects synthetic position/button state, real IKBD
    mouse packets must not clobber it (Hatari keeps sending host motion).  The
@@ -68,7 +72,7 @@ int ksessions_mouse_scripted(void){return mouse_scripted!=0u;}
 int ksessions_mouse_press_x(void){return mouse_press_x;}
 int ksessions_mouse_press_y(void){return mouse_press_y;}
 int ksessions_mouse_press_pending(void){return mouse_press_pending!=0u;}
-void ksessions_mouse_press_consume(void){mouse_press_pending=0u;}
+void ksessions_mouse_press_consume(void){mouse_press_pending=0u;++kdbg_press_consumed;}
 void ksessions_mouse_flush(void){mouse_q_head=mouse_q_tail=0;}
 /* Test hook: inject a synthetic mouse state as if the IKBD produced it.
    Used by the scripted compositor test (drag/resize) so it can run without a
@@ -115,7 +119,7 @@ void ksessions_mouse_inject(int32_t x,int32_t y,uint32_t buttons)
      kdbg_inject_ring[q+1u]=((uint32_t)(uint16_t)x<<16)|(uint16_t)y;
      ++kdbg_inject_ring_n;}
     {uint32_t prev=mouse_buttons;mouse_x=x;mouse_y=y;mouse_buttons=buttons;
-     if((buttons&1u)&&!(prev&1u)){mouse_press_x=x;mouse_press_y=y;mouse_press_pending=1u;}
+     if((buttons&1u)&&!(prev&1u)){mouse_press_x=x;mouse_press_y=y;mouse_press_pending=1u;++kdbg_press_set;}
      if((buttons&3u)!=(prev&3u))mouse_q_push(buttons,x,y,1u);}
 }
 /* Peek the oldest queued event WITHOUT consuming it: the caller must confirm
@@ -238,7 +242,7 @@ void ksessions_pointer_button(uint32_t down,int32_t x,int32_t y)
 {
     down&=3u;
     if((down&1u)&&!(mouse_buttons&1u)){
-        mouse_press_x=x;mouse_press_y=y;mouse_press_pending=1u;
+        mouse_press_x=x;mouse_press_y=y;mouse_press_pending=1u;++kdbg_press_set;
     }
     mouse_buttons=down;
     /* A button edge must also make the compositor produce a frame: the TOS band
@@ -261,7 +265,7 @@ static void handle_mouse(uint32_t buttons,int32_t dx,int32_t dy)
  {int mx=pointer_max_x(),my=pointer_max_y();
   if(mouse_x<0)mouse_x=0;else if(mouse_x>mx)mouse_x=mx;
   if(mouse_y<0)mouse_y=0;else if(mouse_y>my)mouse_y=my;}
- if(press&1u){mouse_press_x=mouse_x;mouse_press_y=mouse_y;mouse_press_pending=1u;}
+ if(press&1u){mouse_press_x=mouse_x;mouse_press_y=mouse_y;mouse_press_pending=1u;++kdbg_press_set;}
  if(mouse_capture){if(!down)mouse_capture=0;return;}
  if(press){
   if(menu){
