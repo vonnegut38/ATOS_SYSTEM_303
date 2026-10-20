@@ -1388,3 +1388,17 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    Po poprawce: zloty zrzut 0e821ede... BAJT W BAJT, a kill-switch nadal
    czysci ekran (p2-po-kill.png, biale 0%, hash 7fbac6e8...).
    KERNEL.SYS: md5 2af687e5...
+
+10aq. ODCZYT TEKSTU: CO DZIALA, A CO NIE (20.10, ZAMKNIETE ROZPOZNANIEM):
+   USTALENIE: okno "TERMINAL" na pulpicie to APLIKACJA (ikona TERMINAL), a nie
+   okno konsoli WM.  Tekst, ktory ona wyswietla, jest w JEJ wlasnym buforze,
+   wiec kdbg_console_text (komorki konsoli jadra) pokazuje nadal LOG BOOTU -
+   i to jest poprawne zachowanie, nie blad odczytu.
+   CO TO ZNACZY DLA TESTOW:
+     - odczyt tekstu (screen_text) jest uzyteczny w trybie KONSOLI (pulpit
+       zamkniety): wtedy shell pisze do konsoli jadra i widac np. wynik "dir",
+     - dla okna TERMINAL na pulpicie trzeba by wystawic bufor TEJ aplikacji
+       (osobna praca) albo dalej uzywac zrzutow,
+     - pulpit jako calosc (ikony, okna, paski) nadal najlatwiej weryfikowac
+       zrzutem + pomiarem pikseli (tak robia istniejace harnessy).
+   NIE ZMIENIANO KODU - to rozpoznanie, zeby nie tracic czasu na zly trop.
