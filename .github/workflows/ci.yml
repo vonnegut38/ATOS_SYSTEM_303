@@ -1,0 +1,47 @@
+name: ATOS 2.1 - build + testy hostowe
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain m68k + Python/Pillow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-m68k-linux-gnu python3 python3-pil
+          m68k-linux-gnu-gcc --version
+
+      - name: Build (TOS=1)
+        working-directory: "ATOS 2.1"
+        run: |
+          make CROSS=m68k-linux-gnu- TOS=1 -j"$(nproc)" 2>&1 | tail -40
+          ls -la build/system/KERNEL.SYS build/system/DESKTOP.APP build/system/SETTINGS.APP build/system/GFX.APP build/system/ICONS.DAT
+
+      - name: Testy hostowe (grafika: ikony, tapeta, planar)
+        working-directory: "ATOS 2.1"
+        run: make CROSS=m68k-linux-gnu- TOS=1 check-graphics
+
+      - name: Testy hostowe (wideo: tryby 1/4/8/16 bpp, guard)
+        working-directory: "ATOS 2.1"
+        run: make CROSS=m68k-linux-gnu- TOS=1 check-video
+
+      - name: Artefakty (jądro + aplikacje + ikony)
+        uses: actions/upload-artifact@v4
+        with:
+          name: atos21-system
+          path: |
+            ATOS 2.1/build/system/KERNEL.SYS
+            ATOS 2.1/build/system/DESKTOP.APP
+            ATOS 2.1/build/system/SETTINGS.APP
+            ATOS 2.1/build/system/GFX.APP
+            ATOS 2.1/build/system/VOFA.SYS
+            ATOS 2.1/build/system/ICONS.DAT
+          if-no-files-found: warn

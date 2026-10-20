@@ -1,0 +1,39 @@
+name: Build ATOS DESKTOP.PRG (m68k-atari-mint)
+on:
+  workflow_dispatch:      # recznie: zakladka Actions -> Run workflow
+  push:
+    paths: [ 'commander-v10/mint/**' ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1) prebuilt cross-tools (Vincent Riviere). Bierzemy wszystkie pakiety linux.
+      - name: Fetch cross mint toolchain
+        run: |
+          mkdir -p $HOME/mint && cd $HOME/mint
+          curl -sL https://vincent.riviere.free.fr/soft/m68k-atari-mint/             | grep -oE 'href="[^"]*linux[^"]*\.tar\.bz2"' | sed 's/href="//;s/"//' > list.txt || true
+          echo "packages:"; cat list.txt
+          while read -r f; do
+            curl -sLO "https://vincent.riviere.free.fr/soft/m68k-atari-mint/$f" || true
+          done < list.txt
+          for f in *.tar.bz2; do tar xjf "$f" || true; done
+          ls
+          echo "$HOME/mint/bin" >> $GITHUB_PATH
+
+      - name: Toolchain check
+        run: m68k-atari-mint-gcc --version || echo "NO TOOLCHAIN - see Fetch step"
+
+      # 2) build our desktop
+      - name: Build DESKTOP.PRG
+        working-directory: commander-v10/mint
+        run: |
+          make CC=m68k-atari-mint-gcc ||           m68k-atari-mint-gcc -mshort -O2 -o DESKTOP.PRG desktop_mint.c
+          ls -la DESKTOP.PRG
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DESKTOP.PRG
+          path: commander-v10/mint/DESKTOP.PRG
