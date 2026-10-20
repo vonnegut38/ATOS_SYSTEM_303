@@ -1,0 +1,33 @@
+PORZĄDEK W ATOS — 11.10.2026
+
+DO UŻYWANIA:
+  ATOS_AKTUALNY/URUCHOM_ATOS.command — dwuklik uruchamia system.
+  ATOS_AKTUALNY/ATOS.img — jeden wskazany obraz do codziennego używania.
+  W tym samym folderze: dobrany BIOS, Hatari i konfiguracja.
+  Jest to zaakceptowany zestaw z 10.10, bez eksperymentalnego audio etapu 5.
+
+KOPIA:
+  ATOS_KOPIA — identyczny zestaw startowy, pliki tylko do odczytu.
+  Nie uruchamiaj kopii bezpośrednio; instrukcja odzyskania wewnątrz.
+
+DLA DEEPSEEKA / DO ROZWOJU:
+  ATOS 2.1 — aktualne źródła, narzędzia i raporty.
+  ATOS 2.1/build — kompilacja robocza, niekoniecznie zaakceptowana.
+  ATOS 2.1/work/atos-v2.img — WYŁĄCZNIE ROBOCZY. Zostawiony celowo,
+  ponieważ build_atos2.py automatycznie instaluje do niego wyniki kompilacji.
+  ATOS 2.1/work/audio-baseline — niezaakceptowane eksperymenty audio.
+  Nie podmieniaj ATOS_AKTUALNY bez testów i nowego manifestu wydania.
+
+STARE PLIKI:
+  TRASH/porzadki-20261011 — stare obrazy i wyniki testów; można usunąć
+  po sprawdzeniu nowego zestawu. Nic nie skasowano bezpowrotnie.
+  W PRZENIESIENIA.jsonl zapisano oryginalne i nowe ścieżki.
+  Historyczne skrypty wymagające starych obrazów potrzebują ich odtworzenia.
+
+ZACHOWANE MATERIAŁY:
+  Stare drzewa źródeł (ATOS 2.0, commander*), repozytoria Git,
+  EmuTOS, źródła Hatari, ROM-y, narzędzia, ikony i oryginalne archiwa gier.
+  To materiały do rozwoju/odtwarzania, nie alternatywne aktualne wydania.
+  flashdos.rar jest zachowany. Flashback.app na Pulpicie pozostaje niezależny.
+
+Weryfikacja: manifest SHA256, kontrola FAT, próbny start nowym launcherem.

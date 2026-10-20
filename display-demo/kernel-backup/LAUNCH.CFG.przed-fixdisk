@@ -1,0 +1,12 @@
+; ATOS desktop launcher - one entry per line: LABEL=path
+; path is a full application path, or *TERMINAL / *TRASH for builtins.
+; The bar sits at the bottom of the desktop; entries that do not fit are hidden.
+COMMANDER=\SYSTEM\APP\AC.APP
+SYSINFO=\SYSTEM\APP\SYSINFO.APP
+TASKMGR=\SYSTEM\APP\TASKMGR.APP
+PLASMA=\SYSTEM\APP\PLASMA.APP
+ARKANOID=\SYSTEM\APP\ARKANOID.APP
+FLASHBACK=\SYSTEM\APP\FLASHBK.APP
+SYSTOS=\SYSTEM\TEST\SYSINFO.PRG
+MODPLAY=\SYSTEM\APP\MODPLAY.APP
+PRE2=\SYSTEM\APP\PRE2.APP

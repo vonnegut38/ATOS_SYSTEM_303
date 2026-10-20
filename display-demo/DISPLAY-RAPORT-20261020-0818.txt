@@ -1,0 +1,27 @@
+STRESS USTAWIEN EKRANU - 2026-10-20 08:18
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-display.img (klon demo-guard.img)
+
+faza   krok zmierzone                    oczekiwane             wynik    uwagi
+BOOT   0    800x600                      800x600                OK       start pulpitu
+RES    otwarcie SETTINGS                     SETTINGS               OK       okno na ekranie
+GUARD  brak-YES 800x600                      800x600                OK       podglad bez potwierdzenia -> jadro wraca samo
+THM    0    pasek=(223, 223, 223) tlo=(16, 32, 32) -                      OK       motyw zastosowany
+THM    1    pasek=(223, 223, 223) tlo=(16, 32, 32) -                      OK       motyw zastosowany
+THM    2    pasek=(223, 223, 223) tlo=(16, 32, 32) -                      OK       motyw zastosowany
+THM    3    pasek=(223, 223, 223) tlo=(16, 32, 32) -                      OK       motyw zastosowany
+DESK   0    tlo=(16, 32, 32) pasek=(223, 223, 223) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 0
+DESK   1    tlo=(0, 0, 48) pasek=(223, 223, 223) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 1
+DESK   2    tlo=(0, 32, 0) pasek=(223, 223, 223) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 2
+DESK   3    tlo=(32, 0, 0) pasek=(223, 223, 223) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 3
+DESK   4    tlo=(32, 32, 32) pasek=(223, 223, 223) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 4
+DESK   5    tlo=(0, 0, 0) pasek=(223, 223, 223) ikona=56 komorka=51 tapeta=1 kol. -                      OK       wiersz 5
+DESK   6    tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=56 komorka=51 tapeta=1 kol. -                      OK       wiersz 6
+DESK   7    tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 7
+DESK   8    tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 8
+DESK   9    tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 9
+DESK   10   tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 10
+DESK   11   tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 11
+DESK   12   tlo=(0, 0, 0) pasek=(0, 170, 48) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 12
+KONIEC 0    800x600                      800x600                OK       pulpit po calej sesji
+
+krokow: 21, zgodnych: 21, roznic: 0

@@ -1,0 +1,261 @@
+================================================================================
+NAPRAWA: PULAPKA TRYBU 4 bpp (1024 x 768 - 16 COLORS)  -  17.10.2026
+================================================================================
+Punkt 2 PRZEKAZANIA-2026-10-17.txt ("TRYB 4/16 bpp JEST PULAPKA") - ROZWIAZANY.
+Przyczyna nie byla tam, gdzie wskazywali podejrzani.  Zmierzone, nie zgadywane.
+
+--------------------------------------------------------------------------------
+1. PRZYCZYNA (jedna linia kodu, dwie konsekwencje)
+--------------------------------------------------------------------------------
+system/kernel_video_boot.c, kvideo_program_mode_format():
+
+    result = vofa_service->set_mode(vofa_io, index);   /* karta JUZ przelaczona */
+    if(result != VOFA_OK) return ...;
+    if((bpp==8||bpp==4||bpp==16) && index != VOFA_MODE_800_8 && ...
+       && index != VOFA_MODE_640_4 && index != VOFA_MODE_800_16)
+        return -0x310 - index;                          /* <- TU */
+
+Lista dozwolonych indeksow nie zawierala VOFA_MODE_1024_4 (indeks 8), dodanego
+15.10 razem z wpisem SETTINGS "1024 x 768 - 16 COLORS".  Skutek lancuchowy:
+
+  a) set_mode() PRZEPROGRAMOWAL karte na 1024x768x4 (ekran przechodzi w nowy
+     tryb), ale funkcja zwraca -792 (-0x310-8);
+  b) kgfx_video_reconfigure_format() przy wyniku <0 NIE aktualizuje geometrii,
+     NIE wola kvideo_set_mode_format() i NIE wola kernel_wm_reconfigure();
+  c) op 40 uzbraja straznik TYLKO przy r>=0:
+         if(r>=0 && (request->wh & ATOS_DISPLAY_PREVIEW)) kvideo_guard_watch(...)
+     - wiec STRAZNIK NIGDY SIE NIE UZBROIL;
+  d) karta jest w 1024x768x4, a warstwa wideo dalej uwaza, ze jest 800x600x8 -
+     dlatego obraz to smieci i dlatego po (nieistniejacym) powrocie zostawaly
+     smieci: kvideo_set_mode_format(800,600,8) trafial na early-return
+     "ten sam tryb" i nie ustawial full=1, wiec nie bylo pelnego przemalowania.
+
+To wyjasnia CALY objaw: brak powrotu po 4 s, ESC bez skutku, "zawieszony"
+system (petla jadra dziala, ale nie ma czego cofac - straznik jest nieuzbrojony).
+
+DOWOD 1 (kod): whitelist zawiera 800_8, 1024_8, 640_8, 640_4, 800_16 - brak
+1024_4.  Wszystkie indeksy sa wyliczane w galeziach powyzej, wiec lista jest
+calkowicie redundantna - jedyne co robila, to odrzucala 1024x768x4.
+DOWOD 2 (historia): vofa-4bpp/etap-c-pliki/kernel_video_boot.c ma te sama liste
+(800_8/1024_8/640_8/640_4), a 1024_4 dolozono pozniej, w zmianie parsera WxHxD
+z 15.10 - lista nie zostala rozszerzona.
+DOWOD 3 (pomiar w emulatorze): kdbg_mode_result = 0 (sterownik przyjal tryb),
+a mimo to op 40 zwracalo blad - patrz rozdzial 3.
+
+--------------------------------------------------------------------------------
+2. DRUGIE MIEJSCE Z TA SAMA LUKA (zapis ustawien)
+--------------------------------------------------------------------------------
+requested_mode() - parser "RES=" z DESKTOP.CFG (sciezka startowa):
+    if(d==4u) return (w==640&&h==480) ? VOFA_MODE_640_4 : -1;
+SETTINGS zapisuje RES=<w>x<h>x<bpp>, wiec po potwierdzeniu "1024 x 768 - 16
+COLORS" do pliku szlo "RES=1024x768x4" - i przy nastepnym starcie parser je
+odrzucal, wracalo domyslne 800x600x8.  Ten sam blad rodzinny: tryb dodany do
+listy UI, ale nie do wszystkich miejsc, ktore go enumeruja.
+
+POPRAWKA:
+  - whitelist: dodane  index != (int)VOFA_MODE_1024_4
+  - parser:    d==4 obsluguje 640x480 ORAZ 1024x768
+  - komentarz przy whiteliscie mowi wprost, ze KAZDA galaz wyboru trybu musi
+    byc na tej liscie (brak = karta przelaczona, jadro nie wie, straznik milczy).
+
+--------------------------------------------------------------------------------
+3. CO ZMIERZONO W EMULATORZE (hatari-debug memdump, bez zgadywania)
+--------------------------------------------------------------------------------
+Test: SETTINGS -> "1024 x 768 - 16 COLORS" -> APPLY, bez potwierdzania.
+Odczyt pamieci jadra: struct video_guard, kernel_timer_ticks, kdbg_*.
+
+  chwila      | pending | prev tryb | armed  | kernel_user_clock | ticks jadra
+  ------------+---------+-----------+--------+-------------------+------------
+  APPLY +1.5s |    1    | 800x600x8 |  2822  |        2824       |    3146
+  APPLY +4s   |    1    | 800x600x8 |  2822  |        2859       |    3288
+  APPLY +8s   |    1    | 800x600x8 |  2822  |        3021       |    3487
+  APPLY +14s  |    0    |     -     |   -    |        3021       |    3728
+
+WNIOSKI (wazne, bo PRZEKAZANIE wskazywalo inaczej):
+  * Podejrzany (a) "kernel_user_clock() zwraca 0" - NIE.  Zegar zwraca prawdziwe
+    tykniecia (2824, 2859, 3021), a straznik jest poprawnie uzbrojony
+    (pending=1, prev=800x600x8, armed=2822).  Zaden z podejrzanych a-d nie byl
+    przyczyna; straznik po prostu nigdy nie zostal uzbrojony (rozdzial 1c).
+  * Podejrzany (b) "petla jadra nie chodzi" - NIE.  kdbg_loop_calls rosnie
+    (25527 -> 27217 w trakcie testu).
+  * Podejrzany (c) "guard_restore() zawodzi" - NIE.  Po uzbrojeniu rollback
+    dziala i przywraca tryb (wiersz +14 s: pending=0).
+  * Podejrzany (d) "ESC nie przywraca" - w tym stanie ESC nie MIAL czego
+    przywracac (aplikacja tylko zamyka okno, bo confirm_pending juz jest 0).
+
+POMIAR CZASU: 200 tykniec wygaslo po ~8-14 s, nie po 4 s.  Przyczyna jest
+osobna i opisana w rozdziale 6.
+
+--------------------------------------------------------------------------------
+4. WERYFIKACJA (dowod, nie "naprawione")
+--------------------------------------------------------------------------------
+KERNEL.SYS 216566 B, md5 9397c5c452e8e18ea6366e7e8003fb56 (TOS=1, 0 relokacji,
+make check-video PASS).
+
+  A) ZLOTA ZASADA: zrzut startowy bez dotykania SETTINGS jest BAJT W BAJT
+     identyczny z wzorcem:
+       v0-boot.png  sha256 0e821ede61e5946463cb75f424e592200da37803b5a2dc3ec7747cf249ef064a
+       (ten sam plik co zrzut-ikony-naprawione.png)
+  B) PULAPKA: SETTINGS -> "1024 x 768 - 16 COLORS" -> APPLY (bez ESC, bez ENTER):
+       +0s     2048x768  obraz zepsuty (to bug BINARKI trackera: 4bpp czyta jako
+                        mono 2048; poprawka Claude'a jest w drugiej binarce)
+       +4s     2048x768
+       +7s     2048x768
+       +10s    2048x768
+       +14s    800x600   <-- JADRO SAMO WROCILO, bez zadnego klawisza
+       +20s    800x600   stabilnie, EKRAN CZYSTY (pelne przemalowanie pulpitu)
+     Okno SETTINGS pokazuje "PREVIEW EXPIRED - RESTORED", a zaznaczenie samo
+     przeskoczylo na "800 x 600 - 256 COLORS" - czyli stan aplikacji zgadza sie
+     z trybem, ktory jadro przywrocilo.
+     Zrzuty: display-demo/v2-po-apply.png, v3-po-4s.png, v4-po-7s.png,
+             v5-po-10s.png, v6-po-14s.png, v7-po-20s.png, v8-po-enter.png
+  C) POWTARZALNOSC: dwa przebiegi pod rzad, identyczne sumy zrzutow.
+  D) TEST REGRESYJNY: tests/test_video_boot.c dostal wpis 1024x768x4 (tabela
+     sterownika + parser RES + tabela trybow).  Sprawdzone, ze BEZ poprawki ten
+     test pada (assert na linii 163), a Z nia przechodzi - czyli luka jest
+     naprawde zakryta, a nie "przypadkiem zielona".
+
+--------------------------------------------------------------------------------
+5. CO ZMIENIC W PRZEKAZANIU (bledy, ktore znalazlem przy okazji)
+--------------------------------------------------------------------------------
+ - Zloty hash w PRZEKAZANIU jest zepsuty: "0e821ede61e59464b0326a2981b29a3c1
+   a4959d07146a0d3d0e9216bc6cca51ff" ma 65 znakow, wiec nie jest zadnym
+   sha256.  Prawdziwy: 0e821ede61e5946463cb75f424e592200da37803b5a2dc3ec7747
+   27cf249ef064a.
+ - "W tym srodowisku NIE MA cmake ani ninja" - NIEAKTUALNE.  Sa:
+   /opt/homebrew/bin/cmake (4.4.4), /opt/homebrew/bin/ninja (1.13.2).
+ - scalony/hatari-build/src/hatari NIE jest zbudowana scalona binarka - to
+   bajt w bajt kopia display-demo/hatari-tracker-20261013 (md5
+   b2494c456b8b245dc61df9592ef15ef1).  Drzewo build/ bylo skopiowane z Codex,
+   wiec CMakeCache wskazywal stare sciezki i "build" tylko kopiowal plik.
+   Wniosek: "patch nalozony i sprawdzony" dotyczyl ZRODEL, nie binarki.
+ - Zrzuty r5/r6/r7 (przed poprawka) byly identyczne co do bajtu - ekran nie
+   zmienial sie w ogole.  Po poprawce ekran zmienia sie miedzy zrzutami, bo
+   jadro naprawde jest w trybie 1024x768x4 i rysuje w nim (smieci sa wtedy
+   wylacznie po stronie emulatora).
+
+--------------------------------------------------------------------------------
+6. ZEGAR STRAZNIKA - NAPRAWIONY (bylo: gubil tykniecia)
+--------------------------------------------------------------------------------
+PROBLEM: kvideo_guard_watch/rollback uzywaly kernel_user_clock(), czyli
+timer_service->ticks().  TIMER.SYS liczy tykniecia przez POLLING 8-bitowego
+licznika Timer-C (system/timer_module.S, timer_poll): miedzy dwoma odczytami
+wykrywa tylko JEDNO zawiniecie.  W trybie-smieciach petla jadra zwalnia, wiec
+zegar gubil tykniecia - w tym samym czasie (8,5 s) licznik pollowy posunal sie
+o 199, a licznik z przerwania o 350, czyli poll chodzil z ~57% predkosci.
+Skutek: "4 s" wychodzilo 8-14 s.
+
+POPRAWKA (4 miejsca, jeden zegar):
+  system/kernel_module.c     nowa funkcja kernel_user_wall_clock()
+                             -> volatile kernel_timer_ticks (przerwanie Timer-C)
+  system/kernel_exception.c  uzbrojenie op 40 i op 39
+  system/kernel_main.c       siatka bezpieczenstwa w petli jadra
+  system/kernel_wm.c         rollback na poczatku kernel_wm_frame_tick()
+  include/kvideo_guard.h     opis jednostki: tykniecia z przerwania, nie polling
+Stala KVIDEO_GUARD_TICKS zostaje 200 (200 x 50 Hz = 4 s).
+
+POMIAR PO POPRAWCE (memdump, bez zrzutow w trakcie - zrzut wstrzymuje emulator):
+  armed = 2986
+  +2 s host  -> tick 3146  (144 tykniecia / 2,9 s = 49,7 Hz - pelna predkosc)
+  +4 s host  -> pending = 0, tryb 800x600 przywrocony
+  => wygasniecie po ~3,7-4,0 s, czyli zgodnie z obietnica naglowka.
+
+UWAGA O POMIARZE: kazdy "hatari-debug screenshot" zatrzymuje emulator na ~1 s,
+wiec seria zrzutow robionych CO 2 s rozciaga to do 7-9 s.  To artefakt
+narzedzia, nie opoznienie straznika - ta sama seria bez zrzutow w trakcie daje
+4 s.  Na wolniejszym emulatorze czas maszyny (200 tykniec) przeklada sie na
+dluzszy czas zegarowy - tak dziala emulacja ponizej real-time, nie ATOS.
+
+--------------------------------------------------------------------------------
+7. PLIKI ZMIENIONE
+--------------------------------------------------------------------------------
+system/kernel_video_boot.c   whitelist trybow + parser RES (2 miejsca)
+system/kernel_module.c       kernel_user_wall_clock() (zegar z przerwania)
+system/kernel_exception.c    uzbrojenie op 40 / op 39 na tym zegarze
+system/kernel_main.c         siatka bezpieczenstwa w petli jadra
+system/kernel_wm.c           rollback w kernel_wm_frame_tick()
+include/kvideo_guard.h       opis jednostki czasu (przerwanie, nie polling)
+tests/test_video_boot.c      wpis 1024x768x4 w trzech tabelach (regresja)
+system/desktop_wm.c          FILEWIN/TRASHWIN: zapis+odczyt+clamp (punkt 4.1)
+display-demo/desktop-cfg-wzor.txt  + FILEWIN/TRASHWIN (18 linii)
+build/system/KERNEL.SYS      216950 B, md5 32614aee2735cef081f9e66b23f3beff
+                             (przeciaganie z zawartoscia; boot BAJT W BAJT)
+build/system/DESKTOP.APP     29321 B (bylo 28395; ASYSAPP0 OK, PIC OK)
+
+Kopie zapasowe: /tmp/kernel_video_boot.c.bak-20261017, /tmp/KERNEL.SYS.216554.bak,
+/tmp/k.c.bak, /tmp/ke.c.bak, /tmp/km.c.bak, /tmp/kwm.c.bak, /tmp/kvg.h.bak
+Obraz testowy: display-demo/demo-guard.img (kopia ATOS-2026-10-16.img z nowym
+jadrem; ATOS-2026-10-16.img i ATOS_AKTUALNY/ATOS.img NIE byly ruszane).
+
+--------------------------------------------------------------------------------
+7.1 ZAMKNIETE PRZY OKAZJI: "PASY przy podgladzie 1024x768 z 640x480"
+--------------------------------------------------------------------------------
+Punkt 4.2 PRZEKAZANIA.  Test na scalonej binarce: start z RES=640x480x8,
+SETTINGS -> "1024 x 768 - 16 COLORS" -> APPLY -> YES, zrzuty po 9 s i 14 s.
+Wynik: 1024x768 w 16 kolorach CZYSTY i stabilny (dwa identyczne zrzuty:
+display-demo/r2-1024-settled.png, r3-1024-stable.png).  Wczesniejszy zrzut
+1,5 s po APPLY (p4-1024-z-640.png) pokazywal poprawny prostokat 640x480 i pasy
+w reszcie - to bylo PRZEMALOWANIE w trakcie, nie blad ukladu.
+Pulapka pomiarowa: zrzut <2 s po zmianie trybu zawsze wyglada zle.
+
+--------------------------------------------------------------------------------
+7.2 ZROBIONE PRZY OKAZJI: ROZMIARY OKIEN PLIKI / KOSZ PRZEZYWAJA RESTART
+--------------------------------------------------------------------------------
+Punkt 4.1 PRZEKAZANIA.
+  * DESKTOP.CFG: FILEWIN=WxH i TRASHWIN=WxH (domyslnie 420x300 / 440x300),
+  * zapis CICHY przy kazdym resize: desktop_save() rozbity na
+    desktop_save_core() (bez UI) + desktop_save() (komunikat) +
+    desktop_save_quiet() (przy WMOV), zeby przeciaganie ramki nie mrugalo
+    "CONFIG SAVED",
+  * odczyt w desktop_load() (parse_wh) i clamp w win_clamp() przy otwarciu:
+    max = ekran-16 x ekran-32; minima ROZNE - PLIKI 200x120 (lista plynie),
+    KOSZ 360x300, bo przyciski RESTORE/DELETE/EMPTY ALL maja STALE y=240
+    i nizsze okno ucinalo je (sprawdzone zrzutem v3-kosz-min.png),
+  * bufor konfiguracji 384 -> 448 B (doszly dwie linie).
+DOWOD: x2-po-resize.png (okno 500x380 po przeciagnieciu za rog),
+y1-pliki-po-restart.png (to samo okno po restarcie), y2-pliki-po-restart.png
+(FILEWIN=700x500 na ekranie 640x480 - przyciete, okno miesci sie w calosci).
+Zrzut startowy nadal BAJT W BAJT z wzorcem.
+DESKTOP.APP 28395 -> 29321 B; naglowek ASYSAPP0 OK, 0 bezwzglednych wywolan.
+
+--------------------------------------------------------------------------------
+8. PRZY OKAZJI: JEDNA BINARKA HATARI (punkt 3 PRZEKAZANIA) - ZBUDOWANA
+--------------------------------------------------------------------------------
+Blocker "nie ma cmake/ninja" jest nieaktualny, a patch tracker-65k-fix.patch
+NIE KOMPILUJE SIE: jego pierwsza linia uzywa zmiennej "packed16", ktorej w
+src/vofa.c tej wersji nie ma (blad: use of undeclared identifier 'packed16').
+Patch byl nalozony, ale nigdy nie zbudowany - dlatego scalony/hatari-build/src/
+hatari bylo po prostu kopiA binarki trackera (md5 b2494c45...).
+
+ZROBIONE ZAMIAST PATCHA: z drzewa atari-030-port/hatari-src (poprawka Claude'a)
+przeniesione DWA pliki - cale, spojne zmiany, nie dwie linijki:
+  src/vofa.c    - rozpoznanie 4 bpp (GDC[6]=0x02) i 16 bpp (GDC[6]=0x08),
+                  wlasciwa szerokosc/stride (4 bpp: crtc13*8, stride w/8*4)
+                  oraz dekoder 4 planow w sciezce rysowania,
+  src/conv_st.c - kopiowanie obrazu karty do powierzchni hosta dla bpp 4 i 16
+                  (bez tego VOFA raportuje tryb, ale ekran stoi).
+Reszta drzewa (audio, nf_atos_sound, libxmp) zostaje z trackera.
+
+BUDOWA (dziala, ~20 s incremental / ~4 min od zera):
+  cmake -S scalony/hatari-src -B scalony/hatari-build2 -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DENABLE_OSX_BUNDLE=OFF -DENABLE_SDL3=ON \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DATOS_SOUND_DIR=/Users/xxx/Documents/Deepseek_test/ATOS-SOUND/reference-v1
+  ninja -C scalony/hatari-build2
+  => scalony/hatari-build2/src/hatari  (md5 b1f22b01..., arm64)
+     kopia: display-demo/hatari-scalony-20261017
+
+WYNIK TESTU (ta binarka + nowe jadro):
+  * start z RES=1024x768x4 (po mojej poprawce parsera) daje POPRAWNY ekran
+    1024x768 w 16 kolorach - pulpit, ikony, pasek, zegar (display-demo/m0-boot.png).
+    W logu emulatora: "VOFA-MODE: w=1024 h=768 stride=512 bpp=4 drive=1".
+  * system zyje i jest szybki w tym trybie: kdbg_loop_calls rosnie ~550/s
+    (memdump, 5 s i 10 s po starcie).
+  * stara binarka trackera w tym samym miejscu pokazywala 2048x768 i smieci
+    ("VOFA-MODE: w=2048 h=768 stride=256 bpp=1" - 4 plany czytane jako mono).
+
+UWAGA: potwierdzenie trybu (YES) zapisuje RES=1024x768x4 do DESKTOP.CFG, a po
+poprawce parsera system NAPRAWDE wstaje w tym trybie - z dobra binarka to
+dziala, ze STARA binarka trackera to powrot do smieci przy starcie.  Dlatego
+kolejnosc wdrazania: najpierw nowa binarka, potem tryby 4 bpp na stale.
+================================================================================

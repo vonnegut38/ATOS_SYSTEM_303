@@ -1,0 +1,83 @@
+STRESS USTAWIEN EKRANU - 2026-10-20 08:44
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-display.img (klon demo-guard.img)
+
+faza   krok zmierzone                    oczekiwane             wynik    uwagi
+BOOT   0    800x600                      800x600                OK       start pulpitu
+RES    otwarcie SETTINGS                     SETTINGS               OK       okno na ekranie
+RES    0    1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 0 (focus_row~7)
+RES    1    800x600 CHUNKY (8/16 bpp)    -                      OK       krok 1 (focus_row~8)
+RES    2    1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 2 (focus_row~7)
+RES    3    800x600 CHUNKY (8/16 bpp)    -                      OK       krok 3 (focus_row~6)
+RES    4    640x480 PLANAR (1/4 bpp)     -                      OK       krok 4 (focus_row~5)
+RES    5    1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 5 (focus_row~4)
+RES    6    640x480 PLANAR (1/4 bpp)     -                      OK       krok 6 (focus_row~3)
+RES    7    1024x768 PLANAR (1/4 bpp)    -                      OK       krok 7 (focus_row~2)
+RES    8    800x600 PLANAR (1/4 bpp)     -                      OK       krok 8 (focus_row~1)
+RES    9    640x400 PLANAR (1/4 bpp)     -                      OK       krok 9 (focus_row~0)
+RES    10   800x600 PLANAR (1/4 bpp)     -                      OK       krok 10 (focus_row~1)
+RES    11   1024x768 PLANAR (1/4 bpp)    -                      OK       krok 11 (focus_row~2)
+RES    12   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 12 (focus_row~3)
+RES    13   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 13 (focus_row~4)
+RES    14   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 14 (focus_row~5)
+RES    15   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 15 (focus_row~6)
+RES    16   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 16 (focus_row~7)
+RES    17   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 17 (focus_row~8)
+RES    18   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 18 (focus_row~7)
+RES    19   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 19 (focus_row~6)
+RES    20   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 20 (focus_row~5)
+RES    21   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 21 (focus_row~4)
+RES    22   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 22 (focus_row~3)
+RES    23   1024x768 PLANAR (1/4 bpp)    -                      OK       krok 23 (focus_row~2)
+RES    24   800x600 PLANAR (1/4 bpp)     -                      OK       krok 24 (focus_row~1)
+RES    25   640x400 PLANAR (1/4 bpp)     -                      OK       krok 25 (focus_row~0)
+RES    26   800x600 PLANAR (1/4 bpp)     -                      OK       krok 26 (focus_row~1)
+RES    27   1024x768 PLANAR (1/4 bpp)    -                      OK       krok 27 (focus_row~2)
+RES    28   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 28 (focus_row~3)
+RES    29   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 29 (focus_row~4)
+RES    30   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 30 (focus_row~5)
+RES    31   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 31 (focus_row~6)
+RES    32   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 32 (focus_row~7)
+RES    33   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 33 (focus_row~8)
+RES    34   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 34 (focus_row~7)
+RES    35   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 35 (focus_row~6)
+RES    36   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 36 (focus_row~5)
+RES    37   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 37 (focus_row~4)
+RES    38   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 38 (focus_row~3)
+RES    39   1024x768 PLANAR (1/4 bpp)    -                      OK       krok 39 (focus_row~2)
+RES    40   800x600 PLANAR (1/4 bpp)     -                      OK       krok 40 (focus_row~1)
+RES    41   640x400 PLANAR (1/4 bpp)     -                      OK       krok 41 (focus_row~0)
+RES    42   800x600 PLANAR (1/4 bpp)     -                      OK       krok 42 (focus_row~1)
+RES    43   1024x768 PLANAR (1/4 bpp)    -                      OK       krok 43 (focus_row~2)
+RES    44   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 44 (focus_row~3)
+RES    45   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 45 (focus_row~4)
+RES    46   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 46 (focus_row~5)
+RES    47   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 47 (focus_row~6)
+RES    48   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 48 (focus_row~7)
+RES    49   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 49 (focus_row~8)
+RES    50   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 50 (focus_row~7)
+RES    51   800x600 CHUNKY (8/16 bpp)    -                      OK       krok 51 (focus_row~6)
+RES    52   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 52 (focus_row~5)
+RES    53   1024x768 CHUNKY (8/16 bpp)   -                      OK       krok 53 (focus_row~4)
+RES    54   640x480 CHUNKY (8/16 bpp)    -                      OK       krok 54 (focus_row~3)
+RES    podsuma geometrie: 640x400, 640x480, 800x600, 1024x768 4 geometrie            ROZNICA  przelaczen: 55
+GUARD  brak-YES 640x480                      640x480                OK       podglad bez potwierdzenia -> jadro wraca samo
+THM    0    pasek=(255, 255, 255) tlo=(0, 138, 138) hash=7a354bc6 -                      OK       motyw bez zmian (ten sam / 1 motyw)
+THM    1    pasek=(223, 223, 223) tlo=(16, 32, 32) hash=6a01db03 -                      OK       motyw zmienil ekran
+THM    2    pasek=(255, 255, 255) tlo=(0, 138, 138) hash=91a0a767 -                      OK       motyw zmienil ekran
+THM    3    pasek=(223, 223, 223) tlo=(16, 32, 32) hash=459686fc -                      OK       motyw zmienil ekran
+DESK   0    tlo=(16, 32, 32) pasek=(223, 223, 223) ikona=36 komorka=51 tapeta=3 -                      OK       bez zmiany ekranu
+DESK   1    tlo=(0, 0, 48) pasek=(223, 223, 223) ikona=34 komorka=51 tapeta=4 -                      OK       KOLOR TLA+TAPETA (4 kol.)+ROZMIAR IKON
+DESK   2    tlo=(0, 32, 0) pasek=(223, 223, 223) ikona=34 komorka=51 tapeta=4 -                      OK       KOLOR TLA
+DESK   3    tlo=(32, 0, 0) pasek=(223, 223, 223) ikona=34 komorka=51 tapeta=4 -                      OK       KOLOR TLA
+DESK   4    tlo=(32, 32, 32) pasek=(223, 223, 223) ikona=36 komorka=51 tapeta=3 -                      OK       KOLOR TLA+TAPETA (3 kol.)+ROZMIAR IKON
+DESK   5    tlo=(0, 0, 0) pasek=(223, 223, 223) ikona=34 komorka=51 tapeta=3 -                      OK       KOLOR TLA+ROZMIAR IKON
+DESK   6    tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=34 komorka=51 tapeta=3 -                      OK       KOLOR PASKA
+DESK   7    tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=92 komorka=20 tapeta=3 -                      OK       ROZMIAR IKON+SIATKA
+DESK   8    tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=34 komorka=51 tapeta=4 -                      OK       TAPETA (4 kol.)+ROZMIAR IKON+SIATKA
+DESK   9    tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=34 komorka=51 tapeta=4 -                      OK       bez zmiany ekranu
+DESK   10   tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=47 komorka=64 tapeta=4 -                      OK       ROZMIAR IKON+SIATKA
+DESK   11   tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=47 komorka=64 tapeta=4 -                      OK       bez zmiany ekranu
+DESK   12   tlo=(0, 0, 0) pasek=(85, 85, 85) ikona=47 komorka=64 tapeta=4 -                      OK       bez zmiany ekranu
+KONIEC 0    640x480                      -                      OK       pulpit po calej sesji (stan faktyczny)
+
+krokow: 77, zgodnych: 76, roznic: 1

@@ -1,0 +1,32 @@
+KONSOLA PRZY ZAMKNIETYM PULPICIE - 2026-10-20 11:49
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-console-stress.img (klon demo-guard.img)
+
+krok                 polecenie/akcja                    stan           wynik   hash
+zamkniecie pulpitu   -                                  konsola        OK      889bb6daf57b81b3
+help                 help                               konsola        OK      b76163fa6b62d4b8
+dir                  dir                                konsola        OK      7e938bef040c87de
+memory               memory                             konsola        OK      108047827e5bf26b
+cpu                  cpu                                konsola        OK      0f4e113d709f42db
+uptime               uptime                             konsola        OK      44f4c4b2d013a7ed
+tasks                tasks                              konsola        OK      b82eab76b1badd1a
+jobs                 jobs                               konsola        OK      9a02fadaaabc70e9
+maps                 maps 2                             konsola        OK      8874b17586902af5
+mkdir                mkdir \tmp                         konsola        OK      f060ff07c03a7816
+copy                 copy \system\notes.txt \tmp\notes.txt konsola        OK      940f0c94ba1cf80f
+dir-tmp              dir \tmp                           inny ekran     UWAGA   639628fde82deb6b
+type                 type \tmp\notes.txt                inny ekran     UWAGA   c4d84dd36e891bfb
+move                 move \tmp\notes.txt \tmp\n2.txt    inny ekran     UWAGA   0661c41e18717d05
+del                  del \tmp\n2.txt                    inny ekran     UWAGA   9af9fbfef6cd1abd
+start                start \system\test\sysinfo.prg     inny ekran     OK      9090d139f47ba731
+tasks-po-start       tasks                              inny ekran     OK      6777953fbbfbc186
+wait                 wait                               konsola        OK      fe3628ef503a3948
+tasks-po-wait        tasks                              konsola        OK      ec27a3bbf40a73dc
+tts2                 tts2                               konsola        OK      6f04ba820dac2a91
+dir-w-tts2           dir                                konsola        OK      5995c978e2ab6b78
+tts1                 tts1                               konsola        OK      38a4738beae0f285
+tos                  tos \system\test\sysinfo.prg       program TOS    OK      163f1e331616676c
+tos-kill             Ctrl+Alt+Esc                       ekran po kill  OK      c4aaa924b678af00
+tos-exit             Y + ENTER                          ekran po wyjsciu OK      c4aaa924b678af00
+koniec               -                                  inny           UWAGA   c4aaa924b678af00
+
+krokow: 26, uwag: 5

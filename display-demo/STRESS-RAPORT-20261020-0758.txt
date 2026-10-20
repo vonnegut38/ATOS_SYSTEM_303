@@ -1,0 +1,103 @@
+STRESS TEST ATOS 2.1 - 2026-10-20 07:58
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-stress.img (klon demo-guard.img)
+
+scena                    czas  tykn. hash              wynik  uwagi
+terminal                18.7s      - 9ee934bbe3259033  OK     wpisane ver + dir, okno terminala
+pliki-f7                 5.4s      - c56dd840ad3f8233  OK     okno PLIKI otwarte i zamkniete
+kosz                    10.7s      - 41a46d46b6571a81  OK     okno KOSZ
+my-atari                11.2s      - eb636542fc7090cb  OK     okno MY ATARI
+menu-kontekstowe         6.6s      - c29c769d3d4cc2ae  OK     menu kontekstowe pulpitu
+settings-otwarcie       12.8s      - bd2e45d9708dad2e  OK     SETTINGS otwarte (proba 1)
+tryb-ekranu             19.0s      - 974eda7789a86a68  OK     podglad trybu + powrot
+motyw                   11.5s      - 1ba08159922ceb0f  OK     zmiana motywu i powrot
+desk-rozmiar-siatka     37.5s      - d3ff7cacc26b9713  OK     rozmiar ikon 64/32/48 + siatka
+edytor-kafelka          19.8s      - f959710b89da9ac5  OK     klikniecia w edytor kafelka
+okno-drag-resize        21.3s      - 1021c8f556b92a18  OK     przeciaganie + resize okna
+app-modplay             15.2s      - 93b487f4245b29d4  OK     modplay uruchomiony
+app-pre2                16.0s      - 487a6895e63892fc  OK     pre2 uruchomiony
+app-taskmgr             13.0s      - aa77e0ce258e0c85  OK     taskmgr uruchomiony
+app-plasma              13.1s      - 78b3371258110465  OK     plasma uruchomiony
+app-arkanoid            17.1s      - 6a7a0d551fe2c5ff  OK     arkanoid uruchomiony, klawisze w grze
+app-sysinfo             13.5s      - d39a0c125b56386a  OK     sysinfo uruchomiony
+tos-kill-switch         17.8s      - ebab084d8422f106  OK     SYSTOS + Ctrl+Alt+Esc (kill TOS)
+bezczynnosc              7.2s      - ebab084d8422f106  OK     ekran stabilny w bezczynnosci
+terminal#1              18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#1                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#1                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#1              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#1                  37.5s      - 587c6334b4ba721c  OK     rozmiar ikon 64/32/48 + siatka
+tile#1                  19.7s      - e51964bf2dfb13eb  OK     klikniecia w edytor kafelka
+drag#1                  21.3s      - 9d394829fee0a04a  OK     przeciaganie + resize okna
+terminal#2              18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#2                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#2                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#2              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#2                  37.4s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#2                  19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#2                  21.2s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#3              18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#3                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#3                  10.9s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#3              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#3                  37.7s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#3                  19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#3                  21.3s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#4              18.8s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#4                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#4                  11.0s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#4              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#4                  37.4s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#4                  19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#4                  21.4s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#5              18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#5                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#5                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#5              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#5                  37.4s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#5                  19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#5                  21.3s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#6              18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#6                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#6                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#6              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#6                  37.4s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#6                  19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#6                  21.3s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#7              18.8s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#7                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#7                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#7              11.1s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#7                  37.9s      - d5198b56e6e3079f  OK     rozmiar ikon 64/32/48 + siatka
+tile#7                  19.8s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#7                  23.5s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+terminal#8              19.2s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#8                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#8                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#8              11.2s      - edddd673a89d8ed3  OK     okno MY ATARI
+desk#8                  37.7s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#8                  19.8s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#8                  21.3s      - f6d255a45097f6ab  OK     przeciaganie + resize okna
+terminal#9              18.9s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#9                  5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#9                  10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#9              11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#9                  37.5s      - 587c6334b4ba721c  OK     rozmiar ikon 64/32/48 + siatka
+tile#9                  19.7s      - e51964bf2dfb13eb  OK     klikniecia w edytor kafelka
+drag#9                  21.3s      - 9d394829fee0a04a  OK     przeciaganie + resize okna
+terminal#10             18.7s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#10                 5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#10                 10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#10             11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#10                 37.5s      - 60659fc2e54e87c2  OK     rozmiar ikon 64/32/48 + siatka
+tile#10                 20.0s      - 554d44c6e372092e  OK     klikniecia w edytor kafelka
+drag#10                 21.5s      - 9d394829fee0a04a  OK     przeciaganie + resize okna
+terminal#11             18.9s      - 3e06d2b4b31ba51b  OK     wpisane ver + dir, okno terminala
+pliki#11                 5.4s      - f504cc28b299f640  OK     okno PLIKI otwarte i zamkniete
+kosz#11                 10.7s      - e1b478eed7a371ec  OK     okno KOSZ
+my-atari#11             11.2s      - 608f288eb1e253da  OK     okno MY ATARI
+desk#11                 37.5s      - 7eeb7d0384e94c2d  OK     rozmiar ikon 64/32/48 + siatka
+tile#11                 19.7s      - 968347a860fce7ca  OK     klikniecia w edytor kafelka
+drag#11                 21.3s      - 6b15d0e55fe7b4c7  OK     przeciaganie + resize okna
+
+scen: 96, OK: 96, uwag: 0
+zrzuty: /Users/xxx/Documents/Deepseek_test/display-demo/s*.png

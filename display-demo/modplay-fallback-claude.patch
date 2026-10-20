@@ -1,0 +1,31 @@
+--- a/system/modplay.c	2026-10-16 22:50:01.640809562 +0200
++++ b/system/modplay.c	2026-10-16 22:50:01.642966092 +0200
+@@ -157,6 +157,7 @@
+        be32(h+28)!=0x83b5d9au){cache_close();return 0;}
+     clip_length=i;cache_expected=be32(h+24);cache_hash=2166136261u;return 1;
+ }
++static void select_song(unsigned which);
+ static void toggle_pause(void)
+ {
+     int32_t rc;
+@@ -166,7 +167,19 @@
+             rc=modsound_open(&accelerator_budget);
+             if(rc){set_status("Accelerator unavailable / busy");return;}
+             owned=1;rc=modsound_module_begin(mod_size);
+-            if(rc){stop_all();if(read_total<mod_size)loaded=0;set_status("Tracker firmware required");return;}
++            if(rc){stop_all();
++                /* Claude, 16.10: the ESP32 answers but has no tracker decoder
++                   (no AS_CAP_TRACKER - e.g. Hatari without libxmp).  Do not
++                   stop silently on "Tracker firmware required": fall back to
++                   the Yamaha/PCM output, exactly as if F1 had been pressed. */
++                if(audio_caps()&ATOS_AUDIO_CAP_PCM){
++                    accelerator=0;panel_dirty=1;dirty=1;paused=1;
++                    if(reading||read_total<mod_size){select_song(song_index);return;}
++                    clip_length=clip_filled=0;zero(pcm,sizeof pcm);toggle_pause();return;
++                }
++                if(read_total<mod_size)loaded=0;
++                set_status("Tracker firmware required");return;
++            }
+             preparing=1;paused=1;clip_filled=0;clip_length=mod_size;
+             set_status("Uploading original module...");return;
+         }

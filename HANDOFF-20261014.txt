@@ -1,0 +1,394 @@
+================================================================================
+PRZEKAZANIE STANU - ATOS 2.1 (audio + video), 2026-10-14
+Plik dla NOWEJ sesji: przeczytaj to zamiast zaczynac od zera.
+================================================================================
+KTO CO ROBI: DeepSeek implementuje; Codex (uzytkownik) audytuje i uruchamia
+emulator; Claude tez testowal i poprawial (patrz nizej). Uzytkownik pisze po
+polsku. OBOWIAZKOWA uczciwosc raportu: nic nie twierdzimy bez dowodu.
+
+--------------------------------------------------------------------------------
+1. CO DZIALA (zweryfikowane dowodami)
+--------------------------------------------------------------------------------
+* WSZYSTKIE 9 TRYBOW EKRANU dziala na karcie - zmierzone automatycznie
+  (display-demo/test_modes.sh, log "VOFA-MODE ... drive=1"):
+    640x400x1, 800x600x1, 1024x768x1,
+    640x480x4, 1024x768x4,
+    640x480x8, 800x600x8, 1024x768x8,
+    800x600x16
+* 1024x768 x 16 KOLOROW (4 bpp planarne) - DODANE dzis:
+    - sterownik: VOFA_MODE_1024_4, tabela {1024,768,768,393216}, CRTC crtc_1024_4
+    - jadro: (1024,768,4) -> VOFA_MODE_1024_4
+    - REGULA CRTC (nauczka!): crtc13 (rej. 0x13, indeks 19 tablicy) = WIDTH/8,
+      NIE pitch/8.  Dla 1024x768x4 = 0x80 (nie 0x40 - z 0x40 Hatari liczyl
+      szerokosc jako crtc13*8 = 512 i karta NIE przejmowala ekranu: drive=0).
+* SETTINGS.APP = OSOBNA aplikacja (system/settings_app.c, ~5,2 KB):
+    - JEDNA lista 9 gotowych trybow (postulat uzytkownika), radio (o), APPLY/CLOSE,
+    - skrzynka "KEEP MODE? 4 SEC TO CONFIRM" + YES/NO,
+    - zapis RES=WxHxD do \SYSTEM\DESKTOP.CFG,
+    - zakladka THEMES (opcode 37 jadra),
+    - komunikat bledu z KODEM: "MODE REFUSED rc=-XXX".
+* Zabezpieczenie zmiany trybu w JADRZE (include/kvideo_guard.h +
+  kernel_video_boot.c): preview 4 s, brak potwierdzenia => powrot.  Opt-in
+  (bit ATOS_DISPLAY_PREVIEW).  NAPRAWIONE zaklinowanie: rollback przy nieudanym
+  powrocie ZDEJMUJE blokade (wczesniej uzbrajal w kolko => -997 na zawsze).
+* Testy hostowe: make check-video => 10 PASS, w tym
+    PASS wm-clamp 121566 asercji, PASS setup-hit 50, PASS kvideo-guard 15.
+* Opcody (include/atos_display.h): ATOS_GFX_DISPLAY_SET=40, PREVIEW=0x100;
+  guard/confirm = 39.  Broker \SYSTEM\GFX.APP MUSI przepuszczac 40
+  (cmpi.l #40 na offsetcie 0x70; sprawdzac: xxd | grep "0c82 0000 0028").
+
+--------------------------------------------------------------------------------
+2. RECEPTA: KOMPLET DO WGRANIA (inaczej "cos nie dziala")
+--------------------------------------------------------------------------------
+ZAWSZE pelny zestaw (Claude zweryfikowal):
+  build/system/KERNEL.SYS        -> \SYSTEM\KERNEL.SYS
+  build/system/GFX.APP           -> \SYSTEM\GFX.APP        (broker, <=40!)
+  build/system/DESKTOP.APP       -> \SYSTEM\APP\DESKTOP.APP
+  build/system/SETTINGS.APP      -> \SYSTEM\APP\SETTINGS.APP
+  build/system/VOFA.SYS          -> \SYSTEM\DRV\ET4000.SYS  (UWAGA: ta nazwa!)
+Wgrywanie: display-demo/install_file.py <obraz> "SYSTEM\DRV\ET4000.SYS" <plik>
+  (umie TWORZYC pliki; sprawdza miejsce PRZED jakimkolwiek zapisem).
+
+--------------------------------------------------------------------------------
+3. URUCHOMIENIE HATARI (dziala, gotowy zestaw argumentow)
+--------------------------------------------------------------------------------
+# PELNA, SPRAWDZONA RECEPTA (skrot z URUCHOM_TEST_TRACKER...command).
+# UWAGA: --tf536 on i --memsize 4 sa KONIECZNE - ATOS jest budowany pod TF536.
+# Bez --tf536 on MODPLAY/PRE2 moga nie dzialac (moj blad z 16.10).
+atari-030-port/hatari-src/build/src/hatari \
+  -c ATOS_AKTUALNY/hatari.cfg --machine megast --cpulevel 3 --cpuclock 32 \
+  --memsize 4 --ttram 64 --tf536 on \
+  --graphics-card vofa --gfx-chip et4000 --fast-forward off \
+  --ide-master "<obraz>.img" --tos ATOS_AKTUALNY/BIOS.bin --patch-tos false \
+  --mmu off --statusbar false --borders false --zoom 1 --sound 44100 \
+  --natfeats on --confirm-quit false --window \
+  --acsi 0=none --acsi 1=none --acsi 2=none --acsi 3=none \
+  --acsi 4=none --acsi 5=none --acsi 6=none --acsi 7=none \
+  --screenshot-dir <katalog> \
+  --cmd-fifo /tmp/x.fifo   # tylko binarka z czytajacym fifo (tracker/tf536)
+BRAK --graphics-card vofa => log pokaze "w=0 h=0 bpp=0 drive=0" (karta nieaktywna).
+Zrzut ekranu: w oknie modyfikator (prawy Alt/AltGr) + G wg konfiguracji
+(kScreenShot = G), plik ladnie w --screenshot-dir.  Ja NIE umiem zrobic zrzutu
+sam (fifo Hatari wstrzykuje klawisze Atari, nie komendy debuggera).
+Przebudowa Hatari (po zmianach w src/): cmake --build build z PATH/PYTHONPATH
+  atari-030-port/tools/py.  Poprawki modelu karty Claude'a sa w src/ (patch:
+  display-demo/hatari-vofa-4bpp-16bpp-fix.patch).
+
+--------------------------------------------------------------------------------
+4. ZASADY BEZPIECZENSTWA (nie lamac)
+--------------------------------------------------------------------------------
+* NIGDY nie ruszac dzialajacego obrazu uzytkownika ani jego instancji Hatari.
+  Zawsze kopia (display-demo/demo-okno.img to kopia demo-poprawiony.img).
+* Nie ma dwoch instancji na tym samym obrazie.
+* Diagnostyka bez klikania: aplikacja/pulpit moga zapisac plik-znacznik na
+  dysku ATOS (gui_call(60,...)) - potem czytamy obraz offline.  Sprawdzone.
+* Hatari sam tworzy plik --cmd-fifo (nie robic go wczesniej: "File exists").
+* --memsize jest w KiB (8192 = 8 MiB), a dla megast bywa odrzucane - lepiej
+  zostawic pamiec z cfg.
+
+--------------------------------------------------------------------------------
+5. OTWARTE WATKI (kolejnosc)
+--------------------------------------------------------------------------------
+A) EKRAN - dokonczenie:
+   - Uzytkownik nadal widzi "MODE REFUSED" przy APPLY.  Tryby sa POTWIERDZONE
+     (tabela wyzej), wiec zostaje bramka -997 (podglad juz trwa) albo -994
+     (stary broker).  Poprosilem o KOD z komunikatu ("rc=-XXX").
+   - Mozliwy kolejny krok: aplikacja ma jasno mowic "TRWA PODGLAD - ODPOWIEDZ
+     YES/NO" zamiast "REFUSED", i nie ignorowac APPLY gdy confirm_pending.
+   - Domyslne RES=800x600x8 przywrocone na obrazie demo-okno.img.
+B) USTALENIA Z AUDYTOW (juz zrobione, dla porzadku): #1 col_label (wskaźniki ->
+   switch z literalami), #2 przesuniecie myszy 16 px, #3 wspolne setup_hit.h,
+   #4 zapis card_bpp (nie cur_bpp!), #5 format RAM 4/16, #6 mode_query opcode 35,
+   #7 commit po sukcesie, #8 clamp okien (wm_clamp.h), #9 SETTINGS jako osobna
+   aplikacja + usuniecie starego okna z pulpitu (-2168 B, pulpit 29 4xx B),
+   #10 straznik w jadrze, #11 install_file.py.
+C) AUDIO (watek 1, nierozpoczety roboczo):
+   - 12 plikow .MUS w \GAMES\PRE2\ = ok. 39,6 MB CACHE (kazdy ma zrodlowy .MOD)
+     => usuniecie cache jest bezpieczne (odtwarzalne z .MOD).
+   - 4 moduly w \SYSTEM\APP\: HYMN.MOD 112590, ADVENT.S3M 869259,
+     REFLECTR.XM 740554, SIREN.XM 1327890.
+   - ROZBIEZNOSC do wyjasnienia: raport mowil o 13 modulach / 576 534 B i
+     12 / 463 944 B - ZADEN z tych zbiorow tego nie sumuje.  Znalezc zrodlo.
+D) Sprzet: firmware ESP32 (TinyUSB - czeka na wersje IDF/TinyUSB + VID/PID;
+   ES8388 - czeka na schemat), NetUSBee pozniej.
+E) DWA DRZEWA HATARI (rozbieznosc): moj fork atari-030-port/hatari-src (ma
+   4/16 bpp + poprawki Claude'a) vs praca/tracker-player/hatari-src (ma
+   audio-clock + tracker, ma czytnik --cmd-fifo).
+
+--------------------------------------------------------------------------------
+6. GDZIE CO LEZY
+--------------------------------------------------------------------------------
+ATOS 2.1/system/settings_app.c      - SETTINGS (lista 9 trybow)
+ATOS 2.1/include/setup_hit.h        - wspolny hit-test (test: 50 asercji)
+ATOS 2.1/include/wm_clamp.h         - clamp okien (test: 121566 asercji)
+ATOS 2.1/include/kvideo_guard.h     - straznik trybu (test: 15 asercji)
+ATOS 2.1/system/vofa_et4000.c/.h    - tryby karty (9 wpisow)
+audyt-20261014/                     - raporty i patche z tej sesji
+display-demo/install_file.py        - instalator FAT16 (umie tworzyc pliki)
+display-demo/test_modes.sh          - AUTOMATYCZNY TEST WSZYSTKICH TRYBOW
+display-demo/demo-okno.img          - obraz demo z hookiem (SETTINGS otwiera
+                                      sie sam po ~8 s; hook za #ifdef
+                                      ARK_DESKTOP_AUTORUN_SETTINGS, w normalnym
+                                      buildzie go NIE ma)
+Raporty zewnetrzne: Codex settings-fix-20261014 (zrzuty 01..16), display-audit-r2,
+Claude: display-demo/UWAGI-CLAUDE-SETTINGS.txt + hatari-vofa-4bpp-16bpp-fix.patch.
+
+================================================================================
+7. DOPISANE PO ZAMKNIECIU SESJI (wazne odkrycia)
+================================================================================
+* ZRZUT EKRANU UDAJE SIE ZROBIC SAMEMU - ale tylko binarka z CZYTAJACYM fifo
+  (dratwo tracker/tf536, np. display-demo/hatari-tracker-20261013), nie moj fork.
+  Sposob (sprawdzony przez rownoleglego agenta):
+      printf 'hatari-debug screenshot /sciezka/absolutna/zrzut.png\n' > /tmp/v5.fifo
+  przy uruchomieniu: --cmd-fifo /tmp/v5.fifo  (Hatari SAM tworzy plik fifo -
+  nie robic go wczesniej, bo wyskoczy "FIFO creation error: File exists").
+  To rozwiazuje problem "nie umiem pokazac ekranu".
+* INNY AGENT PRACUJE ROWNOLEGLE (Codex/Claude). Jego skrypty robia
+  "pkill -f hatari", wiec MOJA instancja bywa ubijana - to nie awaria.
+  NIE odbijac tego pkillem po swojej stronie (nie zabijac cudzych instancji).
+  Nowe artefakty: display-demo/URUCHOM_TEST_TRACKER_20261015.command,
+  display-demo/zrzuty-20261015/ (zrzuty), demo-test-20261015.img.
+* Stan po zamknieciu: obraz display-demo/demo-okno.img ma KOMPLET (KERNEL 467076,
+  ET4000.SYS 5564 z trybem 1024x768x4, SETTINGS 5262 z lista 9 trybow, GFX 401,
+  DESKTOP z hookiem) i RES=800x600x8.  Wystarczy uruchomic wg sekcji 3.
+
+================================================================================
+8. ROZWIAZANA ZAGADKA "rc=-4" (NIE kompilator!) - 16.10
+================================================================================
+Claude raportowal, ze zbudowane u niego jadro (214 810 B) odmawia KAZDEJ zmiany
+trybu z "MODE REFUSED rc=-4", nawet bez jego poprawek, i podejrzewal kompilator.
+TO NIE KOMPILATOR.  Odtworzylem to na Macu wlasnym kompilatorem:
+  - swieze jadro 215 114 B (z poprawkami Claude'a) + STARY sterownik z obrazu
+    => 1024x768x4 ODRZUCONE (zostaje 800x600x8), a 640x480x4 dziala;
+  - po wgraniu PASUJACEGO sterownika (VOFA.SYS 5564 B z VOFA_MODE_1024_4)
+    => 1024x768x4 dziala: "w=1024 h=768 stride=512 bpp=4 drive=1".
+WNIOSEK: rc=-4 to NIEZGODNOSC JADRA I STEROWNIKA (stary \SYSTEM\DRV\ET4000.SYS
+nie zna trybu, o ktory pyta jadro => kontrola m->bytes zwraca -4).  JADRO I
+STEROWNIK MUSZA BYC PARA - to jest twardy dowod na regule "zawsze komplet".
+Diagnostyka na przyszlosc: rc=-4 = sterownik bez danego trybu; rc=-997 = bramka
+straznika (trwa podglad); rc=-994 = nieznany opcode (stary broker GFX.APP);
+rc=-2 = tryb nieobslugiwany przez sterownik.
+
+STAN PO TEJ RUNDZIE (Mac):
+  make TOS=1         EXIT=0, 0 relokacji, KERNEL.SYS 215 114 B
+  make TOS=1 check   EXIT=0, 52 PASS, ZERO FAIL (u Claude'a srodowiskowo padaly
+                     check-audio/console/mono-font - tu NIE)
+  DESKTOP.APP        29 831 B - NAPRAWIONY mylacy komunikat: dla pliku .APP
+                     nieudany spawn pokazuje teraz "NAZWA SPAWN RC -NNN"
+                     (wczesniej cofal sie do persony TOS i klamal "TOS STARTED")
+  display-demo/_claude_tmp (252 MB) - USUNIETY
+Poprawki Claude'a sa w drzewie i dzialaja (tos_prg.c, kernel_exception.c,
+kernel_wm.c; kopie *.przed-claude-tos).
+ZOSTAJE: (1) Test 1 (Ctrl+Alt+Esc) + "SYSINFO -> QUIT" x3 na kopii - wymaga
+klikania (harness FIFO); (2) kosmetyka SETTINGS: uciety tekst VOLUME i stopka
+widoczna na THEMES/VOLUME; (3) TEST 6: pasy przy podgladzie 1024x768 z 640x480
+(z 800x600 czysto!) i zielony pas przy 65K + ~20 px czarnego po YES.
+
+================================================================================
+9. SPROSTOWANIE + NOWA MOZLIMOSC: ZRZUTY EKRANU (16.10)
+================================================================================
+* UMEM ZROBIC ZRZUT EKRANU SAM.  Binarka z czytajacym fifo (np.
+  display-demo/hatari-tracker-20261013) + "--cmd-fifo /tmp/zf.fifo", a potem:
+      printf 'hatari-debug screenshot /sciezka/abs/zrzut.png\n' > /tmp/zf.fifo
+  Zweryfikowane: powstaja PNG 640x480 i 1024x768.  To konczy problem
+  "nie umiem pokazac ekranu".  Uwaga: CZEKAJ ~60 s - zrzut po 38 s trafia
+  w srodek przemalowania i wyglada jak blad (pasek uciety na starej
+  szerokosci), a po 60 s jest juz poprawny.
+* MOJ BLAD TESTOWY (sprostowanie): tester test_modes.sh wpisywal MINIMALNY
+  DESKTOP.CFG (sam RES= + THEME/TOSTA/TOSTT), gubiac linie pozycji ikon
+  ("My Atari=0,0", "TRASH=0,1", ...).  Bez nich pulpit nie ma ikon i wyglada
+  to jak blad systemu - a to blad TESTU.  Wzorzec pelnej konfiguracji lezy w
+  display-demo/desktop-cfg-wzor.txt, a tester juz go uzywa (podmienia tylko
+  RES=).  Obrazy demo-okno.img i demo-claude.img maja konfiguracje przywrocona.
+* WNIOSEK z tego: przy kazdym tescie trybu ZACHOWYWAC reszte DESKTOP.CFG.
+
+================================================================================
+10. ZNALEZIONA PRZYCZYNA "PULPIT BEZ IKON" - BRAK \SYSTEM\ICONS.DAT (16.10)
+================================================================================
+OBJAW: po wgraniu NOWEGO jadra (ze zrodel z poprawkami Claude'a, 215 114 B)
+pulpit rysuje sie BEZ IKON (pasek FILE/SETTINGS jest, tlo jest, ikon nie ma).
+Zrzut: display-demo/t1-ikony-przed.png (tam ikon nie ma) vs
+       display-demo/zrzut-ikony-naprawione.png (tam sa wszystkie 12).
+
+PRZYCZYNA (dowód z jadra, nie domysl):
+  Nowe jadro NIE MA juz ikon w sobie.  255 KB danych przeniesiono do pliku
+  \SYSTEM\ICONS.DAT i jadro wczytuje go do TT-RAM przy starcie
+  (system/kernel_main.c ~499).  Komentarz w kodzie mowi wprost: "Brak pliku nie
+  zatrzymuje startu - pulpit rysuje sie wtedy bez ikon".
+  Stan wczytania jadro zapisuje do \SYSTEM\ICONLOG.TXT; u nas bylo:
+      ICONLOG.TXT = "S1 0x00000000"
+  co znaczy icons_state=1 (BRAK PLIKU) i icons_size=0.  To jest diagnostyka
+  zespolu (polski komentarz w kernel_main.c), nie moja.
+
+NAPRAWA (sprawdzona): plik JEST budowany - build/system/ICONS.DAT (255 252 B,
+  robi go tools/make_icons_blob, Makefile:1155).  Trzeba go WGRAC:
+      python3 display-demo/install_file.py <obraz> "SYSTEM\ICONS.DAT" \
+              "ATOS 2.1/build/system/ICONS.DAT"
+  Po wgraniu zrzut 800x600 jest BAJT W BAJT identyczny ze znanym-dobrym
+  (sha256 b0326a2981b29a3c1a4959d07146a0d3d0e9216bc6cca51ff14e4f7313410f1c).
+
+!!! UZUPELNIENIE REGULY "ZAWSZE KOMPLET" (sekcja 2) !!!
+  Do kompletu dochodzi SZOSTY plik:
+      build/system/ICONS.DAT      -> \SYSTEM\ICONS.DAT      (255 252 B)
+  Bez niego nowe jadro daje pulpit BEZ IKON.  Lista Claude'a (sekcja 2) go
+  nie zawierala - to byla jedyna brakujaca pozycja.
+
+JAK TO ZBADALEM BEZ UDZIALU UZYTKOWNIKA: obraz -> odczyt FAT (ICONLOG.TXT) ->
+  kod jadra (kernel_main.c) -> build/system/ICONS.DAT -> wgranie -> zrzut
+  przez fifo (hatari-debug screenshot) -> porownanie sha256.
+
+================================================================================
+11. SESJA 16.10 - CO ZROBIONO I CO ZOSTALO (stan koncowy)
+================================================================================
+ZROBIONE I POTWIERDZONE:
+* Ikony wrocily - przyczyna: nowe jadro czyta je z \SYSTEM\ICONS.DAT
+  (255 252 B, build/system/ICONS.DAT, tools/make_icons_blob).  Komplet do
+  wgrania ma teraz 6 plikow (KERNEL, GFX.APP, DESKTOP.APP, SETTINGS.APP,
+  ET4000.SYS z VOFA.SYS, ICONS.DAT).  Dowod: zrzut bajt-w-bajt identyczny
+  ze znanym-dobrym (sha256 b0326a29...).
+* MODPLAY GRA POPRAWNIE (potwierdzone przez uzytkownika).  Gra przez YM2149
+  (PSG ST) - widac na zrzucie: "Yamaha [F1]" bez nawiasow, "[ESP32 Sound
+  Accelerator]" w nawiasach = nieaktywne.  XM/S3M wymagaja ESP32.
+* PRE2: wolne ladowanie muzyki to NIE regresja - to brak libxmp w moim forku
+  Hatari.  Z binarka tracker (hatari-tracker-20261013) PRE2 wysyla oryginalne
+  .MOD (463 944 B) zamiast .MUS (41 480 974 B): 20,3 s -> 1,07 s.
+  Obraz demo-tracker.img = obraz trackerowy + moj komplet ekranu.
+* "Zielony pas przy 65K" = BLAD EMULATORA, nie ATOS-a.  Zrzut mial 1600x600
+  (podwojona szerokosc) i zle kolory, bo tracker (build 13.10) nie ma poprawki
+  Claude'a: src/vofa.c linia 140 "if (seq4 & 0x08)" bez "&& !packed16".
+  Moj fork MA poprawke (linia 167).  Patch: display-demo/hatari-vofa-4bpp-
+  16bpp-fix.patch.  ATOS rysuje 65K poprawnie.
+* ROZMIAR OKNA KONSOLI przetrwa restart: nowy \SYSTEM\CONSOLE.CFG ("WxH"),
+  zapis przy zmianie rozmiaru, odczyt raz przy starcie, kontrola sensu
+  (200..screen_w x 64..screen_h).  KERNEL.SYS 215 962 B.
+* Uruchamianie: PELNA recepta z sekcji 3 (--tf536 on, --memsize 4 sa KONIECZNE;
+  bez nich MODPLAY/PRE2 moga nie dzialac).
+* Narzedzia: display-demo/test_modes.sh (test wszystkich trybow przez log),
+  display-demo/fifo_test.py (mysz/klawisze przez fifo), zrzuty przez
+  "hatari-debug screenshot <abs>" (binarka z czytajacym fifo; czekac ~60 s,
+  po 38 s zrzut trafia w srodek przemalowania).
+
+ZOSTAJE:
+1. PASY przy podgladzie 1024x768 wywolanym z 640x480 (z 800x600 czysto).
+   PrZEJSCIOWE - znikaja po potwierdzeniu/uplywie podgladu (tak wynika z
+   notatki audytu "do czasu potwierdzenia").  Proba odtworzenia hookiem
+   (opcode 40 bez PREVIEW po 12 s) NIE przelaczyla trybu - hook usuniety,
+   zeby nie zostawiac kodu testowego.  Do zbadania innym sposobem.
+2. Rozmiar okna PLIKOW i KOSZA nadal staly (fb_ww/fb_wh, tr_ww/tr_wh).
+   Mozna zrobic tak samo jak konsole (klucze w DESKTOP.CFG).
+3. BUILD trackera z poprawka Claude'a (kopia drzewa tracker-player/hatari-src,
+   patch, przebudowa) - dalby JEDNA binarke z szybka muzyka (libxmp) i
+   poprawnym 65K/16 kolorami.
+4. Test 1 (Ctrl+Alt+Esc) + "SYSINFO -> QUIT" x3 na kopii - wymaga klikania;
+   narzedzia gotowe (fifo_test.py + hatari-tracker).
+
+================================================================================
+12. OPTYMALIZACJA ROZMIARU: ICONS.DAT PAKOWANY RLE (16.10) - 126 KB MIENIEJ
+================================================================================
+PRIORYTET UZYTKOWNIKA: miejsce i rozmiar na starych komputerach to podstawa.
+ZROBIONE: ICONS.DAT (ikony pulpitu) byl zapisany SUROWY (255 252 B, 98 ikon).
+  Teraz jest pakowany RLE (bajt: count,value) do wersji 2 formatu:
+    ICONS.DAT: 255 252 B -> 129 046 B  (-126 206 B = 49%)
+    KERNEL.SYS: 215 962 B -> 216 234 B (+272 B, dekoder)
+    NETTO: ok. -125 934 B na dysku.
+  Jak: tools/icons_rle.py (kompresor, wchodzi w Makefile przy ICONS.DAT),
+       dekoder w system/kernel_graphics.c (kgfx_icons_load, galaz version==2):
+       rozwija dane do bufora first+raw w TT-RAM, ustawia version=1 w buforze
+       i size=total, dzieki czemu reszta loadera i rysowanie dzialaja BEZ ZMIAN.
+       Wersja 1 nadal czytana (zgodnosc wstecz).
+  DOWOD: zrzut ekranu po kompresji jest BAJT W BAJT identyczny ze znanym-dobrym
+       (sha256 0e821ede...), czyli ikony rysuja sie dokladnie tak samo.
+  POMIAR POTENCJALU (zrobiony PRZED implementacja): byte-RLE 50%, pixel-RLE 71%
+       (ikony maja dithering, wiec byte-RLE jest lepszy).
+DRUGI KROK: MARTWY KOD STAREGO OKNA SETUP W PULPICIE (ten sam dzien)
+  Usuniete (petla: kompilator wskazuje, skrypt usuwa z dopasowaniem nawiasow):
+  setup_after_mode, setup_paint, setup_open, setup_tab, setup_sel, setup_rows,
+  setup_res_is_cur, setup_col_is_cur, res_label, col_label, theme_name, st_wx,
+  st_wh + handler "WM CLOSED SETUP" (m.v[1]==SETW).
+  Zostawione CELOWO: setup_res[]/setup_col[] (uzywa ich parser RES=).
+  DESKTOP.APP: 29 831 -> 28 395 B (-1 436 B), desktop_wm.c ~2700 -> 2621 linii.
+  DOWOD: zrzut ekranu po czyszczeniu jest BAJT W BAJT identyczny ze
+  znanym-dobrym (sha256 0e821ede...).
+  RAZEM Z ICONS.DAT: ok. -124 000 B (~121 KB mniej na dysku).
+
+TRZECI KROK: PackBits (wersja 3 formatu) - KOLEJNE 21,5 KB
+  Filtr (delta/XOR/2D) ZMIERZONY I ODRZUCONY: pogarszal (70%/68%/69%) bo ikony
+  sa ditheringowane i RLE wlasnie to wykorzystuje.  Natomiast PackBits
+  (kontrola 0x80|n = literaly, n = powtorzenia) nie marnuje 2 B na krotkie
+  przebiegi: dane 254016 -> 106284 B (41%).
+  ICONS.DAT: 129046 -> 107524 B.  KERNEL.SYS: 216234 -> 216526 B (+292).
+  Dekoder: system/kernel_graphics.c, galaz version==3.
+  DOWOD: zrzut ekranu BAJT W BAJT identyczny (sha256 0e821ede...).
+
+RAZEM OPTYMALIZACJA ROZMIARU (16.10):
+  ICONS.DAT   255252 -> 107524 B  (-147728, 42% oryginalu)
+  DESKTOP.APP  29831 ->  28395 B  (  -1436, martwy kod SETUP)
+  KERNEL.SYS  215962 -> 216526 B  (   +564, dekodery RLE+PackBits)
+  NETTO: ok. -148 600 B (~145 KB mniej na dysku).
+  Format czytany: v1 (surowy), v2 (RLE par), v3 (PackBits) - zgodnosc wstecz.
+
+NASTEPNE KANDYDATY DO OPTYMALIZACJI (nie zaczete):
+  * KERNEL.SYS 216 234 B - sprawdzic -Os i nieuzywane sciezki,
+  * ICONS.DAT 107 524 B - dalsze zejscie wymaga juz LZ/deflate (inflate w
+    jadrze to ok. +10 KB kodu; przy 107 KB pliku netto mogloby zostac ~40 KB
+    zysku, ale to duza zmiana - do rozwazenia osobno),
+  * moduly .SYS i aplikacje - przeglad -Os i usuwanie martwych sciezek.
+
+================================================================================
+13. KRYTYCZNE: AUTO-ROLLBACK TRYBU NIGDY NIE DZIALAL (16.10, po zgloszeniu)
+================================================================================
+OBJAW ZGLOSZONY PRZEZ UZYTKOWNIKA: po wybraniu 1024x768 ekran to smieci,
+system wyglada na zawieszony, NIE wraca po 4 s do poprzedniego trybu.
+
+SMECI = BUG EMULATORA (tracker): zrzut mial 2048x768, czyli 1024x2 - tracker
+  czyta 4 bpp jako 8 bpp (brak poprawki Claude'a). Moj fork rysuje poprawnie.
+
+PRAWDZIWY BLAD ATOS-a (znaleziony i naprawiony): w include/kvideo_guard.h jest
+  auto-expire (KVIDEO_GUARD_TICKS=200, 4 s), a komentarz w kernel_video_boot.c
+  mowi "wygasanie obsluguje kvideo_guard_rollback(), wolany z tykniecia".
+  SPRAWDZONE: kvideo_guard_rollback() byl wolany TYLKO z kvideo_guard_control(),
+  czyli WYLACZNIE przez aplikacje. Gdy SETTINGS zaciela sie w nieczytelnym
+  trybie, NIC nie cofalo trybu - system zostawal w trybie-pulapce na zawsze.
+  (Wczesniej licznik 4 s byl w aplikacji; przy przebudowie SETTINGS na liste
+  trybow usunalem z niej hires(), wiec aplikacja blokuje sie na receive i
+  nigdy nie odlicza. Stad "nie wraca po 4 sekundach".)
+
+NAPRAWA: petla jadra (kernel_main.c, obok kernel_wm_frame_tick) sprawdza teraz
+  samodzielnie:
+      if(kvideo_guard_active())(void)kvideo_guard_rollback(kernel_user_clock());
+  Ten sam zegar co przy uzbrojeniu (kvideo_guard_watch uzywa kernel_user_clock).
+  Dzieki temu rollback dziala NIEZALEZNIE od pulpitu i od aplikacji.
+  KERNEL.SYS: 216526 -> 216554 B (+28 B).
+  Boot sprawdzony: pulpit 800x600 z 12 ikonami, zrzut identyczny z wzorcem
+  (roznica 27 B = pozycja kursora po moich testach myszy fifo).
+
+DO PRZETESTOWANIA PRZEZ UZYTKOWNIKA (na MOIM forku, bo tylko on poprawnie
+rysuje 4/16 bpp): SETTINGS -> 1024x768 -> APPLY -> odczekac ~6 s -> ekran
+POWINIEN sam wrocic do poprzedniego trybu.
+
+================================================================================
+14. SCALENIE BINAREK HATARI - STATUS (16.10, koniec sesji)
+================================================================================
+CEL UZYTKOWNIKA: jedna binarka = poprawne 4/16 bpp (moj fork) + libxmp/ESP32
+(tracker).  UDALO SIE: obraz ATOS-2026-10-16.img ma KOMPLET poprawek ATOS-a
+(KERNEL.SYS 216554 B z siatka bezpieczenstwa, DESKTOP.APP 28395 B,
+SETTINGS.APP 6320 B, ET4000.SYS 5564 B, ICONS.DAT 107524 B PackBits v3,
+pelny DESKTOP.CFG).
+NIE UDALO SIE: zbudowac scalonej binarki - w tym srodowisku NIE MA cmake ani
+ninja (brew install nie przechodzi: brak uprawnien do /opt/homebrew; pip
+install cmake tez nie instaluje).  libxmp NIE trzeba instalowac - jest
+vendoryzowany w work/tracker-player/libxmp (libxmp-lite.a 149112 B),
+a ATOS-SOUND/reference-v1 jest dostepny.
+
+JAK DOKONCZYC SCALENIE (na maszynie z cmake+ninja):
+  1. Kopia zrodel: cp -R work/tracker-player/hatari-src /gdzies/hatari-src
+  2. Patch:  patch -p1 -d /gdzies/hatari-src < display-demo/tracker-65k-fix.patch
+     (2 linie w src/vofa.c: "&& !packed16" i vofa_drive z bpp 4/16)
+  3. Build:  cmake -S /gdzies/hatari-src -B /gdzies/build -G Ninja
+             cmake --build /gdzies/build -j6
+  4. Wynik: /gdzies/build/src/hatari - JEDNA binarka z audio, ESP32 i
+     poprawnymi trybami 16 kolorow / 65K.
+
+DO CZASU SCALENIA - DWIE BINARKI (pelne komendy w display-demo/SCALENIE-JAK-UZYWAC.txt):
+  A) DZWIEK/PRE2/ESP32:        display-demo/hatari-tracker-20261013
+  B) 16 KOLOROW / 65K:         atari-030-port/hatari-src/build/src/hatari

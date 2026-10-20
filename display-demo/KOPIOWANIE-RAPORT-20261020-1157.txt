@@ -1,0 +1,15 @@
+KOPIOWANIE PLIKOW W KONSOLI - 2026-10-20 11:57
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-console-stress.img (klon demo-guard.img)
+
+krok                 polecenie/akcja                    stan           wynik   hash
+pwd                  pwd                                konsola        OK      661f0dd947c11ad2
+mkdir-rel            mkdir tmp                          konsola        OK      b3bb42bfd5f31ee5
+copy                 copy \notes.txt tmp\a.txt          konsola        OK      d24084abcc7c570e
+dir-tmp              dir tmp                            konsola        OK      9a0c222d8e65d1a3
+type                 type tmp\a.txt                     konsola        OK      8b0fa5fffe61cdb7
+move                 move tmp\a.txt tmp\b.txt           konsola        OK      078d0f0dfa457022
+dir-tmp2             dir tmp                            konsola        OK      06560d988c6346ae
+del                  del tmp\b.txt                      konsola        OK      ab48c44c09c6a20b
+dir-tmp3             dir tmp                            konsola        OK      cd6721ab6d70c8b3
+
+krokow: 9, uwag: 0

@@ -1,0 +1,10 @@
+STRESS TEST ATOS 2.1 - 2026-10-20 07:28
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-stress.img (klon demo-guard.img)
+
+scena                    czas  tykn. hash              wynik  uwagi
+terminal                18.7s      - 9ee934bbe3259033  OK     wpisane ver + dir, okno terminala
+pliki-f7                 5.4s      - c56dd840ad3f8233  OK     okno PLIKI otwarte i zamkniete
+kosz                    10.7s      - 41a46d46b6571a81  OK     okno KOSZ
+
+scen: 3, OK: 3, uwag: 0
+zrzuty: /Users/xxx/Documents/Deepseek_test/display-demo/s*.png

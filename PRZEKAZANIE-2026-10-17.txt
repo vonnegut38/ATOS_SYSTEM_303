@@ -1,0 +1,974 @@
+================================================================================
+PRZEKAZANIE ATOS 2.1 - STAN PO SESJI 16/17.10.2026
+(aktualizacja 17.10 wieczorem: punkt 2 ROZWIAZANY, punkt 3 ZBUDOWANY)
+================================================================================
+Ten plik jest PUNKTEM WEJSCIA.  Szczegolowa historia krok po kroku:
+HANDOFF-20261014.txt (394 linie, sekcje 1-14) - czytaj go, gdy potrzebny
+kontekst konkretnej zmiany.  Tutaj: co dziala, co NIE dziala, jak testowac.
+
+--------------------------------------------------------------------------------
+1. CO DZIALA I ZOSTALO POTWIERDZONE
+--------------------------------------------------------------------------------
+* IKONY PULPITU - naprawione.  Nowe jadro czyta ikony z \SYSTEM\ICONS.DAT
+  (255252 B surowo).  Brak tego pliku = pulpit BEZ IKON (jadro samo to
+  komentuje).  Komplet do wgrania na obraz ma TERAZ 6 PLIKOW, nie 5.
+* MODPLAY GRA (potwierdzone przez uzytkownika).  Gra przez YM2149 (PSG ST):
+  pasek stanu pokazuje "Yamaha [F1]" bez nawiasow, "[ESP32 Sound Accelerator]"
+  w nawiasach = nieaktywne.  XM/S3M wymagaja ESP32.
+* PRE2: wolne ladowanie muzyki to NIE regresja - to brak libxmp w moim forku
+  Hatari.  Z binarka tracker PRE2 wysyla oryginalne .MOD (463944 B) zamiast
+  .MUS (41480974 B): 20,3 s -> 1,07 s.
+* ROZMIAR OKNA KONSOLI przezywa restart: \SYSTEM\CONSOLE.CFG ("WxH"), zapis
+  przy zmianie rozmiaru, odczyt raz przy starcie, kontrola sensu
+  (200..screen_w x 64..screen_h).  Zly plik jest ignorowany.
+* "Zielony pas przy 65K" = BLAD EMULATORA, nie ATOS-a.  Zrzut 1600x600
+  (podwojona szerokosc) i zle kolory, bo binarka tracker (build 13.10) nie ma
+  poprawki Claude'a.  Moj fork ma poprawke i rysuje 65K poprawnie.
+* OPTYMALIZACJA ROZMIARU (priorytet uzytkownika: miejsce to podstawa):
+    ICONS.DAT   255252 -> 107524 B  (-147728, PackBits v3, 42% oryginalu)
+    DESKTOP.APP  29831 ->  28395 B  (-1436, usuniety martwy kod okna SETUP)
+    KERNEL.SYS  215962 -> 216554 B  (+564 dekodery RLE+PackBits i siatka
+                                     bezpieczenstwa zmiany trybu)
+    NETTO: ok. -148 600 B (~145 KB mniej na dysku)
+  Kazdy krok zweryfikowany zrzutem ekranu BAJT W BAJT identycznym z wzorcem
+  (sha256 0e821ede61e5946463cb75f424e592200da37803b5a2dc3ec7747cf249ef064a)
+  - to jest ZLOTA ZASADA tego projektu: po kazdej zmianie zrzut musi byc ten sam.
+* PRZECIAGANIE OKIEN Z ZAWARTOSCIA (18.10, wzorowane na MagiC "online mover"):
+  lewy przycisk = okno jedzie z trescia, prawy = klasyczna gumka (XOR obrysu).
+  Okna wieksze niz ~420x300 jada gumka (WM_LIVE_MAX_PIXELS=130000 w
+  kernel_wm.c); szczegoly i pomiary: ANALIZA-MAGIC-DRAG-20261018.txt.
+* Format ICONS.DAT czyta sie wstecz: v1 (surowy), v2 (RLE par), v3 (PackBits).
+
+--------------------------------------------------------------------------------
+2. ROZWIAZANE: TRYB 4/16 bpp (1024 x 768 - 16 COLORS)
+--------------------------------------------------------------------------------
+OBJAW (16.10): SETTINGS -> "1024 x 768 - 16 COLORS" -> APPLY -> smieci, system
+wyglada na zawieszony, NIE wraca po 4 s, ESC nie pomaga.
+
+PRZYCZYNA: lista dozwolonych indeksow w kvideo_program_mode_format()
+(system/kernel_video_boot.c) nie miala VOFA_MODE_1024_4.  set_mode() JUZ
+przeprogramowal karte, ale funkcja zwracala -792, wiec:
+  * jadro nie aktualizowalo geometrii/formatu (karta 4 bpp, warstwa 800x600x8),
+  * op 40 uzbraja straznik TYLKO przy r>=0 - STRAZNIK NIGDY SIE NIE UZBROIL.
+Dlatego nie pomagal ani uplyw czasu, ani ESC.  "640 x 480 - 16 COLORS" dzialalo,
+bo bylo na liscie - to byla jedyna roznica.
+DRUGIE MIEJSCE: parser RES= znal tylko 640x480x4, wiec zapisany tryb
+"1024x768x4" byl po restarcie odrzucany i wracalo 800x600x8.
+
+POPRAWKI (17.10):
+  * system/kernel_video_boot.c - whitelist trybow + parser RES (1024x768x4),
+  * straznik zmiany trybu na zegarze z PRZERWANIA Timer-C (kernel_user_wall_clock
+    = kernel_timer_ticks) w czterech miejscach: op 40, op 39, petla jadra,
+    kernel_wm_frame_tick.  Wczesniej polling gubil tykniecia (23 Hz zamiast
+    50 Hz) i "4 s" wychodzilo 8-14 s; teraz 3,7-4,0 s,
+  * tests/test_video_boot.c - przypadek regresyjny 1024x768x4.  Sprawdzone:
+    BEZ poprawki ten test PADA, z poprawka przechodzi (make check-video PASS).
+
+DOWOD (nie "naprawione"): NAPRAWA-TRAP-4BPP-20261017.txt - pomiary memdump,
+zrzuty w display-demo/, hashe.  Skrot: zrzut startowy BAJT W BAJT z wzorcem
+(UWAGA 18.10: zrzut trzeba robic z PRZYPIETYM kursorem - bootcheck.py ustawia
+mysz w (600,8); bez tego hash rozni sie o kilkadziesiat pikseli samego kursora)
+0e821ede61e5946463cb75f424e592200da37803b5a2dc3ec7747cf249ef064a; APPLY bez
+potwierdzenia -> 2048x768 (bug BINARKI trackera, nie ATOS-a) -> po ~4 s jadro
+samo wraca do 800x600 z CZYSTYM pulpitem i komunikatem
+"PREVIEW EXPIRED - RESTORED", zaznaczenie przeskakuje na "800 x 600 - 256 COLORS".
+KERNEL.SYS: 216554 B, md5 4e7ed0de4a293f196d855b92903ef874.
+
+Podejrzenia z 16.10 (kernel_user_clock()==0, petla nie chodzi, guard_restore
+zawodzi) - WSZYSTKIE ODRZUCONE POMIAREM: straznik po prostu nie byl uzbrojony
+(armed=2822, zegar zwracal 2824, petla rosla).  Nie powtarzac tej sciezki.
+
+--------------------------------------------------------------------------------
+3. JEDNA BINARKA HATARI - ZBUDOWANA (audio + poprawne tryby)
+--------------------------------------------------------------------------------
+Problem: dwie binarki, kazda ma polowe:
+  A) display-demo/hatari-tracker-20261013 - libxmp + emulowane ESP32
+     (PRE2 ~1 s, MODPLAY ESP32), ale 4/16 bpp rysuje ZLE (podwojna szerokosc).
+  B) atari-030-port/hatari-src/build/src/hatari - poprawne 4/16 bpp
+     (poprawka Claude'a), ale BEZ libxmp (PRE2 wolno, MODPLAY tylko Yamaha).
+
+SCALENIE - ZBUDOWANE 17.10.  Patch display-demo/tracker-65k-fix.patch NIE
+  KOMPILUJE SIE (uzywa nieistniejacej zmiennej "packed16"), a
+  "scalony/hatari-build/src/hatari" bylo kopia binarki trackera - nigdy nie
+  powstala scalona binarka.  Zamiast latania dwoch linii przeniesione CALE,
+  spojne pliki z drzewa z poprawka (atari-030-port/hatari-src):
+    src/vofa.c    - rozpoznanie 4 bpp (GDC[6]=0x02) i 16 bpp (GDC[6]=0x08),
+                    wlasciwa szerokosc/stride + dekoder 4 planow,
+    src/conv_st.c - obraz karty na powierzchnie hosta dla bpp 4 i 16.
+  Reszta drzewa (audio, nf_atos_sound, libxmp) zostaje z trackera.
+BUDOWA (w tym srodowisku JEST cmake 4.4.4 i ninja 1.13.2 z /opt/homebrew):
+  cmake -S scalony/hatari-src -B scalony/hatari-build2 -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DENABLE_OSX_BUNDLE=OFF -DENABLE_SDL3=ON \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DATOS_SOUND_DIR=/Users/xxx/Documents/Deepseek_test/ATOS-SOUND/reference-v1
+  ninja -C scalony/hatari-build2
+WYNIK: scalony/hatari-build2/src/hatari + kopia display-demo/hatari-scalony-
+  20261017 (md5 b1f22b01069f60b03e6307fa9a39cf31, arm64).
+  Test: RES=1024x768x4 startuje POPRAWNIE (VOFA-MODE w=1024 h=768 stride=512
+  bpp=4; pulpit, ikony i pasek czytelne), a niepotwierdzony podglad wraca do
+  800x600 po ~4 s.
+UWAGA WDROZENIOWA: potwierdzenie trybu (YES) zapisuje RES=1024x768x4.  Z NOWA
+  binarka to dziala; ze STARA (tracker) to powrot do smieci przy starcie.
+  Kolejnosc: najpierw nowa binarka, potem tryby 4 bpp na stale.
+AUDIO POTWIERDZONE (18.10): na scalonej binarce MODPLAY.APP gra -
+  "PLAYING / ESP32 accelerator", start modulu 1287 ms (libxmp), 4 kanaly.
+  Zrzut: display-demo/b-merged.png.  Czyli scalona ma OBIE polowy i moze byc
+  domyslna; tracker zostaje awaryjnie.
+
+--------------------------------------------------------------------------------
+4. POZOSTALE POPRAWKI (zebrane, jeszcze nie zrobione)
+--------------------------------------------------------------------------------
+1. (ZROBIONE 18.10) Rozmiary okien PLIKI i KOSZ przezywaja restart.
+   Klucze w DESKTOP.CFG: FILEWIN=WxH i TRASHWIN=WxH (domyslnie 420x300 oraz
+   440x300).  Zapis CICHY przy kazdym resize (bez mrugania "CONFIG SAVED"),
+   odczyt w desktop_load(), clamp do BIEZACEGO ekranu przy otwarciu
+   (max = ekran-16 x ekran-32).  Minima ROZNE, bo uklad okien jest rozny:
+   PLIKI 200x120 (lista uklada sie plynnie), KOSZ 360x300 - przyciski
+   RESTORE/DELETE/EMPTY ALL stoja na stalym y=240, wiec nizsze okno je ucina.
+   Test na emulatorze: F7 otwiera okno PLIKOW (420x300) -> przeciagniecie za
+   prawy dolny rog -> 500x380 -> wpis FILEWIN=500x380 pojawil sie w pliku ->
+   PO RESTARCIE okno otwiera sie 500x380.  FILEWIN=700x500 na ekranie 640x480
+   jest przycinane i okno miesci sie w calosci.
+   Zrzuty: display-demo/x2-po-resize.png (po zmianie), y1-pliki-po-restart.png
+   (po restarcie), y2-pliki-po-restart.png (clamp na 640x480).
+   DESKTOP.CFG ma teraz 18 linii (doszly FILEWIN/TRASHWIN); wzorzec
+   display-demo/desktop-cfg-wzor.txt zaktualizowany.
+
+2. (ZAMKNIETE 17.10) "PASY przy podgladzie 1024x768 z 640x480" - to NIE blad,
+   tylko zrzut zrobiony w SRODKU przemalowania.  Test na scalonej binarce:
+   RES=640x480x8 na start -> SETTINGS -> "1024 x 768 - 16 COLORS" -> APPLY ->
+   YES, zrzuty po 9 s i po 14 s: ekran 1024x768 w 16 kolorach jest CZYSTY
+   (pulpit, ikony, pasek, okno SETTINGS, "CONFIG SAVED") i identyczny w obu
+   zrzutach.  Zrzuty: display-demo/r2-1024-settled.png, r3-1024-stable.png.
+   Wniosek dla przyszlych testow: zrzut <2 s po zmianie trybu lapie srodek
+   przemalowania i wyglada jak pasy (ta sama pulapka co "zrzut po 38 s").
+   Uwaga kosmetyczna: pozycje ikon sa zapisywane bezwzglednie w DESKTOP.CFG,
+   wiec po przejsciu 640x480 -> 1024x768 uklad zostaje "gesty" - to nie blad.
+
+3. (OCENIONE 18.10: NIE POTRZEBNE OSOBNO) Izolacja znanych-dobrych ustawien:
+   siatka bezpieczenstwa juz to pokrywa - kvideo_guard przywraca tryb po ~4 s
+   bez potwierdzenia (test test_kvideo_guard), a parser DESKTOP.CFG pomija
+   niepoprawne linie i zostawia domyslne wartosci, wiec zepsuty config nie
+   blokuje startu.  Osobny "tryb awaryjny" nic by nie dodal.
+4a. (ZROBIONE 18.10) ICONS.DAT: WYCIEK 107 KB NAPRAWIONY.  Po wczytaniu ikon
+   bufor PLIKU (107524 B) nie byl zwalniany, wiec w pamieci lezaly OBA bufory
+   (plik + rozwiniety blob 255252 B = 362 KB).  Teraz po poprawnym wczytaniu
+   wersji 2/3 (spakowanej) bufor pliku jest zwalniany (kernel_main.c); wersja 1
+   rysuje wprost z tego bufora, wiec dla niej zwolnienie jest pomijane.
+   Zysk: ~105 KB (TT-RAM, a na maszynie bez TT - ST-RAM).  Zrzut startowy
+   nadal BAJT W BAJT, czyli ikony rysuja sie poprawnie po zwolnieniu.
+   PLIK: ZROBIONE 18.10.  ICONS.DAT w wersji 4 = LZSS (okno 4095, 8 tokenow
+   pod bajtem flag, dopasowanie 12 bitow offsetu + 4 bity dlugosci):
+   107524 -> 67386 B (-37%).  Dekoder w kgfx_icons_load (kernel_graphics.c,
+   galez version==4), stare v2/v3 nadal czytane.  PUŁAPKA: offset ma 12 bitow,
+   wiec okno MUSI byc <= 4095 - przy 4096 offset 4096 obcinal sie do 0 i
+   strumien sie rozjezdzal (ikony w ogole nie wstawaly; zlapane przez zrzut
+   startowy, ktory przestal byc zgodny).  Weryfikacja: round-trip w Pythonie +
+   zrzut startowy BAJT W BAJT (dekoder odtwarza ikony idealnie).
+4. ICONS.DAT 107524 B - dalsze zejscie wymaga LZ/deflate (inflate w jadrze to
+   ok. +10 KB kodu; przy 107 KB pliku netto mogloby zostac ~40-50 KB zysku).
+   DUZY projekt, do rozwazenia osobno.
+5. (PRZEJRZANE 18.10) KERNEL.SYS 217922 B.  Buduje sie z -Os + -ffunction-
+   sections/-fdata-sections + gc-sections, wiec martwy kod i tak wypada.
+   .text 217550, .data 340, .bss 125897.  Najwieksze moduly .text:
+     tos_prg 33814 | kernel_exception 30781 | kernel_graphics 26512 |
+     kernel_wm 26209 | kernel_fat 14744 | kernel_module 8762 | kernel_main 8701 |
+     tos_vdi 8659 | kernel_entry 4772 | wm_core 4422 | font 4226
+   Caly person TOS (tos_*) to ~50 KB .text - i to jest JEDYNA duza dzwignia:
+   Makefile ma TOS=0 jako domyslne (oszczedza ~24 KB tekstu i ~26 KB BSS),
+   ale obraz demo uzywa TOS=1, bo dziala na nim SYSTOS/SYSINFO.PRG.
+   Wniosek: nie ma "martwych" sciezek do wyciecia bez utraty funkcji.
+6. TEST 1 (Ctrl+Alt+Esc) - ZALICZONY 18.10 (harness: display-demo/test-kill-tos.py).
+   Uruchomienie: launcher klawiszowy 10x Down + Enter -> SYSTOS =
+   \SYSTEM\TEST\SYSINFO.PRG (program TOS, okno "SYSINFO.PRG" + "TOS STARTED"),
+   potem Ctrl+Alt+Esc (scancody 0x1d,0x38,0x01).
+   WYNIK: okno programu TOS ZNIKA, wraca pulpit, a system dalej odpowiada
+   (po kombinacji otwiera sie TERMINAL).  Czyli kill-switch czysci poprawnie.
+   UWAGA: SYSINFO z ikony "SYSINFO" to aplikacja NATYWNA (\SYSTEM\APP\SYSINFO.APP)
+   - Ctrl+Alt+Esc jej nie dotyczy (Esc zamyka MODPLAY przez "CLOSE [ESC]", nie
+   mylic tego z zabijaniem TOS).
+   PONOWNY START: ZALICZONY.  Launcher pamieta pozycje (sel_icon liczy sie
+   modulo), wiec po zabiciu wystarczy Enter - SYSINFO.PRG wstaje PONOWNIE i
+   dziala (k3-ponownie.png: TYPE ST, 68030, TOS 2.06, wskazniki pamieci).
+   Czyli teardown jest czysty: okno, wektory, TPA i tos_active wracaja do stanu
+   wyjsciowego.
+   TEST 2 "SYSINFO -> QUIT x3": ZALICZONY (harness: display-demo/test-sysinfo-quit.py).
+   Trzy cykle otwarcia (launcher, 5x Down + Enter) i zamkniecia gadzetem X
+   (WCLS -> app quit).  Po kazdym cyklu ekran identyczny (hash 5bd31710), a
+   kolejne otwarcie dziala.  Jedyna roznica wobec stanu wyjsciowego to napis
+   "STARTED" w gornym pasku (komunikat launchera) - kosmetyka.
+
+7. (ZAMKNIETE 18.10) TANI DRAG przez "przesun piksele zamiast komponowac":
+   NIE WCHODZI - i wiadomo to z testu hostowego, nie z emulatora.
+   tests/test_video_strips.c dowodzi: (A) same pasy + przesuniecie pikseli to
+   ZA MALO, bo czesc wspolna starej i nowej ramki tez sie zmienia; (B) pelna
+   suma starej i nowej ramki daje karte rowna frontowi BAJT W BAJT, czyli
+   warstwa wideo jest poprawna.  Kazdy przesuniety piksel musi trafic do VRAM,
+   wiec pelny kompozyt na krok (wm_move) jest rozwiazaniem optymalnym.
+   Test jest w make check-video.  Zostaja liczniki w kernel_video.c
+   (kdbg_dmg_px, kdbg_flush_words, kdbg_flush_calls) - do przyszlych pomiarow.
+   Szczegoly: ANALIZA-MAGIC-DRAG-20261018.txt, sekcja 9.
+8d. KOSZ (18.10): okno ma uklad STALY (12 wierszy listy + pasek przyciskow),
+   wiec deklaruje stala wysokosc dokumentu TR_DOC_H = 24+12*18+44 = 284.
+   Dzieki temu po ZMNIEJSZENIU okna WM pokazuje pasek i mozna doscrollowac do
+   RESTORE/DELETE/EMPTY ALL (wczesniej dol byl obcinany).  Tlo maluje sie do
+   wysokosci dokumentu, nie klienta.  UWAGA: weryfikacja wizualna nieudana w
+   POTWIERDZONE RECZNIE 18.10 ("działa"): po zmniejszeniu okna pasek sie
+   pojawia, suwak przewija do przyciskow, tlo biale.
+   (Automat otwieral ATARI COMMANDER zamiast KOSZA - kolejnosc ikon
+   w pamieci to: 0 My Atari, 1 TRASH, 2 TERMINAL, dalej LAUNCH.CFG: 3 COMMANDER,
+   4 SYSINFO, 5 TASKMGR, 6 PLASMA, 7 ARKANOID, 8 FLASHBACK, 9 SYSTOS, 10 MODPLAY,
+   11 PRE2 - a stan sel_icon bywa nieprzewidywalny po starcie).  Mechanizm jest
+   ten sam co w oknie PLIKOW (tam sprawdzony), do potwierdzenia recznie.
+8c. PASEK PRZEWIJANIA W OKNIE PLIKOW (18.10, WPROWADZONY):
+   - UWAGA NA SCIEZKE: pulpit jest ladowany z \SYSTEM\APP\DESKTOP.APP, a NIE
+     z \SYSTEM\DESKTOP.APP (ten drugi to plik-zaslepka).  Instalacja pod zla
+     sciezka konczy sie brakiem efektu - sprawdzac przez extract_file.
+   - gfx(29) (deklaracja content_h): argumenty to a=wysokosc, c=handle
+     (kernel: kernel_wm_set_content(pid, request->color=handle, request->xy=h)).
+   - nowy opcode gfx(38) = zwraca src_y okna: potrzebny, gdy klient rysuje CALA
+     liste w powierzchni, a przewija nia WM (klik musi doliczyc offset).
+   - TLO DOKUMENTU: fb_paint wypełnia GUI_FILL do wysokosci CALEJ tresci
+     (doc_h), nie tylko widocznego klienta - inaczej po przewinieciu dol obrazu
+     byl czarny (wiersze rysowane na nieodmalowanej powierzchni).
+   - okno PLIKOW: gdy lista <= FB_MAXROWS (28) miesci sie w powierzchni, rysuje
+     CALOSC i deklaruje realna wysokosc tresci -> WM pokazuje pasek; suwak
+     przewija liste (sb_damage_from uszkadza TEZ klienta, inaczej lista stoi),
+     klik trafia w wiersz po offsetcie.  Wieksze katalogi (>28) dalej stronnicuja
+     "MORE >" - powierzchnia okna ma wysokosc ekranu; pelne przewijanie wiekszych
+     list wymaga wyzszych powierzchni (osobny temat).
+8b. PASEK PRZY ZMIANIE ROZMIARU (zgloszenie uzytkownika "pojawia sie i znika"):
+   okno aplikacji (np. PLIKI) deklaruje content_h == client.h i stronnicuje
+   ("MORE >"), wiec po zmniejszeniu okna STARA deklaracja byla wieksza od
+   nowego klienta i pasek WM mrugal, dopoki aplikacja nie przemalowala okna.
+   Teraz wm_resize_commit przycina content_h do nowego client.h od razu
+   (kernel_wm.c, galez resize dla okien aplikacji) - pasek nie mruga.
+   Aplikacja z prawdziwa trescia przewijana zadeklaruje content_h sama.
+   Terminal (pid 0) ma pasek na stale, bo console_fit ustawia content_h=402
+   (siatka 25 wierszy) - zmierzone: vis=1, h=82, client=98, content=402.
+8a. PASEK TERMINALA - diagnostyka: console_fit() zapisuje kdbg_sb_vis,
+   kdbg_sb_h, kdbg_sb_client, kdbg_sb_content (memdump).  Pasek jest widoczny,
+   gdy content_h (stala siatka 25 wierszy = 402) > client.h; przy oknie na 25
+   wierszy pasek CHOWA SIE celowo (nie ma czego przewijac).  Zmierzone dla
+   okna 560x120: vis=1, h=82, client=98, content=402 - pasek jest.
+8. PASEK SUWAKA: przewiniecie uszkadza teraz tylko stary+nowy prostokat suwaka
+   (sb_damage_from), nie cala kolumne 16 x wysokosc - odpowiednik MagiC-owego
+   "odrysuj sam obiekt slidera".  W obecnym UI pasek jest ukryty (aplikacje
+   deklaruja content == klient), wiec zmiana czeka na pierwsza aplikacje z
+   dluzsza trescia.  Przy okazji naprawione: strzalki paska byly glifami
+   0x01/0x02, ktorych font nie ma - rysowaly sie jako "?"; teraz to trojkaty
+   (deco_arrow), jak wzorce obiektow w MagiC.  Analiza:
+   ANALIZA-MAGIC-DRAG-20261018.txt, sekcja 10.
+
+--------------------------------------------------------------------------------
+5. JAK URUCHAMIAC (PELNA, SPRAWDZONA RECEPTA)
+--------------------------------------------------------------------------------
+# --tf536 on i --memsize 4 sa KONIECZNE (ATOS jest budowany pod TF536;
+# bez nich MODPLAY/PRE2 moga nie dzialac - to byl moj blad).
+cd display-demo
+./hatari-tracker-20261013 -c ../ATOS_AKTUALNY/hatari.cfg \
+  --machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 \
+  --tf536 on --graphics-card vofa --gfx-chip et4000 --fast-forward off \
+  --ide-master "$PWD/ATOS-2026-10-16.img" --tos ../ATOS_AKTUALNY/BIOS.bin \
+  --patch-tos false --mmu off --statusbar false --borders false --zoom 1 \
+  --sound 44100 --natfeats on --confirm-quit false --window \
+  --acsi 0=none --acsi 1=none --acsi 2=none --acsi 3=none \
+  --acsi 4=none --acsi 5=none --acsi 6=none --acsi 7=none \
+  --log-file "$PWD/hatari.log" --cmd-fifo /tmp/x.fifo
+
+ZAMIAST tego mozna uzywac SCALONEJ binarki (audio + poprawne 4/16 bpp, czyta
+fifo, wiec dziala tez automatyzacja mysz/klawisze):
+  ./hatari-scalony-20261017 <te same argumenty, z --cmd-fifo>
+Sciezka awaryjna bez audio-ESP32: ../atari-030-port/hatari-src/build/src/hatari
+  (bez --cmd-fifo - ta binarka nie czyta fifo).
+
+--------------------------------------------------------------------------------
+6. KOMPLET DO WGRANIA NA OBRAZ (6 PLIKOW - to jest latwe do przeoczenia!)
+--------------------------------------------------------------------------------
+build/system/KERNEL.SYS      -> \SYSTEM\KERNEL.SYS        218138 B
+build/system/GFX.APP         -> \SYSTEM\GFX.APP              401 B
+build/system/DESKTOP.APP     -> \SYSTEM\APP\DESKTOP.APP     29321 B
+build/system/SETTINGS.APP    -> \SYSTEM\APP\SETTINGS.APP     6320 B
+build/system/VOFA.SYS        -> \SYSTEM\DRV\ET4000.SYS       5564 B
+build/system/ICONS.DAT       -> \SYSTEM\ICONS.DAT          107524 B  <- NOWY!
+Wgrywac przez: python3 display-demo/install_file.py <obraz> "<sciezka>" <plik>
+KERNEL.SYS z 19.10 (po 10t): 220370 B md5 93d1965e4852c97b156a91608f3a5d7c,
+  DESKTOP.APP 30556 B md5 7b2553e8..., SETTINGS.APP 10396 B md5 be9be888...
+  Rozmiary w tabelce powyzej sa SPRZED poprawek wygladu pulpitu (10a-10t) -
+  wiazace sa liczby z tego akapitu.  Instalacja: KERNEL.SYS -> \SYSTEM\,
+  DESKTOP.APP i SETTINGS.APP -> \SYSTEM\APP\ (NIE \SYSTEM\DESKTOP.APP - to
+  zaslepka).
+Jadro i sterownik to PARA: niezgodne daja rc=-4 przy zmianie trybu.
+DESKTOP.CFG musi miec PELNE 16 linii (RES=, THEME=, TOSTA=, TOSTT= + pozycje
+ikon).  Wzorzec: display-demo/desktop-cfg-wzor.txt.  Wpisanie samego RES=
+kasuje uklad ikon (moj blad z tej sesji).
+
+--------------------------------------------------------------------------------
+7. ZASADY BEZPIECZENSTWA
+--------------------------------------------------------------------------------
+* Nie dotykac obrazow ani instancji uzytkownika (ATOS_AKTUALNY/ATOS.img,
+  work/tracker-controls/live/test.img, Codex/...).  Pracowac na KOPIACH.
+* Nie pisac do plikow w Codex/ (sandbox: Permission denied) - kopiowac do
+  /Users/xxx/Documents/Deepseek_test i tam zmieniac.
+* Nie uzywac "pkill -f hatari" bez sprawdzenia, czy nie zabija cudzej
+  instancji (inny agent moze dzialac rownolegle).
+* Po KAZDEJ zmianie: make TOS=1 (0 relokacji!) + check-* + ZRZUT EKRANU
+  identyczny z wzorcem.  Bez tego nie uznawac zmiany za zrobiona.
+* Nie zgadywac: mierzyc (jak pomiar RLE: 50% vs pixel-RLE 71% - filtr
+  odrzucony POMIAREM) i nie twierdzic "naprawione" bez dowodu.
+* Nie ufac "gotowym" patchom: tracker-65k-fix.patch byl nalozony i opisany
+  jako sprawdzony, a NIE KOMPILOWAL SIE (brakujaca zmienna).  Zawsze zbudowac
+  i sprawdzic md5/rozmiar wyniku, zanim uzna sie go za dzialajacy.
+* Nie ufac "zbudowanym" binarkom: scalony/hatari-build/src/hatari bylo kopia
+  innego pliku.  Po zbudowaniu porownac md5 z zrodlem, nie tylko nazwe.
+
+--------------------------------------------------------------------------------
+8. NAJWAZNIEJSZE PLIKI
+--------------------------------------------------------------------------------
+display-demo/ATOS-2026-10-16.img      obraz z kompletnym ATOS-em (kopia robocza)
+display-demo/tracker-65k-fix.patch    gotowy patch 4/16 bpp dla trackera
+display-demo/SCALENIE-JAK-UZYWAC.txt  ktora binarka do czego + komendy
+display-demo/desktop-cfg-wzor.txt     wzorzec DESKTOP.CFG (16 linii)
+display-demo/install_file.py          pewne wgrywanie plikow na obraz FAT16
+display-demo/fifo_test.py             mysz/klawisze przez fifo
+display-demo/rollback_test.py         test SETTINGS -> 1024x768 -> APPLY
+display-demo/test_modes.sh            test wszystkich trybow (czyta VOFA-MODE)
+display-demo/zrzut-*.png              dowody (wzorzec: zrzut-ikony-naprawione.png)
+display-demo/test-wall-custom.py      harness tapety CUSTOM: `golden` (hash wzorca)
+                                      i `custom` (analiza pikseli kafelka)
+display-demo/demo-wall-custom.img     KLON demo-guard.img do tego testu (config
+                                      WALL=4 + TILE=...); demo-guard.img zostaje czysty
+"ATOS 2.1"/tests/test_wallpaper_custom.py  test regresyjny CUSTOM (make check-graphics)
+"ATOS 2.1"/tests/test_icons_dat_v5.py   format ICONS.DAT v5 (sekcje 32/48/64)
+"ATOS 2.1"/tests/test_icons_decoders.py dekodery ikon wyciete z jadra (RLE/PackBits/LZSS)
+"ATOS 2.1"/tools/mk_icons_color.py     generator: icons_ids.h + ICONS.DAT v5
+"ATOS 2.1"/system/icons_ids.h          stale i ID ikon (generowany, maly)
+"ATOS 2.1"/include/icons_blob.h        format pliku ikon (v1..v5)
+display-demo/test-icons-size.py       harness rozmiaru ikon: boot32/boot48/boot64/live
+display-demo/i32-boot.png             dowod: pulpit przy 32 px
+display-demo/i64-boot.png             dowod: pulpit przy 64 px
+display-demo/i-live-1-po-f9.png       dowod: przelaczenie na zywo 48 -> 64
+display-demo/i-live-2-po-f9-drugi.png dowod: przelaczenie na zywo 64 -> 32
+"ATOS 2.1"/tools/icons_rle.py          kompresor ICONS.DAT (v3 PackBits)
+"ATOS 2.1"/system/kernel_graphics.c    dekoder v2/v3 + flush 4 bpp
+"ATOS 2.1"/system/kernel_main.c        petla jadra + siatka bezpieczenstwa
+"ATOS 2.1"/include/kvideo_guard.h      logika guardu (KVIDEO_GUARD_TICKS)
+"ATOS 2.1"/system/kernel_exception.c   uzbrajanie guardu (op 40) i op 39
+"ATOS 2.1"/system/settings_app.c       aplikacja SETTINGS (lista 9 trybow)
+HANDOFF-20261014.txt                   historia 1-14 (szczegoly kazdej zmiany)
+NAPRAWA-TRAP-4BPP-20261017.txt          przyczyna pulapki 4 bpp + pomiary + dowody
+ANALIZA-MAGIC-DRAG-20261018.txt         MagiC: pulpit/okna/drag - porownanie i co wzielismy
+display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrodla
+                                        w scalony/hatari-src, budowa w hatari-build2
+================================================================================
+
+9a. OPTYMALIZACJA KOMPOZYTORA (19.10): prostokat uszkodzenia, ktory w calosci
+   zaslania okno NAJWYZSZE w Z, jest kopiowany TYLKO z tego okna - tlo i nizsze
+   okna sa pomijane (i tak zostana zamalowane).  Pomiar (licznik kdbg_blit_px,
+   drag okna PLIKOW 10 krokow): 3 074 712 -> 2 804 776 px, czyli -8.8%; wiecej
+   daje przy uszkodzeniach W CALOSCI wewnatrz jednego okna (np. pisanie w
+   terminalu: zamiast tlo+okno zostaje samo okno).  Koszt: kilka porownan
+   prostokatow na uszkodzenie.  Zrzut startowy i drag bez zmian (f2==f3).
+
+10a. USTAWIENIA PULPITU - KOLOR TLA (ZROBIONE 19.10, pierwszy krok aplikacji
+   "wszystkie ustawienia pulpitu").  Nowa zakladka DESKTOP w SETTINGS.APP
+   (4 zakladki: RES / THEME / VOLUME / DESKTOP) z 6 kolorami tla (GRAPHITE,
+   NAVY, FOREST, MAROON, GREY, BLACK - wpis 2 palety, reszta motywu bez zmian).
+   - jadro: kgfx_theme_set_desktop()/kgfx_theme_desktop() + opcode 37 sub 5/6
+     (5 = ustaw, 6 = odczytaj; 0xFFFF przywraca kolor motywu),
+   - SETTINGS: wybor koloru dziala NATYCHMIAST, APPLY zapisuje BG=HHH do
+     \SYSTEM\DESKTOP.CFG (tylko ta linia; RES i inne klucze nietkniete),
+   - pulpit czyta BG= przy starcie i przemalowuje sie, gdy kolor sie zmieni
+     (polling gfx(37,0,0,6) w petli bezczynnosci - powierzchnia pulpitu ma
+     stare piksele, wiec bez przemalowania zmiana bylaby widoczna tylko pod
+     oknami).
+   SPRAWDZONE: zmiana koloru widoczna od razu, BG=003 w DESKTOP.CFG, po
+   restarcie pulpit wstaje granatowy.  Potem config wrocil do kanonicznego
+   (zrzut startowy znow BAJT W BAJT).
+   UWAGA: konwencja gfx(op,a,b,c) -> (opcode=op, xy=a, wh=b, color=c), wiec
+   PODOPCJA jest w CZWARTYM argumencie: gfx(37,rgb,0,5) ustawia kolor,
+   gfx(37,0,0,6) czyta.  Pierwsza wersja miala to zamienione i kolor nie
+   dzialal.
+   DO ZROBIENIA (kolejne kroki): tapeta, rozmiar i skalowanie ikon, siatka
+   ikon - kazde wymaga nowego mechanizmu w rysowaniu, wiec osobno, po kolei.
+
+10b. KOLOR PASKA (ZROBIONE 19.10): kgfx_theme_set_bar() + opcode 37 sub 7/8.
+   Jadro buduje z JEDNEGO koloru czterostopniowa rampe (wpisy 252..255), a
+   pulpit w trybie plaskiego paska rysuje go wpisem rampy, gdy kolor jest
+   wybrany (gfx(37,0,0,8) != 0xFFFF); bez wyboru zostaje dotychczasowy jasny
+   pasek, wiec zrzut startowy sie nie zmienia.  W SETTINGS doszedl wiersz
+   "BAR COLOUR" (STEEL/GREEN/AMBER/GREY) - klik cykluje, APPLY zapisuje BAR=HHH
+   (obok BG=).  SPRAWDZONE: pasek zmienia sie na AMBER od razu.
+   ZOSTAJE z ustawien pulpitu: tapeta, rozmiar i skalowanie ikon, siatka ikon.
+
+10c. TAPETA (19.10, CZESCIOWO - WYMAGA DOKONCZENIA):
+   - jadro: kgfx_pattern_fill() + nowy rodzaj elementu listy rysowania
+     GUI_PATTERN (9) - wypelnia prostokat wzorem w jednej operacji na wiersz
+     (wzory: 0 jednolite, 1 dither 50%, 2 szachownica 8x8, 3 skos), kolorami
+     wpisow palety 2 (tlo) i 3 (akcent),
+   - jadro: kgfx_theme_set_wall()/kgfx_theme_wall() + opcode 37 sub 9/10,
+   - SETTINGS: wiersz WALLPAPER (SOLID/DITHER/CHECKER/DIAGONAL), zapis WALL=n,
+   - pulpit: przy bg_dirty rysuje wzor z GUI_PATTERN (albo stare GUI_BG dla 0).
+   NAPRAWIONE (dwa bledy, oba znalezione pomiarem):
+   1) gui_damage.h nie wliczal GUI_PATTERN do uszkodzenia (zakres BG..BEVEL),
+      wiec jadro rysowalo tapete, ale jej obszar nie byl nigdy odswiezany,
+   2) polling pulpitu porownywal z "poprzednio widziana" wartoscia, ktora
+      inicjowala sie przy pierwszym odczycie i zjadala pierwsza zmiane;
+      teraz porownuje z tym, co zostalo NAPRAWDE namalowane (painted_bg/bar/wall).
+   ZMIERZONE: WALL=1 daje dokladnie 50/50 dither (widoczny jako szachownica
+   1-px), a klik w SETTINGS zmienia wzor na zywo (d0 != d1, powiekszenie
+   potwierdza dither).  ZOSTAJE: druga zmiana (DITHER -> CHECKER) nie
+   zatrybila w tescie - do sprawdzenia, czy SETTINGS cykluje wall_sel przy
+   kazdym kliku (memdump wall_pattern pokazywal 2, wiec raczej pulpit nie
+   przemalowal drugi raz).
+   NAPRAWIONE: wzor dziala.  Przyczyna byla inna niz podejrzewalem - getter
+   jadra (opcode 37 sub 10) zwracal 0, wiec pulpit rysowal jednolite tlo.
+   Teraz pulpit bierze wzor z jadra, a gdy ten nic nie wie - z wlasnego
+   configu (WALL=).  Weryfikacja: WALL=1 daje dokladnie 50/50 dwa kolory
+   (0,138,138) i (138,138,138) w tle, czyli dither 2/3 dziala.
+   UWAGA: zmiana NA ZYWO z SETTINGS nadal korzysta z gettera jadra - jesli nie
+   dziala, trzeba sprawdzic, czemu opcode 37 sub 9/10 nie przenosi wartosci
+   (setter jest wolany z aplikacji, getter z pulpitu - oba przez brokera).
+   Domyslnie WALL=0, wiec pulpit wyglada jak dotad i zrzut startowy jest
+   BAJT W BAJT.
+
+10d. TAPETA - DIAGNOZA DRUGIEJ ZMIANY (19.10, do dokonczenia):
+   USTALONE POMIAREM: SETTINGS dziala - etykieta pokazuje "WALLPAPER: CHECKER",
+   a wall_pattern w jadrze = 2 (memdump).  Czyli nie przemalowuje PULPIT.
+   Nastepny krok: w pollowaniu (desktop_wm.c ~2497) dodac kdbg-licznik dla
+   kazdego z trzech warunkow (wall_now != painted_wall, wejscie paint() w galeź
+   bg_dirty) oraz licznik wywolan kgfx_pattern_fill, i porownac.  Podejrzenie:
+   paint() jest wolane z innego miejsca (np. obsluga WMOV) i zjada bg_dirty,
+   zanim polling dojdzie do swojego paint() - wtedy tapeta nie jest rysowana
+   mimo wykrytej zmiany.
+
+10e. TAPETA - WYNIK POMIARU (19.10): wzor rysuje sie POPRAWNIE (config + pierwsze
+   malowanie), ale ZMIANA NA ZYWO nie dochodzi do pulpitu.  Zmierzone licznikiem
+   w jadrze (kdbg_pat_calls, obok kgfx_pattern_fill):
+     wall_pattern w jadrze:  0 -> 1 -> 2   (setter z SETTINGS dziala)
+     kdbg_pat_calls:         1 -> 1 -> 1   (pulpit namalowal tapete tylko RAZ)
+   Czyli problem jest po stronie APLIKACJI pulpitu: nie wykonuje paint() po
+   zmianie.  Probowalem dwoch drog i zadna nie zadzialala:
+     - polling w petli bezczynnosci (porownanie z painted_wall),
+     - budzenie WMOV z jadra (kernel_wm_desktop_repaint()) po zmianie.
+   NASTEPNY KROK: sprawdzic, czy petla pulpitu w ogole sie kreci, gdy inne okno
+   (SETTINGS) ma fokus - najpewniej blokuje sie na receive()/wlasnosci
+   klawiatury i wtedy ani polling, ani WMOV nie sa obslugiwane.  Licznik
+   kdbg_pat_calls zostaje w jadrze jako narzedzie.
+
+10f. TAPETA - PRZYCZYNA ZNALEZIONA I NAPRAWIONA (19.10):
+   Pulpit blokowal sie w receive(&m,1) - petla czekala na wiadomosc, wiec gdy
+   SETTINGS mial fokus, polling wygladu NIE wykonywal sie w ogole (i dlatego
+   WMOV z jadra tez nie pomagal - nie bylo komu go odebrac).
+   POPRAWKI:
+   1) receive(&m,0) (nieblokujace) + pause_tick() w bezczynnosci - petla iteruje
+      ~50 razy/s i polling dziala,
+   2) painted_bg/bar/wall zapisuja SUROWE wartosci jadra (bez fallbacku na
+      config), inaczej polling porownywal 0 z 1 i przemalowywal tlo w kolko,
+   3) polling przeniesiony na poczatek petli (przed receive).
+   ZMIERZONE: kdbg_pat_calls rosnie teraz 58 -> 66 -> 71 w jednym przebiegu
+   (wczesniej stalo na 1), czyli pulpit naprawde przemalowuje tapete.
+   UWAGA: w ostatnim przebiegu testu kliki w SETTINGS nie zarejestrowaly sie
+   (wall_pattern zostal 0), wiec koncowy test "klik -> nowy wzor" trzeba
+   powtorzyc; mechanizm (petla + polling) jest juz naprawiony.
+
+10g. USTAWIENIA PULPITU - STAN NA KONIEC SESJI 19.10 (wszystko sprawdzone):
+   ZROBIONE I POTWIERDZONE RECZNIE:
+     - kolor tla (6 presetow) + zapis BG= + restart,
+     - kolor paska (STEEL/GREEN/AMBER/GREY/WHITE) + zapis BAR= + restart;
+       bialy sprawdzony bootem z BAR=FFF (pasek bialy z gradientem),
+     - tapeta: wzory SOLID/DITHER/CHECKER/DIAGONAL + zapis WALL= + restart,
+       ZMIANA NA ZYWO dziala po naprawie petli pulpitu (patrz 10f).
+   PLIKI: KERNEL.SYS 219202 B (md5 b2c837e8...), DESKTOP.APP 30148 B
+   (md5 f8642956...), SETTINGS.APP 8374 B (md5 cf58f754...).
+   UWAGA: w obrazie testowym jest teraz IKONA SETTINGS w LAUNCH.CFG (dodana na
+   czas testow).  Zeby wrocic do kanonicznego zrzutu startowego (0e821ede...),
+   usunac ta linie z \SYSTEM\LAUNCH.CFG i przywrocic desktop-cfg-wzor.txt.
+   ZOSTAJE (kolejne kroki tej aplikacji):
+     1. tapeta jako KAFELEK 16x16 (gx&15, gy&15 w kgfx_pattern_fill) + opcjonalnie
+        wlasny kafelek PNG (dekoder jest od ikon),
+     2. rozmiar i skalowanie ikon (32/48/64) - wymaga skali w kgfx_icon_color
+        i przeliczenia CELL_W/CELL_H w pulpicie,
+     3. siatka ikon (kolumny/wiersze) zamiast stalych GRID_X/GRID_Y.
+
+10h. SPRZATANIE OBRAZU - PUŁAPKA (19.10): Hatari trzyma cache zapisow FAT i przy
+   wyjsciu ZLEWA go na obraz.  Przywrocenie DESKTOP.CFG/LAUNCH.CFG, gdy emulator
+   jeszcze dziala, zostaje NADPISANE jego stanem z pamieci (objaw: po
+   "przywroceniu" boot dalej mial granatowe tlo i bialy pasek).  Kolejnosc jest
+   wiec taka: NAJPIERW zamknac emulator (F12 -> Quit albo kill -TERM), POTEM
+   przywracac config i robic zrzut startowy.
+   STAN KONCOWY 19.10 (sprawdzony): KERNEL.SYS 219202 B md5 b2c837e8...,
+   DESKTOP.APP 30148 B md5 f8642956..., SETTINGS.APP 8374 B md5 cf58f754...,
+   config kanoniczny, ZRZUT STARTOWY BAJT W BAJT (0e821ede...).
+
+10i. TAPETA JAKO KAFELEK 16x16 (19.10, ZROBIONE):
+   kgfx_pattern_fill() buduje teraz KAFELEK 16x16 na stosie (256 B, wzor liczony
+   256 razy), a kazdy wiersz ekranu to 50 kopii 16-bajtowego fragmentu zapisanych
+   osmiona slowami 16-bit (szybka sciezka dla x=0, szerokosc %16==0, pitch
+   parzysty).  Wczesniej wzor byl liczony NA KAZDY PIKSEL (480 000 iteracji z
+   rozwinieciem switcha).  Wizualnie bez zmian - zmierzone: tlo nadal 50/50
+   (0,138,138) i (138,138,138).
+   Kolejny krok (do zrobienia): EDYTOR KAFELKA - zakladka TILE w SETTINGS z
+   siatka 16x16 (2 kolory, klik przelacza piksel).  Uwaga: 256 komorek nie
+   miesci sie w liscie rysowania (LIST_MAX 48), wiec siatke musi rysowac JADRO
+   (nowy opcode "rysuj siatke kafelka"), a klik mapowac na komorke.  Kafelek
+   trzymamy jako 32 B (1 bpp) i zapisujemy w DESKTOP.CFG jako TILE=<64 hex>.
+
+10j. EDYTOR KAFELKA (19.10, ZBUDOWANY - WERYFIKACJA RECZNA):
+   Jadro:
+     - wlasny kafelek 16x16 1bpp (32 B) + kgfx_tile_set/get/from_bytes/clear,
+     - wzor tapety nr 4 = TEN kafelek (kgfx_pattern_fill),
+     - kgfx_tile_grid() rysuje siatke 16x16 w prostokacie (kazda komorka to
+       wypelnienie paleta 0/1) - musialo byc w jadrze, bo 256 komorek nie
+       miesci sie w liscie rysowania (LIST_MAX 48),
+     - opcody: 42 = piksel (color 0/1/2 gdzie 2=przelacz), 43 = rysuj siatke,
+       44 = dane kafelka (color 0=odczyt 32 B, 1=zapis 32 B pod xy).
+   SETTINGS: 5. zakladka TILE - siatka 256 px (16x16 komorek po 16 px), klik
+     przelacza piksel, CLEAR, APPLY zapisuje TILE=<64 hex> + WALL=4 (CUSTOM).
+   PULPIT: czyta TILE= (64 hex -> 32 B) i wgrywa do jadra (opcode 44 sub 1).
+   STAN: wszystko sie kompiluje i jest wgrane; zrzut startowy BAJT W BAJT.
+   WERYFIKACJA RECZNA POTRZEBNA: SETTINGS -> TILE -> klikac komorki -> APPLY,
+   potem sprawdzic, czy tlo pokazuje kafelek (WALL=4) i czy przezywa restart.
+   Automat nie trafil w UI (launcher otwieral TERMINAL zamiast SETTINGS).
+
+10k. EDYTOR KAFELKA - DIAGNOZA 19.10 (do dokonczenia):
+   ZROBIONE: siatka 16x16 RYSUJE SIE (opcode 43 dziala - widac bialy kwadrat w
+   ramce), stopka z podpowiedzia nie zaslania juz CLEAR/APPLY na zakladce TILE,
+   uklad: komorka 14 px, siatka 224 px od (8,40), przyciski 272, status 300.
+   NIE DZIALA: klik w komorke nie przelacza piksela.  ZMIERZONE licznikiem w
+   jadrze (kdbg_tile_sets przy kgfx_tile_set): 0 - czyli opcode 42 NIE DOCHODZI
+   do jadra, wiec albo klik nie trafia w galaz siatki w aplikacji, albo aplikacja
+   go nie wysyla.
+   Podejrzenia (kolejnosc sprawdzania):
+     a) wx/wy okna w aplikacji sa nieaktualne -> wspolrzedne klikniecia liczone
+        wzgledem zlego origin i warunek (y>=40 && y<264) nie przechodzi,
+     b) krawedz nacisniecia (prev_left) gubi pierwszy klik po fokusie,
+     c) opcode 42 odrzucany (ALE 43 dziala, a oba sa na liscie dozwolonych).
+   Nastepny krok: dodac do SETTINGS na zakladce TILE wyswietlanie ostatnich
+   wspolrzednych klikniecia w linii statusu (x,y po odjeciu wx/wy) - to od razu
+   pokaze, czy problem jest w origin, czy w wysylaniu opcodu.
+   STAN PLIKOW: KERNEL.SYS 219934 B, DESKTOP.APP 30326 B, SETTINGS.APP 9424 B,
+   zrzut startowy BAJT W BAJT (config kanoniczny, WALL=0).
+
+10l. EDYTOR KAFELKA - OSTATNI POMIAR (19.10): aplikacja DOSTAJE klik (dowody:
+   status pokazywal "HIT" i wspolrzedne X=71,Y=109 - poprawne wsp. klienta), ale
+   wywolanie ustawienia piksela wraca z kodem **rc=-994** (RC_UNKNOWN_OPCODE,
+   koncowe "else" lancucha opcodow w kernel_exception.c).  Dziwne: TEN SAM
+   opcode 43 rysujacy siatke dziala (siatka jest widoczna), a wywolanie 43 z
+   bitem 0x8000 w color wraca -994.  Czyli odrzucenie zalezy od ARGUMENTOW, nie
+   od numeru opcodu - najpewniej broker GFX waliduje zakres/forme zadania.
+   NASTEPNY KROK: w brokerze (kernel_exception.c, obsluga call==42 ATOS_CALL_GFX)
+   dodac kdbg z otrzymanym opcode/color/xy dla kazdego zadania i porownac
+   zadanie "siatka" z zadaniem "piksel" - to wskaze, ktory warunek odrzuca.
+   STAN: KERNEL.SYS 219974 B, SETTINGS.APP 9920 B (z trybem 43+0x8000),
+   zrzut startowy BAJT W BAJT, nic nie jest zepsute - edytor jest niedokonczony.
+
+10m. EDYTOR KAFELKA - OSTATNI POMIAR (19.10, koniec sesji):
+   Dodany licznik w brokerze (kdbg_last_opcode/kdbg_last_color w
+   kernel_exception.c, przy kgfx_note_request).  Po kliknieciu w komorke
+   ostatnim zadaniem widzianym przez brokera jest **opcode 37, color 10** -
+   czyli POLLING PULPITU, a NIE zadanie ustawienia piksela z SETTINGS.
+   Wniosek: aplikacja SETTINGS nie wysyla (albo wysyla, ale gubi sie) zadania
+   piksela - najpewniej send() do brokera konczy sie niepowodzeniem, bo w tym
+   momencie broker obsluguje kolejne zadania pulpitu (ten sam proces, ta sama
+   kolejka).  To wyjasnia tez rc=-994: to odpowiedz na INNE zadanie, nie na
+   piksel.
+   NASTEPNY KROK: w SETTINGS sprawdzic wynik send() (zwraca !=0 przy bledzie) i
+   ewentualnie ponawiac; albo wysylac zadanie piksela jako CZESC BATCHA rysowania
+   (opcode 18) nowym rodzajem elementu - batch jest juz sprawdzona droga i nie
+   konkuruje o odpowiedz.
+   STAN PLIKOW: KERNEL.SYS 219974 B, DESKTOP.APP 30326 B, SETTINGS.APP 9920 B,
+   config kanoniczny, ZRZUT STARTOWY BAJT W BAJT.  Edytor kafelka: siatka i
+   uklad gotowe, rysowanie NIE - reszta projektu zdrowa.
+
+10n. EDYTOR KAFELKA - PRZYCZYNA ZNALEZIONA I NAPRAWIONA (19.10):
+   PRAWIDZIWA przyczyna wszystkich "rc=-994": BROKER SYSTEM.GFX
+   (system/gfx_service_app.S) mial twardy limit opcodow:
+       cmpi.l #40,%d2 / bhi command_invalid
+   czyli ODRZUCAL kazde zadanie z opcodem > 40 - a wiec 41 (tapeta),
+   42/43/44 (moje pierwsze numery kafelka) i 45/46/47.  Handler w jadrze byl
+   poprawny, ale zadanie nigdy do niego nie docieralo.
+   POPRAWKI:
+   1) limit podniesiony do 47,
+   2) numery 42/43/44 sa ZAREZERWOWANE przez protokol GFX (ATOS_CALL_GFX /
+      GFX_INFO / GFX_RESTORE) - kafelek przeniesiony na 45 (piksel), 46 (siatka),
+      47 (dane),
+   3) siatka edytora rysowana jako ELEMENT BATCHA (nowy rodzaj GUI_TILE_GRID),
+      bo natychmiastowy opcode rysowal ja w EKRANIE (bialy kwadrat w lewym gornym
+      rogu), a nie w powierzchni okna.
+   WYNIK (zmierzony): klik w komorke przelacza piksel (rc=0, czarna komorka w
+   siatce), APPLY zapisuje TILE=<64 hex> + WALL=4.
+   DO SPRAWDZENIA: zawartosc zapisanego TILE (w tescie wyszlo A5A5..., czyli
+   wzor 50/50 zamiast jednego piksela - podejrzenie: odczyt 32 B przez opcode 47
+   trafia w zly bufor) oraz to, czy tapeta CUSTOM rysuje sie po APPLY.
+   STAN: KERNEL.SYS 220050 B, SETTINGS.APP 9930 B, DESKTOP.APP 30326 B,
+   GFX.APP 401 B, zrzut startowy BAJT W BAJT.
+
+10o. EDYTOR KAFELKA - DZIALA WIZUALNIE (19.10):
+   Siatka ma teraz LINIE (wpis palety 3) i widac dokladnie 16x16 komorek;
+   klikanie przelacza piksele (na zrzucie widac 6 czarnych komorek w miejscach
+   klikniec), rc=0, uklad okna czysty ("rozjechane" zgloszenie naprawione).
+   ZOSTAJE JEDEN BLAD: zapis kafelka.  APPLY czyta 32 B przez opcode 47 i
+   zapisuje TILE=A5A5A5A5... (staly wzor 0xA5), a nie faktyczne piksele.
+   0xA5 to typowa wartosc WYPELNIENIA STOSU, wiec wyglada na to, ze odczyt
+   32 B nie trafia do bufora aplikacji (kernel pisze pod request->xy, ktory
+   broker przekazuje jako 2. slowo) - do sprawdzenia walidacja/adres w opcode 47
+   albo uzycie GUI-owego mechanizmu kopiowania (jak ATOS_CALL_COPY).
+   STAN: KERNEL.SYS 220202 B, SETTINGS.APP 9930 B, DESKTOP.APP 30326 B,
+   GFX.APP 401 B, zrzut startowy BAJT W BAJT.
+
+10p. KOLOR ZAPALONEGO PIKSELA (19.10, ZROBIONE I SPRAWDZONE):
+   - jadro: kgfx_tile_set_fg(rgb12) ustawia WPIS 3 palety (kolor zapalonego
+     piksela kafelka) + opcode 45 z bitem 4 w color (xy = rgb12),
+   - SETTINGS -> zakladka DESK (4.): nowy wiersz PIXEL COLOUR cyklujacy
+     GREY / RED / GREEN / BLUE / WHITE (zmiana widoczna od razu),
+   - zapis do DESKTOP.CFG jako TILEFG=<3 hex>, pulpit wczytuje przy starcie,
+   - przyciski APPLY/CLOSE przesuniete o wiersz nizej, uklad sie miesci.
+   ZRZUT: display-demo/c2-pixelcol.png (PIXEL COLOUR: RED).
+   UWAGA: kolor TLA kafelka to nadal wpis 2 palety, czyli ustawienie BG= z tej
+   samej zakladki - para "tlo + zapalony piksel" jest w pelni konfigurowalna.
+   NADAL OTWARTE: zapis samych pikseli (TILE=) daje A5A5... - patrz 10o.
+
+10r. EDYTOR KAFELKA - ZAPIS PIKSELI NAPRAWIONY (19.10):
+   1) PRZYCZYNA "TILE=A5A5...": odczyt 32 B szedl przez wskaznik w opcodzie -
+      zamiast tego sa teraz BAJTOWE opcody: 45 z color=8 (odczyt bajtu, xy=idx)
+      i color=16 (zapis bajtu, xy=(idx<<8)|wartosc).  Bez wskaznikow, wiec nie ma
+      problemu z przekazywaniem bufora przez brokera.
+   2) DRUGA PRZYCZYNA: parser DESKTOP.CFG mial `char line[32]` - linia TILE=
+      ma 69 znakow, wiec byla OBCINANA i kafelek wczytywal sie jako zera.
+      Bufor zwiekszony do 96 znakow.
+   DOWOD: po kliknieciu 6 komorek (2,2)(3,2)(4,2)(2,3)(5,4)(6,6) zapisal sie
+      TILE=0000000038002000040000000200000000000000000000000000000000000000
+   i zgadza sie PIKSEl W PIKSEL z rysunkiem (0x38 w wierszu 2, 0x20 w 3,
+   0x04 w 4, 0x02 w 6).
+   NADAL OTWARTE: tapeta CUSTOM po restarcie nie rysuje sie (tlo jednolite) -
+   pulpit wczytuje TILE= i wysyla zapisy bajtow, ale trzeba sprawdzic, czy
+   dochodza do jadra (licznik kdbg_tile_put w kgfx_tile_put_byte, adres w nm).
+   WERYFIKACJA: boot z WALL=4 + TILE=... i odczyt kdbg_tile_put (oczekiwane 32).
+
+10s. TAPETA CUSTOM - STAN PO OSTATNIM POMIARZE (19.10, koniec sesji):
+   (ZAMKNIETE - przyczyna i dowody: punkt 10t ponizej)
+   ZMIERZONE: pulpit WGRYWA kafelek przy starcie - kdbg_tile_put = 32 (licznik
+   w kgfx_tile_put_byte), a w pamieci jadra (custom_tile) sa poprawne bajty:
+     [4]=0x38, [6]=0x20, [8]=0x04, [12]=0x02  <- dokladnie klikniete piksele.
+   ALE tapeta nadal rysuje sie jednolicie (probka 100x100 px = 100% koloru tla).
+   Czyli: dane sa w jadrze, a GUI_PATTERN(4) nie rysuje ich na ekranie.
+   Podejrzenia do sprawdzenia w nastepnej sesji:
+     a) kgfx_pattern_fill() dla pattern==4 wchodzi w case 4 i czyta kgfx_tile_get
+        - sprawdzic, czy nie lapie wczesniej `if(pattern==0)`,
+     b) czy pulpit faktycznie wysyla GUI_PATTERN z color=4 (kdbg_pat_calls rosnie,
+        ale nie wiadomo z jaka wartoscia - dodac kdbg_pat_last),
+     c) czy WALL=4 jest wczytane (kdbg w desktop_load).
+   DODATKOWO zrobione: po wczytaniu configu desktop ustawia bg_dirty=1, zeby
+   pierwsze malowanie tla nastapilo JUZ z kafelkiem w jadrze.
+   STAN: KERNEL.SYS 220434 B, DESKTOP.APP 30482 B, SETTINGS.APP 10338 B,
+   config kanoniczny, ZRZUT STARTOWY BAJT W BAJT (0e821ede...).
+
+10t. TAPETA CUSTOM - PRZYCZYNA ZNALEZIONA I NAPRAWIONA (19.10, 22:00):
+   OBJAW (10s): kdbg_tile_put=32, custom_tile w jadrze poprawne, a tapeta
+   rysuje sie JEDNOLICIE.
+   KLUCZOWY POMIAR (kontrola negatywna na emulatorze, ten sam obraz i config
+   WALL=4 + TILE="80 00...00" = jeden zapalony piksel kafelka (0,0), rozni sie
+   TYLKO zakres wzoru w parserze pulpitu):
+      WALL_PATTERN_MAX=3 (stary kod) -> region tla = 1 KOLOR (jednolicie),
+      WALL_PATTERN_MAX=4 (poprawka)  -> 2 KOLORY, 350 punktow DOKLADNIE na
+      x%16==0 i y%16==0, ZERO pikseli poza siatka.
+   TRZY MIEJSCA, w ktorych CUSTOM ginal (kazde osobno wystarczalo):
+     a) desktop_wm.c, parser WALL=: bral JEDNA cyfre i `if(wall_sel>3)wall_sel=0`,
+        wiec zapisane przez edytor kafelka "WALL=4" wczytywalo sie jako SOLID.
+        Teraz parse_wall() czyta LICZBE i przyjmuje 0..4 (WALL_PATTERN_MAX).
+        TO BYL GLOWNY POWOD OBJAWU PO RESTARCIE.
+     b) kernel_theme.c, kgfx_theme_set_wall(): `n>3u?0u:n` zamienialo 4 na 0.
+        Teraz 0..4. (Bez tego zmiana NA ZYWO z SETTINGS nie dochodzila do
+        jadra - pulpit ratowal sie wtedy fallbackiem na wlasny config, dlatego
+        "czasem dzialalo".)
+     c) kernel_exception.c, op 37 sub 9: maska `xy&3u` obcinala 4 do 0.
+        Teraz `xy&7u` (zakres i tak waliduje kgfx_theme_set_wall).
+   DODATKOWO (dwie dziury, ktore zrobilyby ten sam objaw pozniej):
+     - pulpit po wczytaniu configu ODDaje wzor do jadra (gfx(37,wall_sel,0,9)),
+       zeby getter (op 37 sub 10) byl spojny z configiem; wczesniej SETTINGS
+       startowal z SOLID i APPLY nadpisywal WALL=4 zerem,
+     - SETTINGS: WALL_COUNT 5 + etykieta CUSTOM + wall_sync() przy wejsciu na
+       zakladke DESK (jak bg_sync/bar_sync).
+   TEST REGRESYJNY (hostowy, w `make check-graphics`):
+     tests/test_wallpaper_custom.py wycina z ZRODEL parse_wall(),
+     kgfx_theme_set_wall() i kgfx_pattern_fill() i sprawdza je na hoscie
+     (3 przypadki). Na STARYM kodzie wszystkie 3 PADAJA - sprawdzone.
+     UWAGA dla piszacych taki test: szybka sciezka kgfx_pattern_fill zapisuje
+     wiersz slowami 16-bit w kolejnosci BIG-endian, wiec na malo-endianowym
+     hoscie para bajtow wychodzi zamieniona (na m68k jest OK) - test sprawdza
+     PARE, nie pojedynczy bajt.
+   ZRZUTY: display-demo/w-custom-boot.png (CUSTOM: siatka punktow co 16 px,
+     tlo (0,138,138), akcent (138,138,138)), w-custom-zoom.png (ten sam
+     fragment 64x64 powiekszony 8x), w-custom-KONTROLA-NEGATYWNA.png (stary
+     zakres = jednolite tlo), w-golden-boot.png (config kanoniczny).
+   HARNESS: display-demo/test-wall-custom.py - `golden` (hash wzorca) i
+     `custom` (analiza pikseli); pracuje na KLONIE obrazu demo-wall-custom.img,
+     do emulatora wgrywa build/system/{KERNEL.SYS,DESKTOP.APP,SETTINGS.APP}.
+   STAN PLIKOW (19.10, po poprawce): KERNEL.SYS 220370 B
+     md5 93d1965e4852c97b156a91608f3a5d7c, DESKTOP.APP 30556 B
+     md5 7b2553e82c82624529efbbd59afc9eb9, SETTINGS.APP 10396 B
+     md5 be9be8889590b6f1a89dbb88cbcd8116, GFX.APP 401 B (bez zmian).
+     ZRZUT STARTOWY (config kanoniczny) BAJT W BAJT: 0e821ede... - sprawdzone
+     na TYM SAMYM obrazie i tej samej binarce co test CUSTOM.
+
+10u. OBRAZ ATOS-2026-10-16.img NIE STARTUJE DO PULPITU (19.10, ZMIERZONE):
+   NIE jest to blad kodu. \BIOS\BIOS.CFG na tym obrazie ma video_pending=1
+   (bajt 0x1b, CRC poprawny), czyli BIOS uwaza, ze poprzedni start na karcie
+   sie nie potwierdzil, i zostaje na ekranie startowym.
+   DOWOD: podmiana SAMEgo \BIOS\BIOS.CFG z display-demo/demo-guard.img
+   (video_pending=0) sprawia, ze ten sam obraz startuje do pulpitu, a zrzut
+   jest BAJT W BAJT 0e821ede... (stary kernel na tym obrazie).
+   WNIOSEK: do testow brac demo-guard.img; latch kasuje ALT przy starcie
+   (wymusza Shifter na ten start) albo zapis SETUP. Struktura: include/config.h.
+
+10v. ROZMIAR IKON (32/48/64) + SIATKA PULPITU - ZBUDOWANE I SPRAWDZONE (19.10):
+   DECYZJA (pytanie uzytkownika "skalowac czy rysowac nowe"): SKALOWAC, ale w
+   BUILDZIE.  Uzasadnienie z pomiarow:
+     - dane ikon to INDEKSY palety (8 bpp), wiec skalowanie w jadrze umialoby
+       tylko nearest (interpolacja wymagalaby szukania najblizszego z 216 kolorow
+       na kazdy piksel), a 48->64 = 4/3 daje nierowne piksele,
+     - grafika jest ANTYALIASOWANA, wiec resampling LANCZOS wyglada dobrze
+       (podglad: display-demo/ikony-rozmiary-pipeline.png, porownanie metod:
+       display-demo/ikony-skala-porownanie.png),
+     - nowych 98 ikon nie rysujemy; zestaw 32 px z ATOS_ICONS_32_NATIVE.zip to
+       INNY styl (czarne sylwetki), wiec nie pasuje.
+   KOSZTY (zmierzone, tools/mk_icons_color.py):
+     32 px: 114132 B w RAM, 38321 B na dysku | 48: 255252 / 67327 |
+     64 px: 452820 B w RAM, 112242 B na dysku | razem ICONS.DAT 218426 B
+     (+151 KB dysku wzgledem 67 KB), w RAM tylko WYBRANY rozmiar.
+   FORMAT \SYSTEM\ICONS.DAT v5 (include/icons_blob.h):
+     naglowek (20 B), wspolna paleta 216x uint16, tabela sekcji
+     icons_section_t[3], a kazda sekcja to SAMODZIELNY blob v1 spakowany LZSS.
+     Jadro rozwija tylko wybrana sekcje i czyta ja tym samym kodem co v1, wiec
+     stare pliki v1/v2/v3/v4 nadal dzialaja (dostaja rozmiar 48).
+     Sekcja 48 jest BAJT W BAJT tym, co bylo wczesniej (sprawdzone: rozpakowana
+     sekcja = poprzedni ICONS.RAW), wiec zrzut startowy sie nie zmienil.
+   GENERATOR: tools/mk_icons_color.py pisze teraz DWA pliki:
+     system/icons_ids.h   - stale + enum ID + tabela rozmiarow (2,9 KB, kompiluja
+                            go aplikacje; duze tablice NIE trafiaja juz do .rodata),
+     build/system/ICONS.DAT - gotowy plik v5 (nie ma juzposredniego
+                            C-naglowka 1,8 MB; tools/make_icons_blob.c to historia).
+   JADRO (system/kernel_graphics.c):
+     - icon_px/icon_mask_bytes/icon_pixel_bytes = rozmiar BIEZACY, rysowanie
+       (kgfx_icon_color) i ikony PNG (kgfx_icon_from_png) licza z nich,
+     - kgfx_icons_unload/request/size + kgfx_icon_grid/set_grid,
+     - dekodery wyluskane do icons_rle/icons_packbits/icons_lzss (wspolne dla
+       v2..v5), bledy alokacji zwalniane poprawnie (wczesniej kmem_free dostawal
+       rozmiar zamiast ownera).
+   PROTOKOL GFX (broker system/gfx_service_app.S + kernel_exception.c):
+     48 = ustaw rozmiar (xy=32/48/64; przeladowuje ICONS.DAT i zapisuje
+          \SYSTEM\ICONSZ.CFG), 49 = odczytaj (zwraca (px<<8)|tryb_siatki - JEDEN
+          call na tick), 50 = ustaw tryb siatki (0 COMPACT / 1 NORMAL / 2 WIDE).
+     Limit opcodow brokera 47 -> 50.
+   PULPIT (system/desktop_wm.c):
+     - CELL_W/CELL_H/CELL_LEFT to teraz ZMIENNE liczone z icon_px + odstepu
+       (layout_cells), wiec rysowanie, hit test, uszkodzenia, przyciaganie
+       i picker nie moga sie rozjechac,
+     - polling (opcode 49) w petli bezczynnosci: zmiana rozmiaru/siatki =>
+       przeliczenie komorek, icons_clamp() i pelne przemalowanie,
+     - icons_clamp() przycina pozycje do nowej siatki i ROZWIAZUJE KOLIZJE
+       (przy 64 px wiersze 4 i 5 scinaja sie do 4 - bez tego dwie ikony
+       ladowaly w jednej komorce),
+     - prostokat uszkodzenia = ikona + etykieta do 12 znakow (przy 32 px
+       etykieta jest szersza od komorki i zostawiala resztki po hover/drag),
+     - okno MY ATARI i picker ikon licza wysokosc z icon_px.
+   SETTINGS (system/settings_app.c): zakladka DESK ma wiersze "ICON SIZE:"
+   i "ICON GRID:" (cykl klikiem), a APPLY/CLOSE sa nizej; wiersze sa ciasniejsze
+   (22 px), zeby zmiescic sie nad stopka.  Zakladka DESK obsluguje teraz TEZ
+   KLAWIATURE: UP/DOWN wybiera wiersz (ramka), ENTER robi to samo co klik
+   (wczesniej strzalki ruszaly tylko kolorem tla) - bez tego nie dalo sie
+   przelaczyc rozmiaru bez myszy.
+   ZAPIS: \SYSTEM\ICONSZ.CFG ("<px>\n<tryb>\n"), czytany przez jadro PRZED
+   wczytaniem ICONS.DAT (bez drugiego dekodowania przy starcie).  Deszcz
+   zrzutow: display-demo/i64-boot.png (64 px), i32-boot.png (32 px),
+   i-live-1-po-f9.png / i-live-2-po-f9-drugi.png (przelaczenie na zywo).
+   PULAPKA (kosztowala najwiecej czasu): opcode 49 byl ODRZUCANY, gdy fokus mial
+   SETTINGS - bramka "wlasciciel klawiatury" w kernel_exception.c przepuszczala
+   tylko liste opcodow.  Objaw: SETTINGS pokazywal nowy rozmiar, a pulpit stal
+   w starym.  Opcody 48/49/50 sa teraz na tej liscie.
+   DRUGA PULAPKA: diagnostyka przez zapis pliku w opcodzie 49 (50 zapisow/s na
+   FAT) zawieszala pulpit.  Zostaly liczniki w pamieci (kdbg_icon_q_calls,
+   kdbg_icon_q_last, kdbg_icon_set_calls) - bez zapisow.
+   TRZECIA PULAPKA (dla przyszlych testow UI): automat klikajacy w SETTINGS jest
+   NIEStabilny (wstrzykiwanie myszy w struktury jadra gubi czesc zdarzen).
+   Dlatego przelaczenie na zywo weryfikuje TEST-HOOK: klawisz F9 na pulpicie
+   wola opcode 48 DOKLADNIE tak jak SETTINGS, a pulpit NIE zmienia icon_px sam -
+   nowy rozmiar musi przyjsc z pollingu.  Harness: display-demo/test-icons-size.py
+   (tryby boot32/boot48/boot64/live); mierzy on SZEROKOSC BITMAPY ikony
+   wzgledem stanu wyjsciowego (48->64 = 1,33x, 64->32 = 0,67x).
+   TESTY HOSTOWE (w make check-graphics):
+     tests/test_icons_dat_v5.py   - format v5: naglowek, sekcje, offsety,
+                                    rozpakowanie do ukladu v1, maska 64 px
+                                    zgodna z progowa alfa PNG,
+     tests/test_icons_decoders.py - dekodery WYCIETE z kernel_graphics.c na
+                                    wektorach z packerow + 3 sekcjach ICONS.DAT
+                                    (porownanie sum FNV-1a z Pythonem).
+   STAN PLIKOW: KERNEL.SYS 221774 B md5 25de2daf..., DESKTOP.APP 31456 B
+     md5 9ac3ccfc..., SETTINGS.APP 11244 B md5 b413fd3e..., GFX.APP 401 B
+     md5 9c8723b8..., ICONS.DAT 218426 B md5 f6dd27be...,
+     ZRZUT STARTOWY (48 px, config kanoniczny) BAJT W BAJT: 0e821ede...
+   KOMPLET DO WGRANIA to teraz 6 plikow: KERNEL.SYS, GFX.APP, DESKTOP.APP,
+   SETTINGS.APP, VOFA.SYS, ICONS.DAT (GFX.APP MUSI byc nowy - inaczej broker
+   odrzuca opcody 48/49/50 i rozmiar ikon nie zadziala).
+
+10w. STRESS TEST CALEGO SYSTEMU - 30 MINUT (20.10, ZROBIONE):
+   Narzedzie: display-demo/stress_atos.py; raport:
+   display-demo/STRESS-RAPORT-20261020-0758.txt, zrzuty display-demo/s*.png.
+   PRZEBIEG: boot na KLONIE (demo-stress.img z demo-guard.img, wgrane 5 plikow
+   systemu + LAUNCH.CFG z SETTINGS na koncu), potem 96 scen w ~28 minutach:
+     1 przebieg "merytoryczny": terminal (wpisane "ver" i "dir"), okno PLIKI
+       (F7), KOSZ, MY ATARI, menu kontekstowe, SETTINGS (tryb ekranu z
+       podgladem i powrotem, motyw, rozmiar ikon 64/32/48 + siatka, edytor
+       kafelka), przeciaganie i resize okna, MODPLAY, PRE2, TASKMGR, PLASMA,
+       ARKANOID (klawisze w grze), SYSINFO, SYSTOS + Ctrl+Alt+Esc (kill TOS),
+       test bezczynnosci (3 zrzuty bez akcji = identyczne),
+     10 rund "dogrywki": terminal + PLIKI + KOSZ + MY ATARI + DESK + TILE +
+       drag, do wyczerpania czasu.
+   WYNIK: 96/96 scen bez bledu, ZERO wyjatkow, ZERO zawieszen, ZERO ekranow
+   wyjatku jadra; pulpit zywy na poczatku i na koncu (s19-koniec.png), kazda
+   aplikacja po ESC/klawiszu wracala na pulpit (funkcja recover() sprawdza to
+   zrzutem i ponawia ESC, w ostatecznosci Ctrl+Alt+Esc).
+   CO TEN TEST DOWODZI: system przezywa dlugotrwale, szybkie przelaczanie
+   kontekstu (okna, gry, programy TOS, tryby ekranu) bez wycieku stanu, ktory
+   blokowalby pulpit.
+   CZEGO NIE DOWODZI (uczciwie): "OK" sceny = wykonana bez wyjatku + pulpit
+   wrocil; NIE kazdy wiersz SETTINGS jest semantycznie zweryfikowany, bo
+   wstrzykiwane klawisze/mysz gubia czesc zdarzen przy tej gestosci (test
+   "ui" w display-demo/test-icons-size.py trafil na zakladke VOL i wykonac
+   REPAIR zamiast DESK - zobacz u3-po-enter.png: "VOLUME REPAIRED", system to
+   przyjal bez problemu).  Sciezke SETTINGS->DESK->ICON SIZE potwierdza test
+   "live" (hook F9 wola TEN SAM opcode 48), ktory mierzy 48->64->32.
+   DODATKOWO ZMIERZONE: "ver" w powloce ATOS to NIE wbudowane polecenie -
+   probuje uruchomic program VER i konczy sie "PROCESS START FAILED"
+   (zachowanie powloki, nie blad); "dir" dziala.
+   JAK POWTARZAC:  cd display-demo && python3 stress_atos.py 30
+     (SMOKE_N=3 przerywa po 3 scenach, do szybkiego sprawdzenia sterownika).
+
+10x. 10 MINUT "ZABAWY USTAWIENIAMI EKRANU" - Z POMIAREM (20.10, ZROBIONE):
+   Narzedzie: display-demo/stress_display.py (domyslnie 10 minut), raporty:
+   display-demo/DISPLAY-RAPORT-20261020-0833.txt i -0844.txt, zrzuty
+   display-demo/d*.png.  Obraz: klon demo-display.img (5 plikow systemu +
+   LAUNCH.CFG z SETTINGS), obraz demo-guard.img nietkniety.
+   CO PRZEZESZEDL (2 przebiegi po 10 min, lacznie):
+     RES   55 przelaczen trybow - CALA lista 9 pozycji w kolko: 640x400 mono,
+           800x600 mono, 1024x768 mono, 640x480 16 kolorow, 1024x768 16 kolorow,
+           640x480 256, 800x600 256, 1024x768 256, 800x600 65K.  Kazdy krok:
+           APPLY -> YES -> pomiar ROZDZIELCZOSCI ze zrzutu (PNG ma dokladnie
+           WxH trybu) + klasyfikacja PLANARNY/CHUNKY z proby pustego pulpitu
+           (mono/4bpp rysuje tlo ditheringiem = 2 kolory, 8/16bpp jednolicie).
+           ZGODNOSC: kazdy krok trafil w tryb z listy (kolejnosc focus_row
+           7,8,7,6,5,4,3,2,1,0,1,2... = dokladnie lista).
+     GUARD podglad BEZ potwierdzenia -> po ~4 s jadro SAMO wraca do trybu
+           sprzed podgladu (zmierzone: 640x480 -> 640x480, wczesniej blednie
+           oczekiwalem 800x600 - poprawione w harnessie).
+     THM   oba motywy (CLASSIC / STEEL) przelaczone naprzemiennie: hash ekranu
+           zmienia sie za kazdym razem, pasek (255,255,255) <-> (223,223,223),
+           tlo (0,138,138) <-> (16,32,32).
+     DESK  6 kolorow tla (GRAPHITE/NAVY/FOREST/MAROON/GREY/BLACK - zmierzone
+           RGB zgodne z wpisami palety), kolor paska (GREEN, GREY...),
+           tapeta (SOLID 1 kolor -> wzory 2-4 kolory), rozmiar ikon
+           (34 <-> 92 px szerokosci bitmapy = 48 <-> 64), siatka
+           (komorka 51 <-> 20 <-> 64).
+   WYNIK: 77 krokow, 76 zgodnych; jedyna "ROZNICA" to WIERSZ PODSUMOWANIA
+   ("geometrie: 640x400, 640x480, 800x600, 1024x768" vs napis "4 geometrie") -
+   artefakt porownania tekstu, nie blad systemu.  ZERO zawieszen, ZERO ekranow
+   wyjatku, pulpit zywy po calej sesji (d9-koniec.png), po kazdym potwierdzonym
+   trybie SETTINGS pokazuje "CONFIG SAVED" (zapis do \BIOS\BIOS.CFG).
+   CZEGO NIE ROZROZNIA POMIAR: 8 vs 16 bpp maja ten sam WxH i ta sama
+   klasyfikacje CHUNKY - zrzut nie pokazuje glebi wprost.  Dlatego test
+   dowodzi GEOMETRII + klasy PLANARNY/CHUNKY, a konwersje 4/16 bpp pokrywaja
+   testy hostowe (make check-video: test_present16/test_planar4) i wczesniejszy
+   NAPRAWA-TRAP-4BPP-20261017.txt.
+   JAK POWTARZAC:  cd display-demo && python3 stress_display.py 10
+
+10y. SESJE (tts1/tts2/tts3), ZAMYKANIE PULPITU, TRYB PRZY OTWARTYM OKNIE (20.10):
+   Narzedzia: display-demo/stress_sessions.py (sesje + zamykanie pulpitu),
+   display-demo/stress_display.py window (tryb ekranu przy otwartym oknie).
+   Raport: display-demo/SESJE-RAPORT-20261020-1115.txt, zrzuty x*.png, w*.png.
+   SESJE - JAK SIE PRZELACZA: z POWLOKI, poleceniami tts1 / tts2 / tts3
+   (SESSION_COUNT=3).  Menu sesji (prawy przycisk w prawym gornym rogu) czyta
+   PRAWDZIWA mysz, a wstrzykiwana jest oznaczona jako "scripted" i ten kod ja
+   POMIJA (kernel_sessions.c: `if(mouse_scripted)return;`), wiec automatyzacja
+   musi uzywac polecen powloki - i to dziala:
+     tts2 -> inny ekran (sesja 2), "dir" wykonany w sesji 2,
+     tts3 -> inna sesja, uruchomiony \system\app\taskmgr.app
+             ("PROCESS READY, PID 5", potem "PID 5 EXIT 0"),
+     tts1 -> powrot na pulpit sesji 1.
+   ZAMYKANIE PULPITU (FILE -> CLOSE): jadro drukuje
+     "DESKTOP.APP STOPPED [PID 41]" i "TEXT SHELL ACTIVE - THE DESKTOP CAN BE
+     STARTED AGAIN", ekran przechodzi na konsole.  RESTART z konsoli dziala:
+     wpisanie \SYSTEM\APP\DESKTOP.APP daje "PROCESS READY, PID 6" i pulpit wraca.
+     UWAGA: drugi pulpit w TEJ SAMEJ sesji konczy sie od razu - "Exactly one
+     desktop owns a session" (tak ma byc).
+   TRYB PRZY OTWARTYM OKNIE: F7 (okno PLIKI "DISK C:") + SETTINGS -> APPLY
+   1024x768 -> YES: okno PLIKI I okno SETTINGS sa poprawnie skomponowane w nowej
+   rozdzielczosci (w2-1024-z-oknem-0.png, "CONFIG SAVED"), powrot do 800x600
+   przy DALEJ otwartym oknie (w3-powrot-800-0.png).
+   PULAPKI TEGO TESTU (dla przyszlych sesji):
+     - "ROZNICE" w pierwszych przebiegach byly ARTEFAKTEM porownania NAPISOW
+       (expected="konsola" vs measured="konsola (mono)") - poprawione: kryteria
+       opisowe ida z expected=None, a wynik jest liczony z pomiaru,
+     - po kilku tts1/tts2/tts3 harness zgubil, KTORA sesja jest aktywna (w logu
+       widac prompt "tts3"), wiec dalsze kroki (zamykanie nr 2, tryb z oknem)
+       wykonywaly sie w sesji 3, a klik w pasek trafial w okno konsoli - dlatego
+       faza "tryb z oknem" zostala powtorzona OSOBNO, po czystym boocie
+       (stress_display.py window) i tam przeszla w calosci,
+     - porownywanie hashy miedzy sesjami ma sens tylko dla identycznego stanu;
+       dwie sesje maja rozne pulpity, wiec "inny hash" = dobra wiadomosc.
+
+10z. KONSOLA BEZ PULPITU + RESTART PO ZMIANIE TRYBU (20.10, ZROBIONE):
+   Narzedzia: display-demo/stress_console.py (tryby: console, files, modes).
+   Raporty: KONSOLA-RAPORT-20261020-1149.txt, KOPIOWANIE-RAPORT-20261020-1157.txt,
+   TRYBY-RESTART-RAPORT-20261020-1203.txt; zrzuty c-*.png, f-*.png, m-*.png.
+   A) PRACA W KONSOLI PRZY ZAMKNIETYM PULPICIE (FILE -> CLOSE):
+      wykonane polecenia: help, dir, memory, cpu, uptime, tasks, jobs, maps <pid>,
+      mkdir, copy, dir, type, move, del, start (program w tle), wait, tasks,
+      tts2, dir, tts1 oraz tos <prg>.  Wszystkie odpowiadaja, konsola zostaje
+      zywa, brak zawieszen.
+      PLIKI (dowod f-dir-tmp3.png): mkdir tmp -> COPY \NOTES.TXT TMP\A.TXT ->
+      DIR TMP pokazuje "A.TXT 42" -> TYPE drukuje zawartosc -> MOVE na B.TXT ->
+      DIR "B.TXT 42" -> DEL -> DIR pusty.  Czyli zapis/kopiowanie/usuwanie
+      dziala takze bez pulpitu (przez ten sam VFS/FAT co pulpit).
+      UWAGA (moj blad, nie systemu): pierwsze proby "copy \SYSTEM\NOTES.TXT"
+      konczyly sie "INVALID PATH", bo NOTES.TXT lezy w KATALOGU GLOWNYM
+      (\NOTES.TXT), a nie w \SYSTEM.  Jadro odpowiedzialo poprawnie.
+      TOS Z KONSOLI: "tos \SYSTEM\TEST\SYSINFO.PRG" uruchamia program, a
+      Ctrl+Alt+Esc NIE konczy go od razu - program pokazuje pytanie
+      "Exit SysInfo ?" (c-tos-kill.png) i czeka; samo Y+ENTER z klawiatury
+      nie zamknelo okna w tym tescie.  To INNE zachowanie niz przy starcie z
+      pulpitu (tam okno znika - patrz pkt 4.6).  Do sprawdzenia osobno, ale
+      nie blokuje niczego: sesja zyje, program czeka na odpowiedz.
+   B) RESTART PO ZMIANIE TRYBU:
+      1024x768: APPLY+YES -> DESKTOP.CFG zapisuje RES=1024x768x1 (odczytane
+      z obrazu PO zamknieciu emulatora - pulapka z pkt 10h), zamkniecie pulpitu
+      -> konsola -> restart \SYSTEM\APP\DESKTOP.APP -> pulpit wstaje W TRYBIE
+      1024x768, czyli czyta RES= z configu (para jadro <-> VOFA.SYS bez rc=-4).
+      PELNY RESTART (nowy boot tego samego obrazu): ekran 1024x768 od razu po
+      starcie pulpitu (zrzut z-reboot.png, hash fdb95538...).  Czyli sciezka
+      APPLY -> DESKTOP.CFG -> restart dziala w obu wariantach.
+      BIOS.CFG na tym obrazie ma video_mode=3 (800x600x256), wiec tryb z
+      DESKTOP.CFG jest nakladany przez PULPIT po starcie - i to dziala.
+   LEKCJA DLA TESTOW: nie zakladac sciezek plikow (NOTES.TXT jest w roocie),
+   a wynik "INVALID PATH" sprawdzac w zrodle (kfat_copy_path -> resolve_path),
+   zanim uzna sie go za blad.
+
+10aa. SPRZATANIE DYSKU (20.10) - 25 GB -> 7,6 GB, wolne 3,7 GB -> 27 GB:
+   Powod: dysk zapelnil sie do 99%.  Co zrobiono (za zgoda uzytkownika):
+     - 23 stare obrazy testowe z display-demo (~17 GB) + 2 AVI (631 MB) +
+       stare logi hatari -> najpierw do TRASH/20261020-HDD/, potem SKASOWANE,
+     - 13 obrazow tymczasowych z /tmp (~10 GB) - skasowane.
+   Manifest skasowanych rzeczy: TRASH/20261020-HDD-MANIFEST-SKASOWANE.txt
+   (kazda pozycja z rozmiarem; wszystkie obrazy sa ODTWARZALNE: klon
+   demo-guard.img + wgranie 5 plikow systemu - robi to prepare() w harnessach).
+   ZOSTAWIONE CELOWO: display-demo/demo-guard.img (kanoniczny obraz do klonowania,
+   uzywa go 11 skryptow), display-demo/ATOS-2026-10-16.img (kopia robocza z
+   przegladu), obie binarki hatari (scalony + tracker), cale zrodla i raporty.
+   NIE RUSZANE (uzytkownik nie wyrazil zgody): ATOS 2.1/work (1,5 GB, m.in.
+   atos-v2.img i ATOS_AKTUALNY-backup-20261012.img), ATOS_KOPIA (784 MB),
+   commander (1,1 GB), ATOS 2.0 (269 MB), ATOS_AKTUALNY (instancja uzytkownika).
+   SPRAWDZONE PO SPRZATANIU: klonowanie demo-guard.img dziala, odczyt
+   \SYSTEM\KERNEL.SYS z obrazu dziala (md5 80f9ede9... - stan sprzed sesji).
+   UWAGA NA PRZYSZLOSC: przeniesienie do TRASH na TYM SAMYM wolumenie NIE
+   zwalnia miejsca - trzeba kasowac albo przenosic na inny dysk.  Dlatego
+   harnessy powinny po sobie kasowac swoje klony obrazow (kazdy to 768 MB).

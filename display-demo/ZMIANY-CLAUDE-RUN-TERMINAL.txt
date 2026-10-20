@@ -1,0 +1,78 @@
+RUN (opoznienie liter) i TERMINAL (nie widac pisania) - poprawki Claude, 2026-10-16
+=====================================================================================
+Test: obraz display-demo/mem-probe-20261016.img (kernel 213710 B, DESKTOP 29433 B),
+bios_mste.bin, et4000w32i, Hatari z atari-030-port/hatari-src.  Pomiar licznikami
+jadra kdbg_wm_composes / kdbg_total_cycles / wm_damage_pixels (12288 = 1 s).
+
+1) RUN - PRZYCZYNA (zmierzona, dwie czesci)
+   a) Pulpit na kazdy znak wolal paint() = caly pulpit (ikony, pasek, okno RUN).
+      Partia rysowania 800x432 => kompozycja i flush 345 600 pikseli.
+      Profil: kgfx_icon_color + kvideo_flush + wm_copy_rect.  1 znak = 218 ms.
+   b) W jadrze overlay_blit() kopiowal CALY overlay RUN (352x56) przy KAZDEJ
+      kompozycji i zglaszal go do flushu - nawet gdy zmienil sie jeden znak.
+   Wniosek z sekcji 38 ("liczy sie liczba kompozycji, kompozycja jest zawsze
+   pelnym ekranem") byl nietrafny: kompozycja JUZ jest ograniczona do damage;
+   pelny ekran wynikal z tego, ze pulpit SAM zglaszal caly ekran.
+
+   POPRAWKA:
+   * system/desktop_wm.c: add_run_box() (wspolne rysowanie okna RUN) +
+     paint_run(): przy pisaniu/Backspace wysylana jest tylko linia wpisu
+     (pasek 336x16 + tekst + kursor).  paint() bez zmian w zachowaniu.
+   * system/kernel_wm.c: overlay_blit() kopiuje overlay TYLKO w przecieciu
+     z damage tej kompozycji (deco_dmg), przez nowa overlay_copy().  Nowo
+     otwarty overlay jest i tak caly w damage (kernel_wm_overlay), wiec
+     pierwsze pokazanie dziala jak dotad.
+
+   WYNIK (te same kryteria co w sekcji 38):
+     1) jeden klawisz: 218 ms -> 9,2 ms pracy WM (damage 6048 px zamiast 345 600)
+     2) 10 znakow bez przerwy, zrzut po 0,3 s: PRZED widac 1 znak, PO komplet
+     3) testy: make TOS=1 check - wyniki identyczne jak bez zmian (patrz nizej),
+        python3 -m unittest discover tests: 54 testy OK (2 pominiete), jak przed.
+   Dodatkowo sprawdzone: RUN nad oknem SETTINGS (zostaje na wierzchu), menu FILE
+   nad oknem, Backspace, Enter uruchamia SYSINFO, okno RUN znika czysto.
+
+2) TERMINAL - PRZYCZYNA (zmierzona, NIE fokus i NIE pompa)
+   Liczniki: po otwarciu terminala jadro wola shell->pump (kdbg_wake_calls staje),
+   a po powiekszeniu okna (gadzet ZOOM) widac CALY wpisany tekst i wykonane
+   polecenia - czyli shell przyjmuje klawiature od poczatku.  Problem byl w
+   WIDOKU okna:
+   a) okno konsoli zawsze pokazywalo DOLNE wiersze siatki 80x25
+      (src_y = (25-rows)*16).  Po "OPEN TERMINAL" kconsole_clear() stawia kursor
+      na GORZE, wiec znak zachety i pisany tekst byly nad widocznym obszarem;
+   b) kernel_wm_console_present() przeliczal zmieniony pas na ekran jako
+      CONSOLE_WX/WY + dy - bez paska tytulu i bez src_y - wiec wpisany znak byl
+      zglaszany poza widocznymi wierszami i nie trafial na ekran;
+   c) po wyczyszczeniu nie bylo znaku zachety (shell rysuje go po ENTER).
+   Odpowiedz na pytanie z sekcji 37: klikniecie w srodek konsoli NIC nie zmienia
+   (sprawdzone) - fokus byl dobry.  Uwaga: wywolanie kernel_wm_console_show()
+   w kernel_main.c:738 jest tylko w #ifdef ARK_TEST_FOCUS_DESKTOP (test),
+   w normalnym jadrze nie jest wolane cyklicznie.
+
+   POPRAWKA:
+   * system/kernel_console.c + include/kernel_console.h: kconsole_cursor_row().
+   * system/kernel_wm.c: console_follow_cursor() - okno przewija sie do wiersza
+     kursora (jak terminal); przewija tylko gdy kursor sie ruszyl, wiec suwak
+     nadal pozwala cofnac sie do starszego tekstu.  Wolane w console_show
+     i przy kazdej zmianie tekstu.  Pas zmian mapowany przez client + src_y.
+   * system/kernel_exception.c (opcode 24): po kconsole_clear() shell rysuje
+     znak zachety (redraw_prompt przez kernel_find_service - ten sam wzorzec,
+     co juz uzywany w tym pliku dla call==61).
+   WYNIK: po otwarciu od razu "tts1 C:\>", pisany tekst widoczny od razu,
+   ENTER wykonuje, po 14 x ENTER okno idzie za kursorem (ostatnia linia widoczna).
+
+3) TESTY (zestaw hostowy, w chmurze: gcc host + m68k gcc 16)
+   Porownanie drzewa BEZ zmian i Z zmianami - identyczne wyniki:
+   * check-console, check-mono-font: w moim srodowisku nie kompiluja sie
+     (brak #include <stdint.h> w tescie, -Werror misleading-indentation) - tak
+     samo w obu drzewach; po dodaniu stdint oba PASS w obu drzewach,
+   * check-audio: "33 FAILED" w OBU drzewach w moim srodowisku (pliki audio
+     nie byly ruszane) - na Macu sprawdzcie jak zwykle,
+   * pozostale cele check: PASS, 54 testy Pythona OK.
+   Na Macu: zbudowac swoim kompilatorem i uruchomic make TOS=1 check.
+
+PLIKI
+   run-terminal-claude.patch  - patch na system/ (5 plikow), wzgledem stanu z 16.10 12:52
+   KERNEL-claude.SYS, DESKTOP-claude.APP - zbudowane w chmurze (gcc 16, inny
+     kompilator niz Wasz, rozmiar 209462 / 29385 B) - do szybkiej proby;
+     docelowo zbudujcie swoim toolchainem z patcha.
+   run-terminal-test.img - kopia mem-probe-20261016.img z tymi dwoma plikami.

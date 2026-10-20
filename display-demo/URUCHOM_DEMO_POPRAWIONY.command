@@ -1,0 +1,6 @@
+#!/bin/zsh
+# ATOS z poprawionym kompletem SETTINGS (demo-poprawiony.img). Emulator/BIOS z ATOS_AKTUALNY (tylko odczyt).
+set -eu
+cd -- "${0:A:h}"
+A=../ATOS_AKTUALNY
+exec "$A/hatari" -c "$A/hatari.cfg" --machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 --tf536 on --graphics-card vofa --gfx-chip et4000 --mono --fast-forward off --ide-master ./demo-poprawiony.img --tos "$A/BIOS.bin" --patch-tos false --mmu off --statusbar false --borders false --zoom 1 --sound off --confirm-quit false --disable-video off --window --acsi 0=none --acsi 1=none --acsi 2=none --acsi 3=none --acsi 4=none --acsi 5=none --acsi 6=none --acsi 7=none --log-file ./hatari-poprawiony.log "$@" >./hatari-poprawiony-console.log 2>&1

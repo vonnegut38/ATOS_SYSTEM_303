@@ -1,0 +1,8 @@
+STRESS USTAWIEN EKRANU - 2026-10-20 08:14
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-display.img (klon demo-guard.img)
+
+faza   krok zmierzone                    oczekiwane             wynik    uwagi
+BOOT   0    800x600                      800x600                OK       start pulpitu
+RES    otwarcie brak okna                    SETTINGS               ROZNICA  klik nie doszedl
+
+krokow: 2, zgodnych: 1, roznic: 1

@@ -1,0 +1,65 @@
+ANALIZA RAPORTU DEEPSEEKA (sekcje 26-27) - ARKANOID / "MARTWY KOD WYBUDZANIA"
+Claude, 2026-10-16
+==============================================================================
+WNIOSEK: jadro NIE ma tego bledu.  Nie wolno wprowadzac zaproponowanej zmiany
+w schedulerze.  Arkanoid na AKTUALNYM jadrze (KERNEL.SYS 213 674 B, obraz
+display-demo/demo-test-20261015.img, ten sam BIOS bios_mste.bin, et4000w32i)
+animuje sie, reaguje na SPACE, konczy sie na ESC, a potem SETTINGS sie otwiera.
+Zrzuty: display-demo/arkanoid-test-claude.png
+
+1) "kernel_user_take_ready() to martwy kod" - NIEPRAWDA
+   grep byl tylko po *.c.  Funkcje wola ASEMBLER:
+     system/kernel_entry.S:776   jsr kernel_user_take_ready
+   wewnatrz kernel_dispatch_ready_user, a te z kolei wola petla nadzorcy:
+     system/kernel_main.c:692    kernel_dispatch_ready_user();   (co przebieg)
+     system/kernel_main.c:282    (petla startowa)
+   Czyli przy KAZDYM przebiegu glownej petli jadro robi
+   user_wake_sleepers(kernel_user_clock()) + user_pick_ready() i wznawia proces.
+   To jest dokladnie ta sciezka, ktorej raport szukal.
+
+2) "Jedyna droga wybudzenia nie zdaza" - nie dotyczy
+   Proces po sleep(1) wraca do nadzorcy (kernel_sleep_user_context -> -1 ->
+   kernel_user_pause_recover), a nastepny przebieg petli (pkt 1) budzi go,
+   gdy minie wake_tick.  Nie trzeba zadnej dodatkowej okazji.
+
+3) "Petla bezczynnosci z zamaskowanymi przerwaniami" - to nie jest petla bezczynnosci
+   kernel_main.c:786 "stop #0x2700" lezy ZA glowna petla nadzorcy - wykonuje sie
+   dopiero po jej zakonczeniu (komunikat "PRESS RESET").  Glowna petla nie
+   uzywa stop, tylko aktywnie odpytuje (timer_service->poll() itd.).
+
+4) Pomiar "SLEEPING, przyrost CPU = 0" nie dowodzi zawieszenia
+   Arkanoid w kazdej klatce woła sleep(0/1), wiec w przypadkowym momencie
+   odczytu prawie zawsze jest SLEEPING.  cpu_ticks rosnie TYLKO, gdy przerwanie
+   Timer C trafi w uruchomiony proces - krotkie porcje pracy miedzy snami
+   prawie nigdy nie sa trafiane.  Wlasciwy licznik to kdbg_sleep_calls:
+   zmierzylem ~115 wywolan sleep NA SEKUNDE w trakcie gry (315 -> 660 w 3 s),
+   czyli proces caly czas jest budzony i pracuje.
+   Pomiar Claude (process_table @0x58df2, krok 890, state@132):
+     w grze:  slot4 state=3 (SLEEPING), kdbg_sleep_calls 315 -> 660 -> 1038
+     po ESC:  slot4 state=5 (zakonczony), pulpit wraca
+     depth (kernel_user_saved_depth) = 0 przez caly czas
+
+5) Skad wiec "identyczne zrzuty" i "ESC nie dziala"?  (prawdopodobnie artefakt testu)
+   a) Ekran "SPACE OR CLICK TO SERVE" jest STATYCZNY (pilka lezy na paletce),
+      wiec dwa zrzuty bez wcisniecia SPACE sa identyczne bajt w bajt.
+   b) Wstrzykiwanie ESC przez FIFO Hatari: "hatari-event keypress 1" NIE jest
+      klawiszem ESC - jedna cyfra jest traktowana jako ZNAK '1'.  Skankody < 10
+      trzeba podawac jako dwa znaki, np. "keypress 01" albo "keypress 0x01".
+      Ten sam blad ma atos2_auto.py: press("Esc") wysyla "keypress 1".
+      (sprawdzone: z "keydown 01"/"keyup 01" Arkanoid konczy sie od razu)
+   Dotyczy wszystkich klawiszy o skankodzie 1..9: ESC, 1..8 w gornym rzedzie.
+
+PROPOZYCJA ROZWIAZANIA
+  A) NIE ruszac schedulera.  Plan z sekcji 27 (wolanie take_ready z kernel_main,
+     wybudzanie przed "stop") jest zbedny - ta sciezka juz istnieje - a dodanie
+     drugiej moglaby wznawiac proces z niewlasciwego kontekstu (poza
+     kernel_dispatch_ready_user, ktory buduje ramke RTE i pilnuje glebokosci).
+  B) Poprawic narzedzie testowe (1 linia): w atos2_auto.py w press/keydown/keyup
+     wysylac skankod jako "0x%02x" % code zamiast samej liczby.
+  C) Powtorzyc test uzytkownika recznie w jego Hatari: ARKANOID -> SPACE (gra
+     rusza) -> ESC (wraca pulpit) -> SETTINGS.  Jesli u uzytkownika nadal wisi,
+     to roznica jest po stronie emulatora/klawiatury hosta (np. --grab,
+     mapowanie klawiszy), nie jadra - wtedy diagnozowac kdbg_sleep_calls
+     i kdbg_loop_calls w trakcie zawieszenia (jesli rosna, jadro zyje).
+  D) Awaryjne Ctrl+Alt+Del dodane w jadrze moze zostac jako siatka
+     bezpieczenstwa, ale nie jest naprawa zadnego bledu Arkanoida.

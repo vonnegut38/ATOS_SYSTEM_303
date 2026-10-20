@@ -1,0 +1,216 @@
+diff -ru a/include/kernel_console.h b/include/kernel_console.h
+--- a/include/kernel_console.h	2026-10-16 15:26:25.390697617 +0200
++++ b/include/kernel_console.h	2026-10-16 15:26:25.397844743 +0200
+@@ -5,6 +5,7 @@
+ void kconsole_init(int mono,void (*clear)(void),void (*puts)(const char *),
+                    void (*number)(uint32_t));
+ void kconsole_clear(void);
++unsigned kconsole_cursor_row(void);
+ void kconsole_puts(const char *);
+ void kconsole_put_u32(uint32_t);
+ void kconsole_flush(void);
+diff -ru a/system/desktop_wm.c b/system/desktop_wm.c
+--- a/system/desktop_wm.c	2026-10-16 15:26:25.383649326 +0200
++++ b/system/desktop_wm.c	2026-10-16 15:26:25.392109130 +0200
+@@ -334,6 +334,27 @@
+     notice_tick=hires();
+     paint();
+ }
++/* The RUN prompt.  paint() adds it on top of a full desktop pass; typing
++   uses paint_run(), which submits ONLY the prompt: the batch bounds are then
++   the 340x56 box, so the kernel composes and flushes that rectangle instead
++   of the whole desktop (a full pass cost ~218 ms per key at 800x600). */
++static void add_run_box(void)
++{
++    add(GUI_FILL,150,120,340,56,1,0);
++    add(GUI_FRAME,150,120,340,56,0,0);
++    add(GUI_TEXT,158,126,0,0,0,"RUN PROGRAM (SYSTEM/APP):");
++    add(GUI_TEXT,158,146,0,0,0,run_buf);
++    add(GUI_TEXT,(int16_t)(158+(int)run_len*8),146,0,0,0,"_");
++}
++static void paint_run(void)
++{
++    /* only the input line: its paper strip, the text and the cursor (the
++       frame and the caption above it do not change while typing) */
++    n=0;add(GUI_FILL,152,144,336,16,1,0);
++    add(GUI_TEXT,158,146,0,0,0,run_buf);
++    add(GUI_TEXT,(int16_t)(158+(int)run_len*8),146,0,0,0,"_");
++    (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,0);
++}
+ static void paint(void)
+ {
+     unsigned i;int full_background=bg_dirty;
+@@ -393,13 +414,7 @@
+                 add(GUI_TEXT,(int16_t)(bx+6),(int16_t)(MENU_Y+(int)i*MENU_ROW+2),0,0,0,lbl);
+         }
+     }
+-    if(run_mode){
+-        add(GUI_FILL,150,120,340,56,1,0);
+-        add(GUI_FRAME,150,120,340,56,0,0);
+-        add(GUI_TEXT,158,126,0,0,0,"RUN PROGRAM (SYSTEM/APP):");
+-        add(GUI_TEXT,158,146,0,0,0,run_buf);
+-        add(GUI_TEXT,(int16_t)(158+(int)run_len*8),146,0,0,0,"_");
+-    }
++    if(run_mode)add_run_box();
+     if(notice[0]&&(uint32_t)(hires()-notice_tick)<NOTICE_TICKS){
+         add(GUI_TEXT,8,20,0,0,0,notice);
+         list[n-1u].reserved=1;      /* no paper pill: it sits on the wallpaper */
+@@ -2434,8 +2449,8 @@
+             if(type!=1u)continue;                       /* make only */
+             if(run_mode){
+                 if(scan==0x1cu||ch==0x0du)spawn_run();
+-                else if((scan==0x0eu||ch==0x08u)&&run_len){run_buf[--run_len]=0;paint();}
+-                else if(ch>=32u&&ch<127u&&run_len+5u<sizeof(run_buf)){run_buf[run_len++]=(char)ch;run_buf[run_len]=0;paint();}
++                else if((scan==0x0eu||ch==0x08u)&&run_len){run_buf[--run_len]=0;paint_run();}
++                else if(ch>=32u&&ch<127u&&run_len+5u<sizeof(run_buf)){run_buf[run_len++]=(char)ch;run_buf[run_len]=0;paint_run();}
+             }else if(ctx_open){
+                 if(scan==0x48u&&ctx_sel>0){ctx_sel--;ctx_paint();}          /* up */
+                 else if(scan==0x50u&&ctx_sel+1<ctx_items){ctx_sel++;ctx_paint();} /* down */
+diff -ru a/system/kernel_console.c b/system/kernel_console.c
+--- a/system/kernel_console.c	2026-10-16 15:26:25.387140022 +0200
++++ b/system/kernel_console.c	2026-10-16 15:26:25.394916871 +0200
+@@ -113,6 +113,10 @@
+ }
+ void kconsole_invalidate(void)
+ {if(active){term_display_invalidate(&display);dirty=1;}}
++/* Row of the output cursor (0 = top).  The shell window scrolls to it, so
++   text written after a clear (cursor at the top) is not hidden below a
++   viewport that always showed the bottom rows. */
++unsigned kconsole_cursor_row(void){return (active&&consoles)?(unsigned)console.row:0u;}
+ void kconsole_clear(void)
+ {
+  if(!active){if(fallback_clear)fallback_clear();return;}
+diff -ru a/system/kernel_exception.c b/system/kernel_exception.c
+--- a/system/kernel_exception.c	2026-10-16 15:26:25.388814749 +0200
++++ b/system/kernel_exception.c	2026-10-16 15:26:25.396372901 +0200
+@@ -2562,7 +2562,12 @@
+                bootowania (zgloszenie uzytkownika).  Czyscimy TYLKO tutaj -
+                kernel_wm_console_show() jest wolane takze cyklicznie przez
+                jadro i czyszczenie tam kasowaloby prace terminala w tle. */
+-            kconsole_clear();kernel_wm_console_show();kernel_wm_console_focus();}
++            kconsole_clear();
++            /* Czysty ekran musi od razu pokazac znak zachety, inaczej nie
++               widac, gdzie pisac (shell rysuje go dopiero po ENTER). */
++            {const kernel_shell_service_t *sh=(const kernel_shell_service_t *)kernel_find_service(KERNEL_SERVICE_SHELL,KERNEL_SHELL_VERSION);
++             if(sh&&sh->redraw_prompt)sh->redraw_prompt();}
++            kernel_wm_console_show();kernel_wm_console_focus();}
+         /* 25: scripted-test hook - inject a synthetic mouse state. */
+         else if(request->opcode==25u){extern void ksessions_mouse_inject(int32_t,int32_t,uint32_t);
+             ksessions_mouse_inject((int16_t)(request->xy>>16),(int16_t)request->xy,(uint32_t)request->color);}
+diff -ru a/system/kernel_wm.c b/system/kernel_wm.c
+--- a/system/kernel_wm.c	2026-10-16 15:26:25.385304056 +0200
++++ b/system/kernel_wm.c	2026-10-16 15:26:25.393500231 +0200
+@@ -1298,16 +1298,14 @@
+     }else{overlay_on=0;overlay_rect.x=overlay_rect.y=0;overlay_rect.w=overlay_rect.h=0;}
+     wm_force_compose=1;
+ }
+-static void overlay_blit(void)
++/* Copy one rectangle of the desktop surface (the overlay source) over the
++   composed frame and report it to the video layer. */
++static void overlay_copy(const uint8_t *src,const wm_rect_t *r)
+ {
+-    unsigned i,y,w,h;int x0,y0;uint8_t *src=0;
+-    if(!overlay_on||!wm_framebuffer)return;
+-    for(i=0;i<wm.count;++i)
+-        if((wm.win[i].flags&5u)==5u){src=(uint8_t *)(uintptr_t)wm.win[i].pid;break;}
+-    if(!src)return;
+-    x0=overlay_rect.x;y0=overlay_rect.y;w=overlay_rect.w;h=overlay_rect.h;
+-    if(x0<0){w=(unsigned)((int)w+x0);x0=0;}
+-    if(y0<0){h=(unsigned)((int)h+y0);y0=0;}
++    unsigned i,y;int x0=r->x,y0=r->y;unsigned w=r->w,h=r->h;
++    if(x0<0){if((int)w<=-x0)return;w=(unsigned)((int)w+x0);x0=0;}
++    if(y0<0){if((int)h<=-y0)return;h=(unsigned)((int)h+y0);y0=0;}
++    if(x0>=(int)wm.screen_w||y0>=(int)wm.screen_h)return;
+     if((int)x0+(int)w>wm.screen_w)w=(unsigned)(wm.screen_w-x0);
+     if((int)y0+(int)h>wm.screen_h)h=(unsigned)(wm.screen_h-y0);
+     for(y=0;y<h;++y){
+@@ -1326,6 +1324,22 @@
+     }
+     kvideo_damage(x0,y0,(int32_t)w,(int32_t)h);
+ }
++/* The overlay (pull-down menu, RUN prompt) only has to be restored where this
++   composition rewrote pixels, i.e. inside the damage snapshot (deco_dmg) taken
++   before wm_recompose().  Copying the whole overlay on every frame made one
++   typed RUN character cost a 352x56 copy plus its VRAM flush; a newly opened or
++   moved overlay is damaged as a whole by kernel_wm_overlay(), so it is still
++   copied completely the first time. */
++static void overlay_blit(void)
++{
++    unsigned i,d;uint8_t *src=0;wm_rect_t c;
++    if(!overlay_on||!wm_framebuffer)return;
++    for(i=0;i<wm.count;++i)
++        if((wm.win[i].flags&5u)==5u){src=(uint8_t *)(uintptr_t)wm.win[i].pid;break;}
++    if(!src)return;
++    for(d=0;d<deco_nd;++d)
++        if(wm_rect_intersect(&deco_dmg[d],&overlay_rect,&c))overlay_copy(src,&c);
++}
+ void kernel_wm_frame_tick(uint32_t now)
+ {
+     /* Zabezpieczenie zmiany trybu: brak potwierdzenia w 4 s => powrot. */
+@@ -2278,6 +2292,28 @@
+     if(wm_ready)kgfx_fill_rect(0,0,(int32_t)wm.screen_w,(int32_t)wm.screen_h,0u);
+     kernel_wm_damage_all();
+ }
++/* Scroll the shell window so the output cursor row is visible, the way a
++   terminal follows its cursor.  The view used to be pinned to the bottom rows
++   of the 25-row grid; after "OPEN TERMINAL" clears the console the cursor is at
++   the TOP, so the prompt and everything typed landed above the visible part
++   ("the terminal does not take the keyboard").  Only a MOVED cursor scrolls the
++   view (force=1 on show), so the scrollbar can still be used to look back. */
++static void console_follow_cursor(unsigned i,int force)
++{
++    static unsigned last_cur=0xFFFFu;
++    unsigned rows=(unsigned)wm.win[i].client.h/16u,cur=kconsole_cursor_row(),first=0u;
++    if(cur>=TERM_ROWS)cur=TERM_ROWS-1u;
++    if(!force&&cur==last_cur)return;
++    last_cur=cur;
++    if(!rows)rows=1u;
++    if(cur+1u>rows)first=cur+1u-rows;
++    if(rows<TERM_ROWS&&first>TERM_ROWS-rows)first=TERM_ROWS-rows;
++    if(rows>=TERM_ROWS)first=0u;
++    if((uint16_t)wm.win[i].src_y!=(uint16_t)(first*16u)){
++        wm.win[i].src_y=(int16_t)(first*16u);
++        wm_damage_add(&wm,wm.win[i].client);
++    }
++}
+ /* "Open terminal": bring the existing shell window back instead of appending a
+    second one.  kernel_wm_console_hide() parked it off-screen at x=-2048, so the
+    window (matched by its backing surface) is moved back and re-raised. */
+@@ -2294,8 +2330,7 @@
+             wm.win[i].client.x=CONSOLE_WX;wm.win[i].client.y=(int16_t)(CONSOLE_WY+16);
+             wm.win[i].client.w=CONSOLE_WW;wm.win[i].client.h=(uint16_t)(CONSOLE_WH-16);
+             wm.win[i].src_x=0;
+-            {uint16_t rows=(uint16_t)((CONSOLE_WH-16u)/16u);
+-             wm.win[i].src_y=(uint16_t)((rows<TERM_ROWS?(TERM_ROWS-rows):0u)*16u);}
++            console_follow_cursor(i,1);
+             wm_surface[0]=console_surface;
+             console_registered=1;
+             wm_rebuild_clip(&wm);
+@@ -2420,8 +2455,25 @@
+         console_registered=1;
+         console_raise();
+     }else{
+-        r.x=(int16_t)(CONSOLE_WX+dx);r.y=(int16_t)(CONSOLE_WY+dy);r.w=dw;r.h=dh;
+-        if(r.w&&r.h)wm_damage_add(&wm,r);        /* only the changed band */
++        unsigned k;
++        for(k=0;k<wm.count;++k)
++            if(wm.win[k].pid==(uint32_t)(uintptr_t)console_surface)break;
++        if(k<wm.count){
++            wm_rect_t band,vis;
++            console_follow_cursor(k,0);
++            /* The changed band is in SURFACE coordinates; the window shows the
++               surface from (src_x,src_y) at its client origin.  Mapping it as
++               CONSOLE_WX/WY+d ignored the title bar and the scroll offset, so a
++               typed character was damaged outside the visible rows and never
++               reached the screen. */
++            band.x=(int16_t)(wm.win[k].client.x+(int)dx-(int)wm.win[k].src_x);
++            band.y=(int16_t)(wm.win[k].client.y+(int)dy-(int)wm.win[k].src_y);
++            band.w=dw;band.h=dh;
++            if(dw&&dh&&wm_rect_intersect(&band,&wm.win[k].client,&vis))wm_damage_add(&wm,vis);
++        }else{
++            r.x=(int16_t)(CONSOLE_WX+dx);r.y=(int16_t)(CONSOLE_WY+dy);r.w=dw;r.h=dh;
++            if(r.w&&r.h)wm_damage_add(&wm,r);        /* only the changed band */
++        }
+     }
+     /* No composite here: the frame loop does it once per tick. */
+ }

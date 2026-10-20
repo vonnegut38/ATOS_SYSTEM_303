@@ -1,0 +1,40 @@
+STRESS USTAWIEN EKRANU - 2026-10-20 08:23
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-display.img (klon demo-guard.img)
+
+faza   krok zmierzone                    oczekiwane             wynik    uwagi
+BOOT   0    800x600                      800x600                OK       start pulpitu
+RES    otwarcie SETTINGS                     SETTINGS               OK       okno na ekranie
+RES    0    1024x768 (tryb 2, 1 kolor.)  tryb z listy           ROZNICA  1024x768
+RES    1    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    2    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    3    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    4    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    5    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    6    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    7    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    8    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    powrot 800x600                      800x600                OK       po 9 krokach
+RES    9    800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    10   800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+RES    11   800x600 (tryb 1, 1 kolor.)   tryb z listy           ROZNICA  800x600
+GUARD  brak-YES 800x600                      800x600                OK       podglad bez potwierdzenia -> jadro wraca samo
+THM    0    pasek=(222, 223, 222) tlo=(0, 138, 140) hash=bf69289b -                      OK       motyw zastosowany
+THM    1    pasek=(222, 223, 222) tlo=(16, 32, 33) hash=d8370ea3 -                      OK       motyw zastosowany
+THM    2    pasek=(222, 223, 222) tlo=(16, 32, 33) hash=d8370ea3 -                      OK       motyw zastosowany
+THM    3    pasek=(222, 223, 222) tlo=(16, 32, 33) hash=d8370ea3 -                      OK       motyw zastosowany
+DESK   0    tlo=(16, 32, 33) pasek=(222, 223, 222) ikona=57 komorka=51 tapeta=1 kol. -                      OK       wiersz 0
+DESK   1    tlo=(16, 32, 33) pasek=(222, 223, 222) ikona=92 komorka=20 tapeta=1 kol. -                      OK       wiersz 1
+DESK   2    tlo=(0, 0, 49) pasek=(222, 223, 222) ikona=92 komorka=20 tapeta=1 kol. -                      OK       wiersz 2
+DESK   3    tlo=(0, 32, 0) pasek=(222, 223, 222) ikona=92 komorka=20 tapeta=1 kol. -                      OK       wiersz 3
+DESK   4    tlo=(33, 0, 0) pasek=(222, 223, 222) ikona=92 komorka=20 tapeta=1 kol. -                      OK       wiersz 4
+DESK   5    tlo=(33, 32, 33) pasek=(222, 223, 222) ikona=92 komorka=20 tapeta=1 kol. -                      OK       wiersz 5
+DESK   6    tlo=(0, 0, 0) pasek=(222, 223, 222) ikona=56 komorka=51 tapeta=1 kol. -                      OK       wiersz 6
+DESK   7    tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=56 komorka=51 tapeta=1 kol. -                      OK       wiersz 7
+DESK   8    tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 8
+DESK   9    tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=92 komorka=20 tapeta=2 kol. -                      OK       wiersz 9
+DESK   10   tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=56 komorka=51 tapeta=2 kol. -                      OK       wiersz 10
+DESK   11   tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=56 komorka=51 tapeta=2 kol. -                      OK       wiersz 11
+DESK   12   tlo=(0, 0, 0) pasek=(0, 170, 49) ikona=54 komorka=92 tapeta=2 kol. -                      OK       wiersz 12
+KONIEC 0    800x600                      800x600                OK       pulpit po calej sesji
+
+krokow: 34, zgodnych: 22, roznic: 12

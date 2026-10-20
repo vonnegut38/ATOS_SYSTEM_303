@@ -1,0 +1,169 @@
+================================================================================
+MAGIC (MagiC / MagiXDESK) - JAK RYSUJE PULPIT I OKNA, JAK PRZECIAGA OKNA
+Analiza zrodel + co z tego przenieslismy do ATOS.   18.10.2026
+================================================================================
+
+DOPISEK 18.10 (weryfikacja scalonej binarki, punkt 1 planu):
+  display-demo/hatari-scalony-20261017 zagral MODPLAY.APP: "PLAYING / ESP32
+  accelerator", start modulu 1287 ms (libxmp), 4 kanaly, pasek aktywnosci.
+  Czyli scalona binarka ma OBIE polowy: audio (libxmp + ESP32) i poprawne
+  4/16 bpp.  Zrzut: display-demo/b-merged.png.  Stara binarka trackera zostaje
+  tylko jako awaryjna (4/16 bpp rysuje zle).
+
+Zrodla (w repo, katalog magic-src):
+  MagiC/APPS/MAGICDESK/MAGXDESK.5/SRC/*.C     - pulpit (C)
+  MagiC/KERNEL/AES/SRC/AESWIN.S, AESGRAF.S    - jadro AES: okna i drag (68k asm)
+  MagiC/KERNEL/WINFRAME/                      - ramki okien (obiekty GEM)
+  MagiC/DOC/USAGE/SETTINGS.TXT                - opcje "online move/size"
+
+--------------------------------------------------------------------------------
+1. PULPIT: KAFELEK, NIE "WYPELNIJ EKRAN"
+--------------------------------------------------------------------------------
+KACHEL.C:35 drawdesk() jest funkcja rysujaca OBIEKTU (USERDEF). AES wola ja
+z prostokatem clipujacym; funkcja:
+  - ustawia vs_clip (KACHEL.C:54),
+  - wyrownuje poczatek do siatki kafelka:  obj[0] -= obj[0] % fill->fd_w
+    (KACHEL.C:58-59) - bez tego wzor "plywa" przy kazdym przemalowaniu,
+  - rysuje kafelek po kafelku:  vro_cpyfm (kolor) / vrt_cpyfm (mono+2 kolory)
+    (KACHEL.C:72-86).
+Czyli tlo to BLIT malego obrazka na obszar uszkodzony, a nie petla po pikselach.
+
+--------------------------------------------------------------------------------
+2. OKNA: DRZEWO OBIEKTOW + CLIP
+--------------------------------------------------------------------------------
+Okno = drzewo obiektow (_wbm_create, AESWIN.S:406). wind_draw(whdl,startobj,
+clip) (AESWIN.S:354) rysuje je przez objc_wdraw - tylko wycinek i tylko od
+podanego obiektu. Odswiezanie idzie po prostokatach WF_FIRSTXYWH/ NEXTXYWH
+(DWINDOWS.C:1934).
+
+--------------------------------------------------------------------------------
+3. PRZECIAGANIE Z WYPELNIENIEM - DWA TRYBY, DOMYSLNIE WYPELNIONY
+--------------------------------------------------------------------------------
+AESWIN.S:3488-3530, przelacznik look_flags bit 6 ("Online move/size mit Ctrl",
+SETTINGS.TXT:37-38):
+  * NEW mover (online) - okno JEDZIE Z TRESCIA; na kazdy ruch myszy
+    windslid_callback (AESWIN.S:3064) wpisuje nowa pozycje, wysyla WM_MOVED do
+    wlasciciela, robi appl_yield (zeby aplikacja dorysowala odsloniete pasy)
+    i wraca "kontynuuj",
+  * OLD mover - tylko GUMKA: graf_dragbox (AESGRAF.S:563) rysuje XOR-em obrys
+    (draw_2grects, AESGRAF.S:437), okno przeskakuje po puszczeniu.
+Domyslnie online; prawy przycisk lub Ctrl wymusza gumke.
+
+--------------------------------------------------------------------------------
+4. PRZEWIJANIE: BLIT + ODSLONIETY PASEK
+--------------------------------------------------------------------------------
+DWINDOWS.C:1929-1966: obszar wspolny kopiowany vro_cpyfm (S_ONLY), a objc_draw
+maluje TYLKO odsloniety pasek. Zero pelnego przemalowania listy.
+
+--------------------------------------------------------------------------------
+5. JAK TO JEST U NAS (ATOS)
+--------------------------------------------------------------------------------
+  pulpit:  desktop_wm.c paint() - lista rysowania; tlo pelnym fill-em tylko przy
+           zmianie trybu/tematu (bg_dirty), reszta zdarzen = same komorki ikon,
+  okna:    kompozytor z powierzchniami klienta; chrom przyciety do uszkodzenia
+           (kernel_wm.c deco_*), klient blitowany CPU/blitter,
+  drag:    dotad TYLKO gumka (XOR obrysu, limit ~20 ms),
+  przewijanie: pasek przez src_y - klient w ogole nie przerysowuje.
+
+--------------------------------------------------------------------------------
+6. CO WDROZONE (18.10): PRZECIAGANIE Z ZAWARTOSCIA + GUMKA NA PRAWYM
+--------------------------------------------------------------------------------
+kernel_wm.c:
+  * drag_live: lewy przycisk = okno jedzie z trescia (wm_move + notify_geometry
+    + wymuszony kompozyt w tej samej klatce, limit 20 ms),
+  * prawy przycisk = gumka (klasyka GEM), jak w MagiC,
+  * WM_LIVE_MAX_PIXELS = 130000: okna wieksze niz ~420x300 jada gumka
+    (koszt rosnie z powierzchnia),
+  * chrom ciagnietego okna rysowany w CALOSCI (deco_dmg = ramka), bo przy
+    uszkodzeniu "pasy" deco_vis przycinal ramke do paskow i zostawial schodki.
+Testy: zrzuty display-demo/f2-live-w-trakcie.png (okno z trescia w trakcie
+przeciagania, przycisk wcisniety) oraz f4-gumka-w-trakcie.png (gumka) i
+f5-gumka-po.png (okno po puszczeniu).  Zrzut startowy bez zmian (zlota zasada).
+
+--------------------------------------------------------------------------------
+7. POMIAR KOSZTU (800x600x8, okno PLIKOW 420x300, Hatari)
+--------------------------------------------------------------------------------
+  krok z zawartoscia: DWA kompozyty (stara i nowa ramka) - zmierzone ~4500
+    tykniec hires na krok (~0.37 s czasu MASZYNY; Hatari emuluje zapisy do
+    VRAM bajt po bajcie, wiec zawyza),
+  krok gumki: ~2 ms (sam obrys, bez kompozytu).
+Dlatego prog: male okna domyslnie z zawartoscia, duze gumka; prawy przycisk
+zawsze gumka.  WM_LIVE_MAX_PIXELS zwiekszyc, jesli zawartosc ma byc wszedzie
+(0 = nigdy, bardzo duza liczba = zawsze).
+
+--------------------------------------------------------------------------------
+8. CZEGO NIE UZYLISMY I DLACZEGO (nastepne optymalizacje)
+--------------------------------------------------------------------------------
+1) wm_move_live() (wm_core.c:285) uszkadza tylko ODSLONIETE PASY.  Sprawdzone:
+   w kompozytorze z powierzchniami to NIE wystarcza - piksele okna nie "jada"
+   same, wiec WNETRZE nowej pozycji tez wymaga przemalowania.  Efekt: schodki
+   starych ramek (zrzut d2 z wariantu pasowego).  To zadziala dopiero z
+   punktem 2.
+2) PRZESUNIECIE PIKSELI W FRAMEBUFFERZE (model GEM w_move): skopiowac obszar
+   wspolny starej i nowej pozycji, potem uszkodzic tylko pasy.  Wtedy
+   wm_move_live staje sie poprawny i krok tanieje ~5-10x.  To najbardziej
+   oplacalna nastepna zmiana w kompozytorze.
+3) KAFELKOWE TLO (KACHEL): sensowne dopiero, gdy dodamy tapete/wzor; dla
+   jednolitego koloru obecny fill jest optymalny.
+4) PRZEWIJANIE BLITEM: lista 12 wierszy tego nie potrzebuje; wazne przy
+   dlugich listach (setki pozycji).
+5) Drzewa obiektow per okno nie kopiujemy - powierzchnie + damage sa tansze
+   w typowym przypadku, a WM_MOVED per krok nie jest u nas potrzebne do
+   rysowania (kompozytor sam przesuwa powierzchnie).
+
+--------------------------------------------------------------------------------
+9. PROBA "PRZESUN PIKSELI" (18.10) - ZDIAGNOZOWANA, NIE WDROZONA
+--------------------------------------------------------------------------------
+Pomysl (model GEM): zamiast komponowac stara i nowa ramke, skopiowac piksele
+klienta w framebufferze o (dx,dy) i uszkodzic tylko odsloniete pasy
+(wm_move_live).  Zaimplementowane: fb_row_move() + fb_drag_scroll()
+(kopiowanie wierszy z zachowaniem kierunku; tylko gdy klient jest w calosci
+widoczny, nic go nie zaslania i nie wychodzi za ekran).
+WYNIK: same piksele klienta przesuwaja sie POPRAWNIE (lista jedzie z oknem),
+ale na ekranie zostaja stare ramki/uchwyty z kolejnych krokow.  Diagnoza
+zrobiona pomiarem: po dodaniu kvideo_damage(0,0,ekran) obraz jest CZYSTY -
+czyli kompozytor (framebuffer) jest poprawny, a to WARSTWA WIDEO nie wypycha
+cienkich pasow / chromu rysowanego poza uszkodzeniem WM.  Dodanie samej ramki
+(belka + krawedzie) do uszkodzenia wideo naprawilo belke, ale dolna i prawa
+krawedz zostaje - pasy gina w dalszym ciagu.
+WNIOSEK (ZWERYFIKOWANY TESTEM HOSTOWYM, tests/test_video_strips.c):
+warstwa wideo jest POPRAWNA - zapisuje dokladnie to, co dostanie w uszkodzeniu
+(przypadek B: pelna suma starej i nowej ramki => karta == front BAJT W BAJT).
+Pasy NIE MOGA wystarczyc: czesc wspolna starej i nowej ramki tez sie zmienia
+(tresc okna jedzie razem z ramka), wiec KAZDY przesuniety piksel musi trafic
+do VRAM - nawet po przesunieciu pikseli w framebufferze (przypadek A: mimo
+scrollu karta != front).  Czyli "tani drag" nie jest kwestia naprawy - po
+prostu kazdy piksel trzeba zapisac do karty i kompozytor robi to dobrze.
+TEN WATEK JEST ZAMKNIETY: zostaje pelny kompozyt na krok (wm_move) z progiem
+WM_LIVE_MAX_PIXELS dla bardzo duzych okien.
+DO CZASU NAPRAWY zostaje wersja z PELNYM KOMPOZYTEM na krok (wm_move):
+poprawna, zmierzona (f2/f3 = ten sam czysty zrzut) i wdrozona.
+
+POMIAR BASELINE (18.10, liczniki sa juz w jadrze): drag okna 420x300,
+10 krokow + puszczenie -> 2,60 mln pikseli uszkodzonych i 679 KB wypchnietych
+do karty (kdbg_dmg_px, kdbg_flush_words w kernel_video.c; odczyt przez
+hatari-debug memdump).  Liczniki zostaja, zeby nastepna sesja porownywala
+warianty bez dodawania wlasnej instrumentacji.
+
+--------------------------------------------------------------------------------
+10. WIDZETY I PASEK SUWAKA - POROWNANIE Z MagiC
+--------------------------------------------------------------------------------
+MagiC: pasek przewijania okna to OBIEKT drzewa (O_VSCROLL/O_VSLIDE, O_HS*),
+geometria w _wbm_sslid (AESWIN.S:923): grubosc suwaka = track*hslsize/1000
+(0..1000 = widoczna czesc), pozycja = track*(hslide)/(track-thumb).  Odswiezanie
+idzie przez objc_draw ZMIENIONEGO obiektu, nie calego okna.
+ATOS: te same wzory w kernel_wm.c (sb_thumb_size, sb_thumb_rect), pasek po
+PRAWEJ stronie klienta (konwencja GEM, 16 px, strzalki + tor + suwak, koniec
+toru nad chwytakiem 16x16 - jak W_VBAR nad W_SIZER).
+ZMIANA (18.10): przewiniecie uszkadza teraz TYLKO stary i nowy prostokat
+suwaka (sb_damage_from), a nie cala kolumne 16 x wysokosc okna - 3-8x mniej
+pikseli na krok.  To odpowiednik magiC-owego "odrysuj sam obiekt slidera".
+NAPRAWIONE PRZY OKAZJI: strzalki paska byly rysowane jako glify 0x01/0x02,
+ktorych font systemowy NIE MA - deco_text wypisywal "?" w obu strzalkach
+(widac na wczesniejszych zrzutach).  Teraz deco_arrow() rysuje je jako
+trojkaty z klockow (MagiC rysuje strzalki jako wzorce, nie tekst).
+UWAGA: w obecnym UI pasek WM jest widoczny tylko w oknie TERMINAL (konsola
+zglasza dluzsza tresc); aplikacje pulpitu deklaruja content == klient (aplikacje
+deklaruja content = klient, opcode 29), wiec zmiana jest nieaktywna do czasu,
+az jakas aplikacja zglosi dluzsza tresc - wtedy zadziala bez dalszych zmian.
+================================================================================

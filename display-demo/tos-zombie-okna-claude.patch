@@ -1,0 +1,130 @@
+diff -ru a/system/kernel_exception.c b/system/kernel_exception.c
+--- a/system/kernel_exception.c	2026-10-16 21:17:07.278747940 +0200
++++ b/system/kernel_exception.c	2026-10-16 21:17:07.280455680 +0200
+@@ -554,6 +554,37 @@
+     return 0;
+ }
+ 
++/* Zombie slots (Claude, 16.10).  A finished process keeps its slot in the
++   TERMINATED state until its parent collects the status (call 32 reap=1 /
++   call 33).  The desktop launches applications with SYS_SPAWN_ASYNC and never
++   collects them, so every QUIT/ESC left a zombie behind: with 6 slots (4
++   services + 2 applications) the third launch failed - "PROCESS START FAILED",
++   or on the desktop a silent fallback into the TOS personality ("TOS STARTED"
++   and no window, "TOS RC -689").  Memory, windows and files are already
++   released in kernel_user_end(); only the slot and its exit status remain.
++   When no slot is free, give back the oldest zombie nobody is waiting for.  A
++   later status query for it answers "no such child" (-0x371), which the
++   desktop already treats as "not running". */
++volatile uint32_t kdbg_zombie_reclaimed;
++static void user_reclaim_zombie_if_full(void)
++{
++    uint8_t i,k;int victim=-1;
++    for(i=0;i<USER_PROCESS_SLOTS;++i)if(process_table[i].state==USER_PROCESS_FREE)return;
++    for(i=0;i<USER_PROCESS_SLOTS;++i){
++        int waited=0;
++        if(process_table[i].state!=USER_PROCESS_TERMINATED)continue;
++        for(k=0;k<USER_PROCESS_SLOTS;++k)
++            if(process_table[k].state==USER_PROCESS_WAITING&&
++               process_table[k].wait_pid==process_table[i].pid)waited=1;
++        if(waited)continue;
++        if(victim<0||process_table[i].pid<process_table[(uint8_t)victim].pid)victim=(int)i;
++    }
++    if(victim<0)return;
++    process_table[(uint8_t)victim].state=USER_PROCESS_FREE;
++    process_table[(uint8_t)victim].pid=0;
++    process_table[(uint8_t)victim].parent_pid=0;
++    ++kdbg_zombie_reclaimed;
++}
+ static uint32_t user_allocate_pid(void)
+ {
+     uint8_t attempts,i;uint32_t candidate;
+@@ -1202,6 +1233,7 @@
+                       void *stack_top)
+ {uint8_t i,slot;uint32_t stack_size;
+  stack_size=(image&&size>=32u)?user_be32((const uint8_t *)image+24u):0u;
++ user_reclaim_zombie_if_full();
+  for(i=0;i<USER_PROCESS_SLOTS;++i){slot=(uint8_t)((next_process_slot+i)%USER_PROCESS_SLOTS);
+      if(process_table[slot].state==USER_PROCESS_FREE)break;}
+  if(i==USER_PROCESS_SLOTS)return 0;
+@@ -1340,6 +1372,7 @@
+         return -0x366;
+     if(parent->runtime_stack&&kmem_owner(parent->runtime_stack)!=parent->runtime_stack_owner)
+         return -0x366;
++    user_reclaim_zombie_if_full();
+     for(i=0;i<USER_PROCESS_SLOTS;++i){slot=(uint8_t)((next_process_slot+i)%USER_PROCESS_SLOTS);
+         if(process_table[slot].state==USER_PROCESS_FREE){child=&process_table[slot];break;}}
+     if(!child)return -0x361;
+@@ -1401,6 +1434,7 @@
+     user_process_t *parent=current_process,*child=0;uint8_t i,slot,j;
+     if(pid)*pid=0;
+     if(!image||!stack||!stack_size||!user_pc_valid_image((const uint8_t *)image,image_size,entry))return -0x390;
++    user_reclaim_zombie_if_full();
+     for(i=0;i<USER_PROCESS_SLOTS;++i){slot=(uint8_t)((next_process_slot+i)%USER_PROCESS_SLOTS);
+         if(process_table[slot].state==USER_PROCESS_FREE){child=&process_table[slot];break;}}
+     if(!child)return -0x391;
+diff -ru a/system/kernel_wm.c b/system/kernel_wm.c
+--- a/system/kernel_wm.c	2026-10-16 21:17:07.282188260 +0200
++++ b/system/kernel_wm.c	2026-10-16 21:17:07.283884799 +0200
+@@ -124,6 +124,17 @@
+         if(wm.win[i].flags&4u)continue;                     /* desktop background */
+         if(window_owner_pid((unsigned)i)==pid)window_close((unsigned)i);
+     }
++    /* Claude, 16.10: drop EVERY geometry request of the exiting process.
++       window_close() releases a request only for handle != 0, but an
++       application's main window is handle 0 (SYSINFO, COMMANDER...), so each
++       run leaked one of the WM_APP_WINDOWS (6) slots.  With the table full,
++       kernel_wm_set_window() returned silently and the next application window
++       registered as a full-screen background canvas (flags 7): the desktop,
++       its top bar and all window frames vanished. */
++    {unsigned r;for(r=0;r<WM_APP_WINDOWS;++r)
++        if(wm_window_req[r].set&&wm_window_req[r].pid==pid){
++            wm_window_req[r].set=0u;wm_window_req[r].title_set=0u;
++            wm_window_req[r].content_set=0u;}}
+ }
+ 
+ /* Close ONE window of a client.  The TOS personality registers its window under
+diff -ru a/system/tos_prg.c b/system/tos_prg.c
+--- a/system/tos_prg.c	2026-10-16 21:17:07.275297368 +0200
++++ b/system/tos_prg.c	2026-10-16 21:17:07.276856698 +0200
+@@ -3876,6 +3876,19 @@
+     if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_write_cacr(tos_async_native_cacr|8u);
+     tos_async_switch(&tos_async_guest_sp,tos_async_native_sp);
+     tos_async_unlock(sr);
++    /* Ctrl+Alt+Esc (Claude, 16.10): the guest resumes HERE after the user asked
++       to end it.  Leave through asf_tos_exit(), exactly like Pterm or a fault,
++       so kernel_tos_run_program() runs its normal epilogue: the window is
++       closed, the task slot, vectors, audio and TPA are released and tos_active
++       drops to 0.  Only then does tos_async_entry() report state 3.  Freeing
++       the stack from the pump instead (the first version) abandoned the guest
++       mid-run: the window stayed on screen, tos_active stayed 1 and every later
++       start failed with -0x2b1 (= "TOS RC -689"). */
++    if(tos_async_cancel==1u&&tos_active){
++        tos_async_cancel=2u;
++        tos_exit_code=-32;            /* GEMDOS: terminated by the user */
++        asf_tos_exit();
++    }
+ }
+ static void tos_async_yield(void)
+ {
+@@ -3915,6 +3928,7 @@
+     tos_async_key_head=tos_async_key_tail=tos_async_mouse_head=tos_async_mouse_tail=0;
+     tos_async_mouse_x=ksessions_mouse_x();tos_async_mouse_y=ksessions_mouse_y();
+     tos_async_session=ksessions_current();kernel_tos_async_result=0;kernel_tos_async_yields=0;kernel_tos_async_first_sp=0;
++    tos_async_cancel=0u;
+     tos_async_state=1u;return 0;
+ }
+ void kernel_tos_async_pump(void)
+@@ -3936,9 +3950,9 @@
+     tos_async_in_guest=1u;tos_async_slice=kernel_user_hires_clock();
+     tos_async_switch(&tos_async_native_sp,tos_async_guest_sp);
+     tos_async_unlock(sr);
+-    if(tos_async_state==3u||tos_async_cancel){
+-        /* 3 = gosc zakonczyl sie sam; tos_async_cancel = zadanie uzytkownika
+-           (Ctrl+Alt+Esc), gdy program TOS nie chce sie zakonczyc. */
++    if(tos_async_state==3u){
++        /* 3 = gosc zakonczyl sie: sam albo na zadanie uzytkownika (Ctrl+Alt+Esc,
++           obsluzone w tos_async_park(), ktore konczy go przez asf_tos_exit). */
+         kmem_free(tos_async_stack,KMEM_OWNER_KERNEL);tos_async_stack=0;
+         tos_async_state=0u;tos_async_cancel=0u;
+         if(kernel_gui_focus_pid()==TOS_ASYNC_PID)kernel_gui_focus_set(0u);

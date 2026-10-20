@@ -1,0 +1,19 @@
+SESJE + ZAMYKANIE PULPITU + TRYB Z OKNEM - 2026-10-20 11:15
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-sessions.img (klon demo-guard.img)
+
+faza     krok             zmierzone                        oczekiwane         wynik    uwagi
+BOOT     -                pulpit 800x600                   pulpit 800x600     OK       02e7e5cc228c527f
+SESJE    start            pulpit (sesja 1)                 -                  OK       176bda98549b5be4
+SESJE    tts2             inny ekran                       -                  OK       e2468193836defa4
+SESJE    tts2 + dir       hash 9ee934bbe3259033            -                  OK       polecenie w sesji 2
+SESJE    tts3             hash 3dea01b4576c77b1            -                  OK       sesja 3
+SESJE    app w tts3       hash d2569191b6e29db2            -                  OK       TASKMGR uruchomiony w sesji 3
+SESJE    powrot tts1      pulpit                           pulpit             OK       643bc8e2202ba02b
+DESKTOP  zamkniecie 0     konsola                          -                  OK       9704e8a584510ab2
+DESKTOP  restart 0        pulpit wrocil                    -                  OK       59a80307949258e6
+DESKTOP  zamkniecie 1     pulpit nadal                     -                  OK       5766a32034a462cf
+TRYB+OKNO 1024 z oknem     800x600                          -                  OK       zmiana rozdzielczosci przy otwartym oknie
+TRYB+OKNO powrot 800x600   800x600                          -                  OK       powrot przy otwartym oknie
+KONIEC   -                hash 337901056d15d0f2            -                  OK       pulpit po sesji
+
+krokow: 13, zgodnych: 13, roznic: 0

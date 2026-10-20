@@ -1,0 +1,24 @@
+19:05:50 START testu obciazeniowego; stan: sloty=4 tos=0
+19:05:50 FAZA 1: przelaczanie rozdzielczosci
+19:06:17   tryb 1024x768 mono: zrzut=16625 B, sloty=4, tos=0
+19:06:47   tryb 640x480 16: zrzut=16771 B, sloty=4, tos=0
+19:07:16   tryb 800x600 256: zrzut=16897 B, sloty=4, tos=0
+19:07:45   tryb 1024x768 256: zrzut=16625 B, sloty=4, tos=0
+19:08:13   tryb 800x600 256: zrzut=16822 B, sloty=4, tos=0
+19:08:15 FAZA 2: otwieranie/zamykanie aplikacji
+19:08:41   SYSINFO: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:09:07   PLASMA: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:09:34   MODPLAY: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:10:00   SETTINGS: otwarcie=16608 B (sloty 4, tos 0), po ESC=16574 B (sloty 4, tos 0)
+19:10:24   AC: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:10:50   SYSINFO: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:11:16   PLASMA: otwarcie=16588 B (sloty 4, tos 0), po ESC=16588 B (sloty 4, tos 0)
+19:11:16 FAZA 3: mieszane (RUN w kolko, terminal, ESC, dyrygowanie menu)
+19:11:43   iteracja 0: zrzut=13950 B, sloty=4, tos=0
+19:12:56   iteracja 3: zrzut=13948 B, sloty=4, tos=0
+19:14:08   iteracja 6: zrzut=13936 B, sloty=4, tos=0
+19:15:21   iteracja 9: zrzut=13936 B, sloty=4, tos=0
+19:15:21 FAZA 4: SYSTOS (program TOS) - znany trap persony; sprawdzam stan
+19:15:40   po SYSTOS: zrzut=14041 B, sloty=4, tos=0 (2 = persona zajeta)
+19:15:47   po Enter+Space: tos=0
+19:15:47 KONIEC testu; wykryte problemy: BRAK

@@ -1,0 +1,31 @@
+KONSOLA PRZY ZAMKNIETYM PULPICIE - 2026-10-20 11:44
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-console-stress.img (klon demo-guard.img)
+
+krok                 polecenie/akcja                    stan           wynik   hash
+zamkniecie pulpitu   -                                  konsola        OK      ad433ab80719baf0
+help                 help                               konsola        OK      b76163fa6b62d4b8
+dir                  dir                                konsola        OK      7e938bef040c87de
+memory               memory                             konsola        OK      108047827e5bf26b
+cpu                  cpu                                konsola        OK      0f4e113d709f42db
+uptime               uptime                             konsola        OK      783da18b59f38c44
+tasks                tasks                              konsola        OK      031cd56cb77c1b52
+jobs                 jobs                               konsola        OK      39193a0eaed9a16f
+maps                 maps                               inny ekran     UWAGA   3e4c9a7c328a5f0d
+mkdir                mkdir \tmp                         inny ekran     UWAGA   77bddf1488469fa5
+copy                 copy \system\notes.txt \tmp\notes.txt konsola        OK      a76b00c00550ba9d
+dir-tmp              dir \tmp                           konsola        OK      5a19f69ad80c90a5
+type                 type \tmp\notes.txt                konsola        OK      29f2c80c25d549f2
+move                 move \tmp\notes.txt \tmp\n2.txt    konsola        OK      18351fecea79c79f
+del                  del \tmp\n2.txt                    konsola        OK      63bae6a5903e1808
+tos                  tos \system\test\sysinfo.prg       program TOS    OK      a83712ac3409a0f5
+tos-kill             Ctrl+Alt+Esc                       inny           UWAGA   7ddb78c817d6f516
+start                start \system\test\sysinfo.prg     inny ekran     OK      7ddb78c817d6f516
+tasks-po-start       tasks                              inny ekran     OK      7ddb78c817d6f516
+wait                 wait                               inny ekran     OK      7ddb78c817d6f516
+tasks-po-wait        tasks                              inny ekran     OK      7ddb78c817d6f516
+tts2                 tts2                               inny ekran     OK      7ddb78c817d6f516
+dir-w-tts2           dir                                inny ekran     OK      7ddb78c817d6f516
+tts1                 tts1                               inny ekran     OK      7ddb78c817d6f516
+koniec               -                                  inny           UWAGA   7ddb78c817d6f516
+
+krokow: 25, uwag: 4

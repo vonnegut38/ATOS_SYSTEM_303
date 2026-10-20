@@ -1,0 +1,2051 @@
+================================================================================
+RAPORT 2026-10-15 - EKRAN (SETTINGS/APPLY, tryb -997) + AUDIO (rozbieznosc)
+Sesja: DeepSeek.  Zakres: poprawki w kodzie + przebudowa + testy hostowe.
+OBRAZOW I DZIALAJACEJ INSTANCJI HATARI NIE RUSZANO (wszystkie kontrole na
+kopiach/odczytach).
+================================================================================
+
+--------------------------------------------------------------------------------
+1. CO USTALILEM (dowody, nie domysly)
+--------------------------------------------------------------------------------
+A) DLACZEGO WIDAC "MODE REFUSED" BEZ KODU
+   Obraz, na ktorym testowano APPLY, to demo-poprawiony.img (URUCHOM_DEMO_
+   POPRAWIONY.command).  Ma on SETTINGS.APP 5 156 B, zbudowany PRZED dodaniem
+   kodu bledu - `strings` pokazuje samo "MODE REFUSED", bez "rc=-".
+   Ten obraz jest tez o jeden build do tylu: KERNEL.SYS 467 056 B (obecny
+   467 080), ET4000.SYS 5 475 B (obecny 5 564 - bez wpisu 1024x768x4).
+   WNIOSEK: brak kodu nie byl niczyim bledem logicznym - to po prostu starszy
+   plik.  Kod pojawia sie dopiero z kompletu z 15.10 (SETTINGS.APP 5 432 B).
+
+B) INWENTARZ OBRAZOW (md5 wobec build/system z 14.10 21:50)
+   demo-okno.img:        KERNEL, GFX, SETTINGS, ET4000 = IDENTYCZNE z build
+                         (SETTINGS ma "MODE REFUSED rc=-"); DESKTOP.APP 29 757 B
+                         = build z hakiem ARK_DESKTOP_AUTORUN_SETTINGS (stala
+                         12288*8 obecna w kodzie; w normalnym buildzie jej nie ma)
+   demo-poprawiony.img:  komplet z ~19:58 (KERNEL 467 056, SETTINGS 5 156 bez
+                         kodu, ET4000 5 475), broker GFX juz nowy
+   demo.img:             NAJSTARSZY komplet - broker ma na 0x70 `cmpi.l #0x25`
+                         (37), wiec opcody 39/40 sa odrzucane => tu JEDYNIE
+                         mozliwe jest -994; SETTINGS 4 609 B bez kodu
+
+C) MAPA KODOW (z kodu jadra, nie z pamieci)
+   -994 = -0x3E2  nieznany opcode (stary broker GFX.APP)
+   -997 = -0x3E5  bramka w JADRZE: podglad juz trwa albo gre zajmuje ekran
+                  (system/kernel_exception.c, opcode 40)
+   -2            sterownik karty nie zna zadanej trojki (w,h,bpp)
+   -0x3E5 = -997 i -0x3E2 = -994, dlatego te dwie liczby wygladaly podobnie.
+
+--------------------------------------------------------------------------------
+2. ZNALEZIONE I NAPRAWIONE BLEDY
+--------------------------------------------------------------------------------
+#1 JADRO: anulowanie podgladu moglo zostawic blokade na zawsze  [-997]
+   system/kernel_video_boot.c, kvideo_guard_control(), galaz op==1 (anulowanie):
+   gdy powrot do poprzedniego trybu sie NIE udal, funkcja zwracala -1 i NIE
+   zdejmowala `pending` (sciezka wygasniecia w kvideo_guard_rollback robi to
+   poprawnie).  Skutek: aplikacja zerowala swoje confirm_pending, a KAZDE
+   kolejne APPLY dostawalo -0x3E5 (-997) az do wygasniecia.  To jest dokladnie
+   zgloszony objaw "MODE REFUSED przy APPLY".
+   POPRAWKA: nieudany powrot zdejmuje blokade, tak jak wygasniecie.
+
+#2 APLIKACJA: APPLY byl cicho ignorowany i slepa uliczka przy -997
+   system/settings_app.c:
+   * APPLY w trakcie podgladu: zamiast `return` bez slowa - komunikat
+     "PREVIEW RUNNING - ANSWER YES/NO" (okno YES/NO wlasnie czeka).
+   * -997: aplikacja pyta jadro (opcode 39, sub 2), kto jest wlascicielem:
+       - nasz podglad  -> wracamy do okna YES/NO (podglad zostaje potwierdzalny),
+       - obcy podglad  -> "PREVIEW BUSY (OTHER APP) rc=-997".
+   * zwykle odmowy: "MODE REFUSED rc=-994" / "MODE REFUSED rc=-2"
+     (kod zamiast samego REFUSED - postulat z audytu r2).
+   * nieudany powrot: "PREVIEW EXPIRED/FAILED rc=-XXX" (z kodem).
+
+#3 TESTY HOSTOWE BYLY CZERWONE (dwie osobne przyczyny, obie naprawione)
+   * `make check-settings` NIE KOMPILOWAL SIE: tests/test_settings_app.c uzywal
+     pol res_sel/col_sel, ktorych aplikacja juz nie ma (jest focus_row/tab).
+     Test przepisany na stan biezacy + nowe przypadki: APPLY przy podgladzie,
+     -997 (nasz/obcy podglad), -994, -2, YES/NO/ESC, zachowanie nieznanych
+     kluczy DESKTOP.CFG, THEMES, kolejkowanie zdarzen obcych.
+   * tests/test_tos_memory_info.py generuje persone z tos_prg.c, ktora od
+     dodania haka Dosound nie kompilowala sie na hoscie 64-bitowym
+     (brak deklaracji kaudio_dosound_revalidate + cast uint32_t -> wskaznik).
+     Dodana zaslepka i wyciszone WYLACZNIE to jedno ostrzezenie hosta
+     (-Wno-int-to-pointer-cast); testowany kod m68k nietkniety.
+   PRZED ta sesja `make check` byl wiec czerwony z definicji; teraz:
+     make TOS=1 check  ->  EXIT=0  (caly zestaw, 58 linii PASS/ok)
+
+#4 DOWOD, ZE POPRAWKA #1 DZIALA (nie "powinno dzialac")
+   * tests/test_video_boot.c - nowe asercje: anulowanie z trybem powrotu
+     nieznanym sterownikowi (bpp=3) MUSI zdjac blokade i nowy podglad musi
+     dac sie uzbroic.  Kontrolnie cofniete stare zachowanie jadra =>
+     test PADA w linii 186; z poprawka przechodzi.
+   * Disasm kvideo_guard_control (kernel_video_boot.o): w wersji z poprawka
+     w sciezce bledu jest dodatkowe `clrb` (pending=0) przed `moveq #-1`;
+     w wersji starej tego zapisu nie ma.
+   * KERNEL.SYS (TOS=1) urosl o 4 B wobec 14.10 - dokladnie ta zmiana.
+
+--------------------------------------------------------------------------------
+3. PULAPKA PRZY PRZEBUDOWIE: PROFIL TOS
+--------------------------------------------------------------------------------
+`make` BEZ TOS=1 daje KERNEL.SYS 414 046 B (profil native-text, bez warstwy
+GEMDOS/BIOS/XBIOS/AES-VDI), a obraz uzywa profilu TOS=1: 467 080 B.  Plain
+`make` podmienilby kernel na WERSJE BEZ warstwy TOS.  Zawsze:
+    make TOS=1 build/system/KERNEL.SYS ...   (Makefile ma znacznik profilu,
+    wiec przelaczenie TOS=0<->TOS=1 przebudowuje wszystkie obiekty)
+GFX.APP, DESKTOP.APP i VOFA.SYS sa niezalezne od profilu (byte-identyczne
+w obu buildach - to takze dowod powtarzalnosci builda).
+
+--------------------------------------------------------------------------------
+4. NOWY KOMPLET (build/system, profil TOS=1)
+--------------------------------------------------------------------------------
+KERNEL.SYS     467 080 B  sha256 d2f6d1d043b6f6aa8ca8dd312b115d6be4e2a4c99da66dfbb7425ea44d3ef720
+GFX.APP            401 B  sha256 ca541189b1c6f0a4ced7c05e66bfa007a2262d15ac1f5204e8d28fd90cb9fe89
+SETTINGS.APP     5 432 B  sha256 8de277eb6667d547320edc1560f0da858e9fd0604200cbc3e0916f760c249ba3
+DESKTOP.APP     29 433 B  sha256 16ad134451391cbc846b21c045514c5f3b77d1f0187ad64cccc58360df57a972
+VOFA.SYS         5 564 B  sha256 5af20e2707dadba8d4d33a01c53a74c04ab9ffc6998fe4394cf675afefe4070b
+
+ZMIENILY SIE wobec 14.10 21:50 tylko DWA pliki: KERNEL.SYS (poprawka #1)
+i SETTINGS.APP (poprawka #2).  GFX.APP/DESKTOP.APP/VOFA.SYS sa identyczne.
+
+--------------------------------------------------------------------------------
+5. PRZEPIS WGRANIA (na KOPIE obrazu; obrazow wlasnych nie ruszac)
+--------------------------------------------------------------------------------
+cd /Users/xxx/Documents/Deepseek_test
+# minimalnie (dokladnie to, co sie zmienilo - wystarczy na demo-okno.img,
+# ktore ma juz aktualny broker, sterownik i SETTINGS z kodem):
+python3 display-demo/install_file.py display-demo/demo-okno.img "SYSTEM\KERNEL.SYS" "ATOS 2.1/build/system/KERNEL.SYS"
+python3 display-demo/install_file.py display-demo/demo-okno.img "SYSTEM\APP\SETTINGS.APP" "ATOS 2.1/build/system/SETTINGS.APP"
+# na demo-poprawiony.img dochodza jeszcze (starszy build): GFX.APP,
+# SYSTEM\DRV\ET4000.SYS (jako VOFA.SYS) i SYSTEM\APP\DESKTOP.APP - komplet:
+python3 display-demo/install_file.py <obraz> "SYSTEM\GFX.APP" "ATOS 2.1/build/system/GFX.APP"
+python3 display-demo/install_file.py <obraz> "SYSTEM\APP\DESKTOP.APP" "ATOS 2.1/build/system/DESKTOP.APP"
+python3 display-demo/install_file.py <obraz> "SYSTEM\DRV\ET4000.SYS" "ATOS 2.1/build/system/VOFA.SYS"
+TEST: uruchomic Hatari z --graphics-card vofa (bez tego drive=0), otworzyc
+SETTINGS, wybrac tryb, APPLY.  Oczekiwane komunikaty:
+  - tryb OK       -> "WAITING FOR CONFIRMATION" + "KEEP MODE? 4 SEC TO CONFIRM"
+  - APPLY w trakcie podgladu -> "PREVIEW RUNNING - ANSWER YES/NO" (nie REFUSED)
+  - odmowa        -> "MODE REFUSED rc=-XXX" (kod!)
+UWAGA: demo-okno.img ma pulpit z hakiem AUTORUN (sam otwiera SETTINGS po ~8 s).
+Wgranie tam normalnego DESKTOP.APP usunie ten hak (SETTINGS trzeba wtedy
+otworzyc z menu).
+
+--------------------------------------------------------------------------------
+6. AUDIO - ROZBIEZNOSC 576 534 B WYJASNIONA (bez zadnej tajemnicy)
+--------------------------------------------------------------------------------
+Policzone, czego nikt nie sumowal:
+  * 576 534 B = suma 13 plikow .MOD wyciagnietych z obrazu
+                (12 modulow PRE2 + HYMN.MOD 112 590) - modcheck/img_mods,
+                zgadza sie co do bajtu;
+  * 463 944 B = 576 534 - 112 590 = DOKLADNIE 12 modulow PRE2, i tyle samo
+                wynosi suma PRE2/build/modules (12 plikow, co do bajtu);
+  * cache .MUS = 12 plikow, 41 480 974 B = 39,56 MiB ("ok. 39,6 MB") -
+                modcheck/img_mus.
+  Czyli raport porownywal SUME ZRODEL .MOD z cache .MUS.  "13 vs 12" to
+  roznica o sam HYMN.MOD, ktory jest moduly MODPLAY, a nie PRE2.
+KOREKTY do przekazania (sprawdzone skanem calego drzewa katalogow na obrazach):
+  * na ATOS_AKTUALNY/ATOS.img w \SYSTEM\APP jest TYLKO HYMN.MOD (112 590);
+    ADVENT.S3M 869 259, REFLECTR.XM 740 554, SIREN.XM 1 327 890 to pliki
+    w katalogu roboczym (te same rozmiary), nie na obrazie;
+  * na ZADNYM obrazie obecnym w drzewie nie ma juz ani jednego .MUS
+    (sprawdzone 10 obrazow; GAMES\PRE2 = 53 pliki/1 049 997 B, same .TRK/.SQZ).
+    Cache zyl na tracker-controls/live/test.img, ktorego juz nie ma - zostaly
+    tylko kopie w modcheck/.  Watek "usuniecie cache" jest wiec bezprzedmiotowy
+    dla istniejacych obrazow.
+
+--------------------------------------------------------------------------------
+7. CO ZOSTAJE
+--------------------------------------------------------------------------------
+* Wgrac nowy komplet na kopie obrazu i zobaczyc APPLY (spodziewany komunikat
+  z kodem; przy -997 teraz NIE ma slepej uliczki).
+* Macierz 9 trybow na kopii z NOWYM jadrem (test_modes.sh robi to automatycznie)
+  + restart i powrot z gry.
+* #8 clamp okien (z audytu) - nadal otwarte.
+* DYSK: patrz sekcja 8 (sprzatanie) - wolne miejsce z 1,0 GiB wzroslo do 21 GiB.
+================================================================================
+
+--------------------------------------------------------------------------------
+8. SPRZATANIE 15.10 (na polecenie uzytkownika)
+--------------------------------------------------------------------------------
+Przeniesione do TRASH/porzadki-20261015, a nastepnie USUNIETE TRWALE 43,02 GiB
+(wg st_blocks): cale TRASH/porzadki-20261011 (31,6 GB) + 16 pozycji przeniesionych
+dzis (stare obrazy z work/, 9x audio-baseline, demo.img, ATOS_HYDRA_PROBA,
+backup-atos21-20261006).
+W TRASH zostaly CELOWO (odzyskiwalne, ~1,1 GB): PRE2/work/ATOS-PRE2.img,
+modcheck/wav, modcheck/wav_full (WAV-y odtwarzalne z .MOD przez modcheck/render;
+kopie .MUS/.MOD zostaly w modcheck/img_mus i img_mods).
+NIE ruszone: ATOS_AKTUALNY/ATOS.img, display-demo/demo-poprawiony.img,
+display-demo/demo-okno.img, ATOS 2.1/work/atos-v2.img (tools/build_atos2.py
+otwiera go w trybie r+b, wiec plik musi istniec), ATOS_KOPIA,
+ATOS_AKTUALNY-backup-20261012.img.
+Wykazy: TRASH/porzadki-20261015/CZYTAJ.txt, PRZENIESIENIA.jsonl,
+USUNIETE-20261015.jsonl oraz notka ATOS 2.1/work/audio-baseline/
+OBRAZY-USUNIETE-20261015.txt.  Uwaga: razem z porzadki-20261011 przepadl jego
+wlasny PRZENIESIENIA.jsonl (615 wpisow z 11.10) - byl w skasowanym katalogu.
+
+ZMIERZONE, NIE ZALOZONE: `du` i st_blocks PRZECENIAJA odzysk miejsca.
+Workspace zmniejszyl sie o ~41 GB (TRASH 31->1,1 GB, ATOS 2.1 11->1,7 GB,
+display-demo 2,3->1,5 GB), ale wolne miejsce wzroslo tylko o 9 GiB, bo czesc
+skasowanych danych to KLONY APFS wspoldzielace extenty z plikami, ktore zostaly.
+Dowod wykonany na zywo: `cp -c` obrazu 768 MB daje du = 768M, a df nie zmienia
+sie ani o bajt.  Efekt sesji: wolne 1,0 GiB na starcie (0,5 GiB w trakcie
+przebudowy) -> 21 GiB.
+================================================================================
+
+--------------------------------------------------------------------------------
+9. PRZYGOTOWANY TEST APPLY (obraz testowy + launcher)
+--------------------------------------------------------------------------------
+Obraz: display-demo/demo-test-20261015.img = kopia demo-poprawiony.img (768 MB)
+z wgranym kompletem 15.10.  Weryfikacja: kazdy z 5 plikow ODCZYTANY z obrazu ma
+md5 identyczny z build/system (nie "wgralem i zakladam"):
+  KERNEL.SYS   467 080 B  md5 004155631fca
+  GFX.APP          401 B  md5 8f9886389385
+  DESKTOP.APP   29 433 B  md5 c789af8d8756
+  SETTINGS.APP   5 432 B  md5 8b01c0f83138
+  ET4000.SYS     5 564 B  md5 be9855666752
+SETTINGS.APP na obrazie zawiera nowe komunikaty: "MODE REFUSED rc=-",
+"PREVIEW RUNNING - ANSWER YES/NO", "PREVIEW BUSY (OTHER APP)",
+"PREVIEW EXPIRED/FAILED" (sprawdzone w binarium z obrazu).
+DESKTOP.CFG NIETKNIETY: 182 B, RES=800x600x8 + pozycje ikon (nie nadpisany -
+install_file.py zastapilby caly plik).
+Boot zweryfikowany wlasna instancja Hatari (zamknieta po tescie, cudzego obrazu
+i cudzej instancji nie dotykano): log /tmp/boot_test_20261015.log ma 27x
+"VOFA-MODE ... drive=1", tryb 800x600x8 i 0 linii panic/fault.
+Launcher: display-demo/URUCHOM_TEST_20261015.command - dokladna kopia
+URUCHOM_DEMO_POPRAWIONY.command (ta sama binarka ATOS_AKTUALNY/hatari, ten sam
+hatari.cfg i BIOS.bin, --gfx-chip et4000); zmieniony tylko obraz i nazwy logow,
+zeby porownanie z poprzednim "MODE REFUSED" bylo 1:1.
+UWAGA na wyswietlanie: binarka ATOS_AKTUALNY/hatari jest z 10.10 i nie ma
+poprawek modelu karty Claude'a (4 bpp / 16 bpp).  Logika APPLY i kody rc sa od
+niej niezalezne; zeby tryby 16-kolorowe i 65K wygladaly poprawnie, uruchamiac
+z atari-030-port/hatari-src/build/src/hatari (build 14.10 21:23) wg recepty z
+przekazania.
+================================================================================
+
+--------------------------------------------------------------------------------
+10. DZWIEK PRE2: DLACZEGO CISZA I DLACZEGO DLOUGIE "LOADING..."
+--------------------------------------------------------------------------------
+Sciezka dzwieku to NIE PSG, a emulowane ESP/ASND wystawione gosciowi przez
+NatFeats jako "NF_ATOS_SOUND" (src/debug/natfeats.c:314).  Wymagania:
+  (a) Hatari z tym urzadzeniem, (b) uruchomienie z --natfeats on,
+  (c) --sound <czestotliwosc> (ta binarka nie zna "on"!).  Bez (a)/(b) kernel
+  zwraca KSND_E_UNAVAILABLE (-0x400) - cisza.
+Inwentarz binarek (sprawdzone strings):
+  ATOS_AKTUALNY/hatari (10.10)                     NF_ATOS_SOUND: 0  -> cisza
+  atari-030-port/hatari-src/build/src/hatari       NF_ATOS_SOUND: 1, libxmp: 0
+  Codex tracker-controls/ATOS Tracker.app (13.10)  NF_ATOS_SOUND + libxmp: 3
+Kopia tej ostatniej: display-demo/hatari-tracker-20261013 (16 627 160 B,
+sha256 2ca8e36b65d6f85cc5b6754667f548e8...).
+
+DWA BACKENDY MUZYKI w PRE2 (ta sama binarka 270 656 B, md5 40c025f3d9e5c94d):
+  * AS_CAP_TRACKER (bit 7 z GET_CAPS) obecny -> gra wysyla ORYGINALNY MODUL,
+    dekoduje go emulowane ESP (libxmp w Hatari) razem z efektami:
+    12 modulow = 463 944 B, MINES.MOD 38 764 B -> upload 1,066 s czasu Atari;
+  * brak zdolnosci -> stary backend PCM: 12x .MUS = 41 480 974 B,
+    MINES.MUS 3 325 140 B -> upload 20,327 s (dokumentacja PRE2/NAPRAWA-LOADING-
+    ESC-20261013.txt: 19x krotsze ladowanie, 86x mniej danych).
+Dlatego przy naszym forku (bez libxmp) PRE2 ZAWSZE wybieral wolna sciezke i
+pokazywal dlugie "loading..." z paskiem.  To nie byl blad builda ekranu.
+Obraz testowy ma OBA zestawy (12x .MOD 463 944 B i 12x .MUS 41 480 974 B) oraz
+PRE2.APP identyczny z certyfikowanym obrazem Codexa, wiec wystarczylo podmienic
+BINARKE Hatari na wersje z trackerem.
+Launcher: display-demo/URUCHOM_TEST_TRACKER_20261015.command
+  (tracker + --natfeats on + --sound 44100, reszta flag jak zwykle).
+W gre: F8 wylacza/wlacza muzyke; wlaczenie startuje utwor od poczatku.
+================================================================================
+
+--------------------------------------------------------------------------------
+11. WERYFIKACJA APLIKACJI (automat, bez klikania) - 15.10
+--------------------------------------------------------------------------------
+Narzedzie: ATOS 2.1/atos2-tools/atos2_auto.py (klasa Hatari) - sterowanie przez
+--cmd-fifo ("hatari-event keydown/keyup"), zrzuty ekranu ("hatari-debug
+screenshot") i ODCZYT PAMIECI GOSCIA (read_u32/read_bytes).  Wszystko headless
+(SDL dummy), na KOPII obrazu - ekran uzytkownika nietkniety.
+WYNIKI (dowody: display-demo/zrzuty-20261015/dowod-*.png):
+  ARKANOID   DZIALA - okno "ARKANOID - ATOS DEMO", 256 COLOURS, SCORE/ROUND/
+             LIVES, mur cegiel, "SPACE OR CLICK TO SERVE".  Bez zmiany trybu
+             (aplikacja OKIENKOWA - to poprawne).
+  TASKMGR    DZIALA - okno "PROCESS MANAGER": INIT.APP 1, GFX.APP 2, GUI.APP 3,
+             DESKTOP.APP 4, TASKMGR.APP 5 RUN + przyciski KILL/SUSPEND/RESUME/
+             REFRESH/QUIT.
+  FLASHBACK  DZIALA - wlasny ekran "FLASHBACK / LOADING <pasek> / SPRITES";
+             port ma ~260 KB i laduje sie kilka-kilkanascie sekund (bez zmiany
+             trybu: gra przejmuje ekran w tym samym 800x600x8).
+  PRE2       DZIALA (potwierdzone przez uzytkownika; z binarka z trackerem
+             muzyka startuje ~1 s na utwor zamiast ~20 s).
+  MODPLAY, PLASMA - NIEZWERYFIKOWANE automatem (patrz nizej), bez przeslanek
+             na awarie.
+Jak czytac te wyniki (wazne, bo sam sie na tym przewrocilem):
+  1) Okno RUN w pulpicie przyjmuje nazwy 8.3 ("FLASHBK", nie "FLASHBACK").
+     Fifo jest nieblokujace i dluzsze nazwy potrafia sie URWAC - wtedy nic sie
+     nie uruchamia, a zrzut pokazuje sam pulpit.  To falszywy negatyw.
+  2) type_checked() z atos2_auto weryfikuje tekst w KONSOLI jadra, wiec do
+     dialogu GUI nie pasuje; pewniejsze sa: wolne type() + zrzut kontrolny
+     przed Return, albo hak AUTORUN pulpitu (sam spawnuje SETTINGS.APP -
+     mozna podstawic inna aplikacje pod ta nazwe).
+  3) "TOS STARTED" na pulpicie = SYS_SPAWN_ASYNC zwrocil blad (np. brak pamieci
+     przy braku TT-RAM), a desktop ponowil probe przez osobowosc TOS
+     (desktop_wm.c:2046).  To nie jest komunikat sukcesu.
+  4) Nieudany spawn z haka AUTORUN jest CICHY - hak nie sprawdza wyniku
+     (desktop_wm.c:2346), wiec brak okna po haku nie dowodzi jeszcze bledu.
+Pułapka mojego pierwszego uruchomienia: brak --ttram 64 (recepta z atos2.cfg ma
+nTTRamSize=0) - wtedy czesc aplikacji nie dostawala pamieci i "nie dzialala".
+================================================================================
+
+--------------------------------------------------------------------------------
+12. FLASHBACK: DZWIEK PRZEZ EMULOWANE ESP (15.10, nowe)
+--------------------------------------------------------------------------------
+STAN WYJSCIOWY: port mial port/audio_null.cpp - caly mikser i 4 graczy (mod/cpc/
+ogg/sfx) byly ZASLEPKAMI, zero kodu audio w FLASHBK.APP, brak przerwania audio.
+Silnik i tak wola API Mixer (m.in. play(dane,rozmiar,freq,glosnosc) dla efektow),
+wiec wystarczylo dopisac backend - bez zmian w silniku.
+EFEKTY: silnik dekoduje je sam z GLOBAL.FIB (66 sampli, ~99 KB, max 4,6 KB),
+a port/audio_atos.cpp wysyla je do urzadzenia: upload raz (cache po wskazniku
+zrodlowym) + AS_PLAY jednym z 16 glosow PCM. Urzadzenie miksuje je z muzyka -
+na 68030 nie ma miksera ani przerwania.
+MUZYKA: dane DOS maja 27 plikow .MID + bank AdLib (.ADL/.INS), ZERO modulow -
+emulowane ESP dekoduje moduly (libxmp), nie MIDI. Sciezka trackera jest
+zaimplementowana (AS_TRACKER_LOAD/CONTROL) i urzadzenie reklamuje AS_CAP_TRACKER
+(caps=0x19f), wiec po wrzuceniu danych amigowych (MOD) muzyka zagra od razu
+(liczba kilkadziesiat KB na utwor). Alternatywa dla danych DOS: prerender
+MIDI->PCM na Macu i upload jak .MUS w PRE2 (wolniejsze pierwsze wczytanie).
+
+PLIKI: apps/flashback/port/audio_atos.cpp (nowy), Makefile portu (AUDIO_TEST),
+klient ASND bez zmian (third_party/atos_sound_client: wire/client/upload).
+FLASHBK.APP: 260 168 B -> 269 532 B (md5 b4734b99f74c1f8dc2462fe0402960e2),
+check_app: memory 313 484 B, OK dla ABI 1.2.
+
+WERYFIKACJA (automat, bez odsluchu) - znaczniki na dysku ATOS \SYSTEM\FB_*.TXT:
+  przelacznik AUDIO_TEST=1 dodaje ton kontrolny 441 Hz przy starcie gry
+  (dowod calej sciezki, niezaleznie od tego, czy scena ma efekty).
+  Przebieg z tonem: FB_CONN -> FB_INIT -> FB_PLAY -> FB_DONE, a ostatni z nich:
+    state=DONE connected=1 caps=0x19f loaded=1 played=1 dropped=0 error=0
+  czyli: urzadzenie znalezione (uslugi 86/87), sample WGRANY, PLAY PRZYJETY.
+  caps=0x19f = PCM|SCHEDULE|LOOP|STEREO_SAMPLE|TRACKER|TRACKER_SEEK.
+POTWIERDZENIE OSLUCHEM (uzytkownik, 15.10): "efekty dzwiekowe sa" - czyli
+sciezka dziala nie tylko protokolarnie, ale i slyszalnie, w grze.
+POMIAR Z PRAWDZIWEJ ROZGRYWKI (znaczniki z obrazu demo-test po sesji uzytkownika):
+  FB_CONN: connected=1 caps=0x19f
+  FB_PLAY: pierwszy zagrany efekt
+  FB_EXIT: loaded=22 played=425 dropped=0 error=0
+  => 22 rozne efekty wgrane, 425 odtworzen przez ESP, ZERO odrzuconych, ZERO bledow.
+
+ZNALEZIONY BŁĄD PROTOKOŁU (moj, warty zapamietania): AS_PLAY ma 32 bajty:
++0 uchwyt, +4 rate (0 = z sampla), +8 czas, +16 glosnosc, +20 FLAGI PETLI,
++24/+28 lo/hi.  Urzadzenie waliduje:
+    if (flags ? !(lo < hi && hi <= s->frames) : (lo || hi)) return AS_E_ARGUMENT;
+Wysylalem +28 = liczba ramek BEZ flagi petli => AS_E_ARGUMENT (=7) i cisza.
+Efekt jednorazowy MUSI miec lo/hi = 0 (tak robi PRE2); dlugosc wynika z sampla.
+
+JAK SLUCHAC: display-demo/URUCHOM_TEST_TRACKER_20261015.command (binarka z
+trackerem + --natfeats on + --sound 44100; wlasna binarka ATOS_AKTUALNY/hatari
+NIE MA NF_ATOS_SOUND, wiec z nia dzwiek nie zagra).  Znaczniki: \SYSTEM\FB_CONN.TXT
+(urzadzenie), FB_PLAY.TXT (pierwszy zagrany efekt), FB_FAIL/FB_IO (bledy),
+FB_EXIT.TXT (wyjscie z gry) - jesli czegos brak, to znaczy ze etap nie zaszedl.
+================================================================================
+
+--------------------------------------------------------------------------------
+13. FLASHBACK: MUZYKA - MODULY XM DLA TRACKERA ESP (15.10, nowe)
+--------------------------------------------------------------------------------
+CEL: muzyka miala grac OD RAZU (nie wczytywac sie 10-20 s jak PCM w PRE2).
+DROGA: muzyka DOS to 27 plikow .MID (standardowe MIDI, MThd, format 1), a
+emulowane ESP dekoduje MODULY (libxmp), nie MIDI.  Powstal konwerter hostowy
+apps/flashback/tools/midi_to_xm.py (bez zaleznosci, ~250 linii):
+  * czyta MIDI (format 0/1), zbiera noty i programy GM,
+  * kwantyzuje do rzedow (1/16), tempo z naglowka MIDI,
+  * syntezuje instrumenty wg rodzin GM (sinus/saw/square/noise + obwiednie),
+    perkusja (kanal 10) jako krotkie sample,
+  * alokuje glosy do 8 kanalow i zapisuje XM 1.04 (mono 8-bit, delta PCM).
+Walidacja na HOSCIE tym samym libxmp, ktory siedzi w ESP (src/lite/*.c):
+27/27 modulow "LOAD OK" + niezerowe audio (np. TR17: 2 369 404 probki).
+Moduly maja 15-210 KB (srednio ~60 KB), czyli wgranie ~0,4 s - muzyka startuje
+natychmiast.  Leza w GAMES\FLASHBK\DATA jako TR00.XM .. TR30.XM.
+
+MAPOWANIE NUMEROW: gra wola Mixer::playMusic(num), a numery 0..30 to INDEKSY
+tabeli utworow z silnika DOS (GAMES\FLASHBK\DEMODATA\FB.EXE, offset 0x1ca93):
+  0 DEBUT, 1 OBJET, 2 CARTE, 3 GEN, 4 CHUTE, 5 CODE, 6 DESINTEG, 7 INTRO1,
+  8 STREM, 9 HOLOSEQ, 10 CARTEID, 11 PONT, 12 ASC, 13 MAP, 14 METRO,
+  15 MISSIONS, 16 GENMIS, 17 MEMO, 18 TAXI, 19 ACCROCHE, 20 VOYAGE,
+  21 TELEPORT, 22 LIFT, 23 ESPIONS, 24 LOG, 25 FIN, 26 GENEXP, 27 LOGOS,
+  28 OVER, 29 SCORE, 30 INTRO2.
+To francuskie nazwy wewnetrzne, a pliki .MID maja nazwy opisowe - dopasowalem
+je po nazwach (OBJET->OBJET.MID, GEN->GENERATE.MID, INTRO1/2->INTROLON.MID,
+MISSIONS->MISSION.MID, MEMO->MEMORY.MID, OVER->GAMEOVER.MID, HOLOSEQ->HOLO.MID,
+PONT, VOYAGE, TELEPORT, LIFT, TAXI, CHUTE, DESINTEG), a pozostale numery
+obsadzilem najdluzszymi nieuzytymi utworami.  4 numery (13 MAP, 14 METRO,
+16 GENMIS, 19 ACCROCHE) nie maja odpowiednika - tam jest cicho.
+Muzyka poziomow: gra wola MUSIC_TRACK + numer poziomu (>=1000) i wtedy
+podstawiam TR00/TR25/TR08/TR26 (najdluzsze), zeby tlo nie zapetlalo sie co chwile.
+Jesli beda prawdziwe moduly amigowe, wystarczy podmienic pliki TR*.XM.
+
+WERYFIKACJA (znaczniki z przebiegu w emulatorze):
+  FB_MUS:  track=1 rc=0 path=TR01.XM          <- ESP (libxmp) WCZYTAL modul
+  FB_PLAY: loaded=1 played=1 dropped=0 error=0 <- efekty nadal dzialaja
+  rc=0 = AS_OK; rc=9 = AS_E_HANDLE (brak pliku - cicho, bez bledu gry).
+
+PRZY OKAZJI - ZNALEZISKA (z jednym SPROSTOWANIEM, patrz nizej):
+1) [SPROSTOWANIE 16.10] Pierwotnie napisalem, ze "zapis pliku z jadra gubi nazwy
+   6+ znakow".  To bylo BLEDNE.  Kontrolowany test przez hatari-debug (jądro
+   zapisuje 5 plikow o bazie 3..7 znakow i zapisuje kody zwrotne do tablicy
+   kdbg_save_probe) dal dla WSZYSTKICH dlugosci ten sam kod -6 =
+   -FAT_WRITE_READ_ONLY: o tej porze startu (przed pulpitem) sciezka zapisu
+   jest jeszcze read-only i dlugosc nazwy nie ma z tym nic wspolnego.
+   Co NAPRAWDE powodowalo brakujace znaczniki:
+     a) testy automatyczne uzywaly zlego adresu process_table po przebudowie
+        jadra - aplikacja w ogole nie startowala (stad "brak znacznikow"),
+     b) czesc moich nazw byla NIEPOPRAWNA dla FAT 8.3: "FB_A66666" (9 znakow
+        bazy) i "FB_A8888888" (11) - a znaczniki dzialajace mialy baze 5-7
+        ("FB_A2"=5, "FB_A444"=7, "FB_CONN"=7).  Limit 8.3 dziala wiec POPRAWNIE.
+   Wniosek dla diagnostyki: nazwa pliku znacznika MUSI miec baze <= 8 znakow,
+   a zapisy z jadra robic PO starcie pulpitu (wtedy sciezka nie jest read-only).
+   DESKTOP.CFG (7 znakow bazy) jest w porzadku - nie ma tu bledu jadra.
+2) KATALOG UTWORZONY PRZEZ INSTALATOR HOSTOWY NIE JEST WIDOCZNY DLA JADRA.
+   Gdy moduly lezaly w nowym GAMES\FLASHBK\DATA\MUSIC, gra dostawala rc=9
+   (AS_E_HANDLE), mimo ze pliki byly na obrazie; po przeniesieniu do katalogu
+   danych (GAMES\FLASHBK\DATA) wszystko dziala.  Prawdopodobna przyczyna:
+   katalog bez wpisow "." i ".." (instalator hostowy ich nie tworzy).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+14. PAMIEC: ST-RAM ZAJETY PRZEZ BUFORY JADRA (16.10)
+--------------------------------------------------------------------------------
+ZGLOSZENIE: po starcie zostaje ok. 1 MB wolnego ST-RAM.
+POMIAR (narzedzie display-demo/mem_measure.py): boot obrazu w Hatari, odczyt
+pul jadra (st_pool/tt_pool z ELF - adresy zmieniaja sie przy kazdej przebudowie)
+i przejscie listy blokow z podzialem na wlascicieli.  Wynik PRZED zmiana:
+  ST: pula 4096 KiB, zajete 1268 KiB, wolne 1921 KiB
+      768.0 KiB  owner=jadro  PINNED  <- desktop_framebuffer (kompozytor)
+      468.8 KiB  owner=jadro          <- cien ekranu (kernel_video)
+      13.7+5.4+0.4 KiB wolne fragmenty, reszta to drobnica
+  TT: zajete 1079 KiB (aplikacje: SYSTEM.GFX 512 KiB i in.)
+Czyli ST-RAM zjadalo ~1.25 MB BUFOROW JADRA, a nie aplikacje (te sa w TT).
+Poza pula zostaje jeszcze ~892 KB na samo jadro (kod+dane+BSS ponizej puli).
+
+ZMIANY (4 alokacje, wszystkie CPU-only - bez DMA i bez blittera, ktory na 030
+jest wylaczony):
+  1. kernel_graphics.c  desktop_framebuffer  -> TT  (bylo prefer_tt=0)
+  2. kernel_graphics.c  desktop_backbuffer   -> TT
+  3. kernel_wm.c        console_surface      -> TT dla trybow chunky
+                        (ta sama regula co powierzchnie okien: wm_surface_prefer_tt)
+  4. kernel_video.c     shadow (cien ekranu) -> TT
+Uzasadnienie: kmem_pin() tylko blokuje zwolnienie bloku, nie wymusza ST-RAM,
+a na TF536 TT-RAM jest SZYBSZY od ST, wiec przeniesienie nie kosztuje wydajnosci.
+W ST CELOWO zostaja bufory DMA (kernel_block: TRANSFER_SECTORS, kernel_fat undo).
+
+WYNIK (pomiar po zmianie, dwa niezalezne zrodla):
+  pula jadra:  ST wolne 1921 -> 3158 KiB, zajete 1268 -> 30.8 KiB
+  SYSINFO 0.3: ST-RAM total/free 4096 KiB / free 3158 KiB, largest ST 3152 KiB
+  TT: zajete 1079 -> 2316 KiB (z 65536 KiB) - miejsca bez porownania wiecej
+  => +1237 KiB wiecej wolnego ST-RAM (ok. +1.2 MB), bez ruszania aplikacji.
+
+TEST REGRESJI (na kopii mem-probe-20261016.img):
+  * pulpit + okna: SYSINFO 0.3 otwiera sie i rysuje poprawnie,
+  * gra w trybie gry: ARKANOID w oknie, 256 kolorow, "SPACE OR CLICK TO SERVE",
+  * FLASHBACK: dzwiek i muzyka dzialaja (FB_PLAY loaded=1 played=1 dropped=0;
+    FB_MUS track=1 rc=0 path=TR01.XM).
+Rollback: display-demo/kernel-backup/KERNEL-przed-pamiecia-20261015.SYS (md5
+004155631fcac8f0e61ddf361bf9e7f4) + kopie zrodel kernel_graphics.c/kernel_wm.c/
+kernel_video.c z tego katalogu.  Nowy kernel: KERNEL-po-pamieci-20261016.SYS.
+
+PRZY OKAZJI: pula ST ma total 4096 KiB, mimo ze Hatari startuje z --memsize 8 -
+bootstrap raportuje 4 MB.  Na prawdziwym Mega ST (TF536) ST-RAM to 4 MB, wiec
+sprzecznosc dotyczy tylko emulatora; do wiernych testow lepiej uzywac
+--memsize 4.  Gdyby kiedys maszyna miala wiecej ST-RAM, trzeba sprawdzic
+wykrywanie rozmiaru w bootstrapie (handoff.st_ram_bytes).
+================================================================================
+
+--------------------------------------------------------------------------------
+15. FLASHBACK: PRZEJMOWANIE GLOSOW ESP (16.10, po dlugiej sesji)
+--------------------------------------------------------------------------------
+DANE Z SESJI UZYTKOWNIKA (znacznik FB_EXIT.TXT na obrazie po grze):
+  loaded=18  played=2546  dropped=506  error=11
+error=11 to AS_E_BUSY - czyli 506 z ~3050 prob PLAY zostalo odrzuconych, bo
+wszystkie 16 glosow urzadzenia bylo zajete.  Moj klient nie mial zadnej polityki
+zwalniania glosow, wiec ok. 17% efektow w ogole nie brzmialo.
+POPRAWKA (port/audio_atos.cpp, Mixer::play): przy AS_E_BUSY (i AS_E_LIMIT)
+zatrzymujemy glos, ktory konczy sie najwczesniej (najmniejszy end_tick), i
+ponawiamy PLAY raz jeszcze.  Bez zmian w urzadzeniu i w PRE2.
+WERYFIKACJA (build testowy AUDIO_TEST=1 ma w Mixer::init() test 24 rownoczesnych
+efektow przy 16 glosach i znaczniki PREB/BRST):
+  FB_PREB: loaded=1  played=1  dropped=0    (ton kontrolny 200 ms)
+  FB_BRST: loaded=25 played=25 dropped=0    (1 ton + 24 efekty naraz)
+Bez przejmowania glosow urzadzenie odrzuciloby 8 z tych 24 jako AS_E_BUSY.
+Wersja produkcyjna (bez testu) wgrana na demo-test: FLASHBK.APP 270152 B,
+md5 f21be690be5fca09aa48339688a1166e.  Kolejna sesja powinna pokazac w
+FB_EXIT.TXT dropped=0.
+
+UWAGA METODYCZNA (dla automatyzacji): adresy symboli jadra (process_table,
+st_pool/tt_pool) zmieniaja sie przy KAZDEJ przebudowie jadra.  Skrypt testowy
+musi czytac je z ELF TEJ SAMEJ wersji, ktora jest na obrazie - inaczej wpisywanie
+nazw w oknie RUN nie dziala (bylo zrodlem dwoch nieudanych przebiegow).
+================================================================================
+
+--------------------------------------------------------------------------------
+16. PAMIEC, ETAP 1: BUFORY JADRA DO TT-RAM (16.10)
+--------------------------------------------------------------------------------
+PO CO: po sekcji 14 w ST-RAM zostalo jeszcze ~170 KB BSS jadra.  Te bufory sa
+uzywane wylacznie przez CPU (bez DMA, blitter na 030 wylaczony), wiec moga
+mieszkac w TT-RAM - tam miejsca jest 64 MB, a na TF536 TT-RAM jest szybszy.
+PRZENIESIONE (alokacja przez kmem_alloc(...,prefer_tt=1), wskazniki zamiast tablic):
+  kernel_graphics.c: png_work 64 KB, png_rgba 36 KB, dyn_mask+dyn_pixels 18 KB,
+                     session_cells 12 KB (alokacja w kgfx_init; brak pamieci =
+                     blad inicjalizacji grafiki, wiec sciezki rysowania sa czyste)
+  kernel_console.c:  consoles 12 KB (alokacja w kconsole_init; przy braku pamieci
+                     active=0 i wszystko idzie sciezka awaryjna fallback_*)
+  kernel_pcm.c:      kpcm_ring 32 KB (alokacja przy otwarciu strumienia, przed
+                     przejeciem Timer A, zeby nie trzeba bylo cofac rejestracji)
+BSS jadra: ~305 KB -> 134 KB (-171 KB); KERNEL.SYS 467104 -> 467528 B (+424 B kodu).
+Poniewaz pula ST zaczyna sie od konca obrazu jadra, kazdy kilobajt mniej w BSS
+automatycznie powieksza wolna pule.
+
+POMIAR (mem_measure.py + SYSINFO 0.3 na obrazie z nowym jadrem):
+  ST wolne: 3158 KiB (po sekcji 14) -> 3333 KiB  [+175 KiB]
+  SYSINFO:  ST-RAM total/free  4096 KiB / free 3333 KiB, largest ST 3327 KiB
+  TT zajete: 2316 -> 2460 KiB z 65536 KiB (przeniesione bufory widoczne w TT)
+  W sumie od poczatku prac: ST wolne 1921 -> 3333 KiB (+1412 KiB, czyli +1.38 MB)
+TESTY: make TOS=1 check -> EXIT=0 (55 linii PASS).  Poprawki w testach hostowych:
+  test_kernel_pcm.c sprawdza teraz prawdziwy kpcm_ring (kernel sam go alokuje),
+  test_kernel_console.c dostal zaslepke kmem_alloc.  Testy generowane z zrodla
+  (test_session_redraw.py) podstawiaja session_cells jako TABLICE, dlatego
+  sprawdzenia "czy wskaznik istnieje" sa tylko tam, gdzie nie psuja tych testow.
+REGRESJA (kopie obrazu, zrzuty w zrzuty-20261015/): pulpit z ikonami bez zmian,
+  SYSINFO, ARKANOID (256 kolorow w oknie), FLASHBACK z dzwiekiem i muzyka
+  (FB_PLAY loaded=1 played=1, FB_MUS track=1 rc=0).
+Backup: display-demo/kernel-backup/KERNEL-po-etapie1-20261016.SYS + zrodla
+kernel_graphics.c/kernel_pcm.c/kernel_console.c.
+
+CO ZOSTALO W ST-RAM (kolejne etapy):
+  ~255 KB .rodata z ikonami/czcionkami w kernel_graphics.o (to dane, nie kod:
+  sam kod rysowania to 19 KB),
+  ~48 KB drobnicy jadra (tos_irq_stack 8 KB, chain_seen 8 KB, tos_dir 7,5 KB,
+  tags 6 KB, process_table 5,2 KB, gdos 5,2 KB, tos_aes_log 4 KB, terminal_font 4 KB),
+  ~50 KB kodu rdzenia (pamiec, wyjatki, loader) - to musi zostac.
+Dwie drogi na ikony (do wyboru): (A) modul *.SYS z tymi tablicami, ladowany do TT,
+albo (B) wygenerowanie ikon jako PNG na obraz i korzystanie z istniejacej sciezki
+kgfx_icon_from_png (dyn_pixels juz jest w TT) - mniej inwazyjne.
+================================================================================
+
+--------------------------------------------------------------------------------
+17. PAMIEC, ETAP 2: IKONY PULPITU JAKO DANE W TT-RAM (16.10)
+--------------------------------------------------------------------------------
+POMIAR POKAZAL, ZE JADRO TO GLOWNIE DANE: w kernel_graphics.o bylo 254,6 KB
+.rodata (ikony/czcionki/palety), 147,8 KB BSS i tylko 18,8 KB kodu.  Dane ikon
+to 98 ikon po masce 288 B + 2304 B pikseli (system/icons_color.h = 1,86 MB zrodla,
+generowany przez tools/mk_icons_color.py).
+
+DLACZEGO NIE MODUL *.SYS: moduly kompiluje sie z -mpcrel (adresowanie PC-wzgledne,
+zasieg R_68K_PC16 to +/-32 KB), a 254 KB danych w jednym module tego zasiegu nie
+miesci.  Dla DANYCH naturalna droga jest plik ladowany do TT; modul zostaje dla
+kodu (np. audio).  Sama infrastruktura modulow dziala: kazdy *.SYS jest ladowany
+z prefer_tt=1 (kernel_module.c:681), wiec i kod, i BSS modulu leza w TT-RAM.
+
+JAK ZROBIONE:
+  * tools/make_icons_blob.c - host: wlacza icons_color.h i zapisuje blob
+    big-endian (naglowek + wpisy offsetow + paleta + maski/piksele),
+  * include/icons_blob.h - format bloba (offsety wzgledne, wiec bloba mozna
+    polozyc pod dowolnym adresem), system/icons_abi.h - stale kontraktu ikon,
+  * kernel_graphics.c: bez #include "icons_color.h" (to zabieralo 254 KB z obrazu
+    jadra); zamiast tablic wskazniki + kgfx_icons_load()/kgfx_icons_loaded(),
+  * kernel_main.c: po modulach startowych plik \SYSTEM\ICONS.DAT jest czytany
+    przez kfat_stat_path()/kfat_load_path() do bufora z kmem_alloc(...,prefer_tt=1),
+  * Makefile: reguly buildu ICONS.DAT + instalacja na obrazach projektu.
+  * Diagnostyka: gdy wczytanie sie nie uda, jadro zapisuje \SYSTEM\ICONLOG.TXT
+    (S<stan> 0x<rozmiar>; 1=brak pliku, 2=zly rozmiar, 3=brak pamieci,
+    4=read failed, 5=zly format).  Brak pliku nie zatrzymuje startu - pulpit
+    rysuje sie bez ikon.
+
+WYNIK:
+  KERNEL.SYS: 467528 -> 213102 B (-254 KB, czyli -46%)
+  ST-RAM wolne: 3333 -> 3582 KiB  (+249 KiB); w TT widac bloba 249,3 KiB
+  W sumie od poczatku prac nad pamiecia: ST wolne 1921 -> 3582 KiB (+1,62 MB)
+  SYSINFO 0.3 na nowym jadrze: "ST-RAM total / free 4096 KiB / free 3581 KiB",
+  "largest ST block 3575 KiB" (zrzut: zrzuty-20261015/dowod-st-ram-3581.png).
+
+TESTY: make TOS=1 check -> EXIT=0 (55 PASS).  Regresja: pulpit z ikonami
+identyczny jak przed zmianami (zrzut dowod-ikony-z-tt.png), SYSINFO dziala,
+FLASHBACK na nowym jadrze gra dzwiek i muzyke (FB_PLAY loaded=1 played=1,
+FB_MUS track=1 rc=0).
+Backup: display-demo/kernel-backup/KERNEL-po-etapie2-20261016.SYS +
+kernel_graphics.c/kernel_main.c z tego katalogu.
+
+CO ZOSTALO W ST-RAM: ~30 KB drobnicy jadra (dwa bloki 9,4 KB, TOS-owe struktury)
+oraz ~213 KB obrazu jadra (kod + data + BSS rdzenia).  Dalej mozna juz tylko
+odchudzac sam rdzen (kod pamieci/wyjatkow/loadera) albo przeniesc audio jako
+SOUND.SYS (~41 KB) - to juz nie jest duzy zysk pamieciowy, bardziej izolacja.
+================================================================================
+
+--------------------------------------------------------------------------------
+18. MODPLAY: MODULY Z KATALOGU MOD/ NA OBRAZIE (16.10)
+--------------------------------------------------------------------------------
+ZRODLO: katalog MOD/ w repozytorium - 4 moduly, ktore uzytkownik chcial miec na
+obrazie do testu:
+  666.s3m          236056 B  "Demon's Gate"      (S3M)
+  awake-427.s3m    217064 B  "Spring Awake"      (S3M)
+  oxygenemix.xm    961686 B                      (XM)
+  algar-4k!!!.xm     3843 B                      (XM)
+NAZWY: ATOS/FAT wymaga 8.3, a "algar-4k!!!.xm" i "oxygenemix.xm" sie nie miesza,
+wiec na obraz poszly jako: DEMON.S3M, AWAKE.S3M, OXYGEN.XM, ALGAR4K.XM
+(katalog SYSTEM\APP, tam gdzie MODPLAY ich szuka).
+
+MODPLAY (system/modplay.c): lista byla stala, 4 utwory testowe.  Rozszerzona do
+MODPLAY_SONGS=8 (stare 4 zostaly, doszly 4 nowe) + etykiety:
+  DEMON'S GATE   [S3M], SPRING AWAKE   [S3M], OXYGENEMIX     [XM], ALGAR 4K INTRO [XM]
+Wiersz listy zmniejszony z 22 na 12 px, zeby 8 pozycji zmiescilo sie w tym samym
+polu 240x96 (box 58..154) bez ruszania reszty ukladu okna.  MODPLAY.APP: 18308 B.
+
+TEST W EMULATORZE (uruchomiony MODPLAY, klawisze: strzalki = utwor, SPACE = graj,
+F2 = akcelerator ESP):
+  DEMON.S3M  -> "Demon's Gate"  16 CHANNELS / BPM 125, START 1958 ms / 230 KB  OK
+  OXYGEN.XM  -> 24 CHANNELS / BPM 132,          START 5440 ms / 939 KB        OK
+(939 KB = 961686 B pliku; 230 KB = 236056 B; telemetria MODPLAY zgadza sie z
+rozmiarami plikow, czyli ESP/libxmp dostal caly modul.)
+Zrzuty: zrzuty-20261015/dowod-modplay-demon-s3m.png, dowod-modplay-oxygen-xm.png.
+Backup zrodla: kernel-backup/modplay.c.z-modulami-MOD.
+Uwaga do testow automatycznych: song_index w MODPLAY to 4-bajtowe BE pod offsetem
+0x4a7c w obrazie aplikacji (linker/app-sys.ld ustawia . = 0), a slot procesu to 4.
+================================================================================
+
+--------------------------------------------------------------------------------
+19. MODPLAY: LISTA PRZEWIJANA + NAZWA MODULU (16.10, po uwadze uzytkownika)
+--------------------------------------------------------------------------------
+UWAGA: po dodaniu modulow lista 8 pozycji byla zbyt scisnieta (wiersz 12 px),
+a w panelu "NOW PLAYING" dla OXYGEN.XM nie bylo nazwy (tylko "24 CHANNELS /
+BPM 132").  Oba spostrzezenia sluszne - zmierzone i naprawione.
+1) LISTA PRZEWIJANA: widoczne 4 wiersze po 22 px (czytelne, jak oryginal),
+   a zaznaczenie przesuwa widok (list_scroll_into_view).  Dodane wskazniki:
+   - tekst zakresu w naglowku listy ("1-4/8", "4-7/8"), stala szerokosc, zeby
+     krotszy tekst nie zostawial resztek,
+   - cienki pasek u gory/dolu pola listy: podswietlony = sa ukryte pozycje.
+2) NAZWA MODULU: tytul pochodzi z libxmp w ESP (telemetria +48).  OXYGEN.XM nie
+   ma tytulu (albo ma znaki spoza ASCII), wiec panel byl pusty.  Teraz jesli
+   tytul jest nieuzywalny, pokazywana jest NAZWA PLIKU (np. "OXYGEN.XM").
+MODPLAY.APP: 18954 B.  Testy: make TOS=1 check -> EXIT=0 (55 PASS).
+Zrzuty: dowod-modplay-przed-poprawka.png (przed), dowod-modplay-lista-przewijana.png
+(po: zakres "4-7/8", OXYGENEMIX zaznaczony, w panelu "OXYGEN.XM", START 5417 ms
+/ 939 KB - modul gra).  Backup zrodla: kernel-backup/modplay.c.z-przewijana-lista.
+UWAGA METODYCZNA: po kazdej przebudowie aplikacji offset song_index zmienia sie
+(teraz 0x4d06, list_top 0x4d02) - skrypty testowe musza czytac symbole z ELF tej
+samej wersji, ktora jest na obrazie.
+================================================================================
+
+--------------------------------------------------------------------------------
+20. SETTINGS/APPLY NA NOWYM JADRZE + "SAVE FAILED" (16.10)
+--------------------------------------------------------------------------------
+Przeprowadzilem pierwotny watek sam (automat: RUN -> SETTINGS -> ENTER=APPLY):
+  * APPLY (ENTER) NIE daje juz "MODE REFUSED": aplikacja wchodzi w podglad trybu
+    i pokazuje "KEEP MODE? 4 SEC TO CONFIRM" + YES [ENTER] / NO [ESC],
+    w statusie "WAITING FOR CONFIRMATION".  Czyli trzeba potwierdzic w ciagu
+    4 sekund - to wyjasnia, dlaczego wczesniej "nic sie nie dzialo": bez
+    odpowiedzi podglad wygasa (a stara wersja nie pokazywala wtedy kodu).
+  * Po YES tryb zostal zachowany (lista trybow pelna, 800x600x256 zaznaczony),
+    ALE status pokazal "SAVE FAILED" - zapis ustawien (\SYSTEM\DESKTOP.CFG)
+    nie powiodl sie.
+Zrzuty: zrzuty-20261015/test-settings-1-okno.png (okno),
+        test-settings-2-po-apply.png ("KEEP MODE? 4 SEC"), 
+        test-settings-3-po-yes.png ("SAVE FAILED").
+NASTEPNY KROK: zbadac sciezke zapisu.  Podejrzenie: kernel pisze przez
+ROM-owy sterownik urzadzenia ("Write-through the ROM's device driver when the
+kernel has no native path (TF536 IDE)" - include/kernel_fat.h), a w tym
+srodowisku (IDE + TF536) ta sciezka moze nie dzialac.  Wczesniejszy pomiar:
+kfat_save_path z jadra tuz po starcie zwracal -6 = FAT_WRITE_READ_ONLY.
+Do sprawdzenia: (a) czy zapis dziala z TOS-owego programu (persona), (b) czy
+dysk IDE jest zamontowany do zapisu, (c) czy znaczniki aplikacji (FB_*.TXT)
+powstaja - one POWSTAWALY na demo-test, wiec sam zapis FAT dziala i problem
+jest w konkretnej sciezce/pliku ustawien.
+UWAGA: to NIE jest spowodowane pracami nad pamiecia (bufory DMA zostaly w ST),
+ale trzeba to potwierdzic testem na starszym kernelu z kernel-backup.
+================================================================================
+
+--------------------------------------------------------------------------------
+21. "SAVE FAILED" - ZNACZNIK CZYSTOSCI WOLUMINU (16.10) - ROZWIAZANE
+--------------------------------------------------------------------------------
+OBJAW: SETTINGS po APPLY -> YES pokazywal "SAVE FAILED" (dodany kod: rc=6).
+PRZYCZYNA (kernel_fat.c): zapis jest odmawiany, gdy wolumin nie jest CZYSTY:
+    if(!logical_sector_size||write_failed||volume_health!=FAT_HEALTH_CLEAN||fat_bits==12u)
+        return -FAT_WRITE_READ_ONLY;
+a stan czyta sie z FAT[1] (pierwszy sektor FAT, slowo +2):
+    bit15 = "clean shutdown" (0 => DIRTY), bit14 = "no hard error".
+Jadro PRZED kazda transakcja zapisu czysci bit15 (set_fat(1,flags&~0x8000)),
+a po udanym zapisie go ustawia (set_fat(1,flags|0x8000)).  Skutek: jesli maszyna
+zostanie zresetowana (lub emulator ubity) w trakcie zapisu, bit15 zostaje
+wyczyszczony i jadro ODMAWIA WSZYSTKICH ZAPISOW do czasu naprawy.
+
+DOWOD (dwa niezalezne pomiary):
+  mem-probe-20261016.img: FAT[1] bit15=0 -> DIRTY; SETTINGS: "SAVE FAILED rc=6"
+  demo-test-20261015.img: FAT[1]=0xFFFF  -> CLEAN; znaczniki aplikacji (FB_*.TXT)
+      zapisywaly sie poprawnie - to spina wszystkie wczesniejsze obserwacje.
+  Po naprawie (--clear) ten sam test: "CONFIG SAVED"  [zrzut
+  zrzuty-20261015/test-settings-5-po-naprawie.png, przed: ...-4-kod-bledu.png]
+
+NARZEDZIE: tools/fix_volume_dirty.py <obraz> [--clear]
+  * pokazuje FAT[1], porownuje obie kopie FAT (jesli sie roznia - ODMOWA naprawy),
+  * --clear ustawia bity 14+15 w obu kopiach ("clean, no error").
+  Naprawilem nim obraz testowy; demo-test byl czysty, wiec nie wymagal zmiany.
+
+LUKA W SYSTEMIE (wazna, zwlaszcza na prawdziwym sprzecie): NIE MA fsck/repair.
+Po nieczystym resecie wolumin zostaje tylko do odczytu NA ZAWSZE (nie da sie
+zapisac ustawien, skopiowac pliku) i jedyna droga to zewnertzny tool.  Propozycja
+(dalszy krok, do decyzji): maly FIXDISK.APP + nowa operacja jadra, ktora
+1) sprawdza, czy obie kopie FAT sa identyczne i czy wpisy FAT[0]/FAT[1] sa sensowne,
+2) dopiero wtedy (za wyraznym potwierdzeniem uzytkownika) czysci bit15.
+Automatyczne czyszczenie przy starcie NIE jest bezpieczne: identyczne kopie FAT
+nie dowodza spojnosci lancuchow po przerwanym zapisie.
+UWAGA PRAKTYCZNA: nie ubijac emulatora w trakcie zapisu - to wlasnie "zabrudzilo"
+obraz testowy (dlatego znaczniki raz powstawaly, a raz nie).
+================================================================================
+
+--------------------------------------------------------------------------------
+22. NAPRAWA WOLUMINU W SYSTEMIE: FIXDISK (16.10)
+--------------------------------------------------------------------------------
+KONTEKST (sekcja 21): po nieczystym resecie wolumin zostaje DIRTY i jadro
+odmawia wszystkich zapisow, a w systemie nie bylo zadnej sciezki naprawy.
+CO ZROBIONE:
+  * jadro: nowa funkcja kfat_volume_repair() (system/kernel_fat.c) - najpierw
+    sprawdza, czy obie kopie FAT sa BAJT W BAJT identyczne (i czy FAT[0] ma
+    sensowny znacznik nosnika), a dopiero potem ustawia w FAT[1] bity
+    "clean" (15) i "no error" (14) we WSZYSTKICH kopiach.  Swiadomie NIE uzywa
+    sciezki transakcyjnej (ta sama odmawia przy DIRTY) i NIE jest fsck-iem:
+    identyczne kopie FAT nie dowodza spojnosci lancuchow, dlatego nie robi tego
+    automatycznie przy starcie.
+  * ABI: ATOS_CALL_VOLUME = 88 (d1=0 -> stan woluminu, d1=1 -> naprawa),
+    obsluga w kernel_exception.c (zwraca enum fat_health albo 0/kod bledu).
+  * aplikacja: system/fixdisk.c -> FIXDISK.APP (1766 B) - okno z aktualnym
+    stanem ("CLEAN - WRITES ENABLED" / "DIRTY - WRITES BLOCKED"), ENTER = napraw,
+    ESC = zamknij.  Regula w Makefile + wpis w 'all'.
+  * narzedzie hostowe: tools/fix_volume_dirty.py <obraz> [--clear|--dirty]
+    (--dirty sluzy do ODTWORZENIA stanu na potrzeby testu).
+STAN TESTOW:
+  * mechanizm po stronie jadra: sprawdzony posrednio i mocno - ten sam obraz
+    z DIRTY dawal "SAVE FAILED rc=6", a po wyczyszczeniu znacznika "CONFIG SAVED"
+    (sekcja 21); czyli to wlasnie ten warunek decyduje o zapisach.
+  * FIXDISK.APP: zbudowany i wgrany, ale w moim automacie (RUN -> FIXDISK)
+    okno sie nie pojawilo - aplikacja prawdopodobnie konczy prace, gdy
+    receive() zwroci blad (u mnie: brak odpowiedzi na GFX opcode 20).
+    DO ZROBIENIA w nastepnej rundzie: nie wychodzic przy bledzie receive,
+    ponawiac zadanie okna i zweryfikowac na zywo.  Wersja awaryjna: wywolanie
+    ATOS_CALL_VOLUME z innej, dzialajacej aplikacji (np. testu konsolowego).
+================================================================================
+
+--------------------------------------------------------------------------------
+22b. FIXDISK - USTALENIA Z WERYFIKACJI (16.10)
+--------------------------------------------------------------------------------
+1) SKAD SIE BIORA IKONY PULPITU: wylacznie z \SYSTEM\LAUNCH.CFG (nie z listy
+   plikow w SYSTEM\APP).  Dlatego FIXDISK nie mial ikony - dopisalem wpis
+   FIXDISK=\SYSTEM\APP\FIXDISK.APP (kopie oryginalu: kernel-backup/
+   LAUNCH.CFG.przed-fixdisk).  Uwaga z naglowka pliku: "entries that do not fit
+   are hidden" - przy 12 istniejacych ikonach trzynasta moze sie nie zmiescic.
+2) URUCHOMIENIE OKIEM PULPITU: RUN -> FIXDISK wpisuje nazwe poprawnie (zrzut
+   test-fixdisk-0-dialog.png: "RUN PROGRAM (SYSTEM/APP): fixdisk"), ale okno
+   sie nie pojawia.  Aplikacja ma ten sam naglowek ASYSAPP0 co dzialajace
+   SETTINGS/MODPLAY/SYSINFO, wiec roznica nie jest w formacie pliku.
+   Zrobione po drodze: (a) klawiatura nie jest juz filtrowana po nadawcy
+   (sender=0 dla klawiszy - wczesniej ENTER/ESC byly ignorowane),
+   (b) start okna jest ponawiany, (c) blad receive nie konczy juz programu.
+   NADAL DO ZROBIENIA: ustalic, czemu WM nie przydziela okna tej aplikacji
+   (podejrzenie: sciezka uruchamiania z okna RUN vs rejestracja w LAUNCH.CFG).
+3) POTWIERDZONE MOCNO: sam mechanizm naprawy po stronie jadra dziala - ten sam
+   obraz z FAT[1]=0x7fff (DIRTY) odmawia zapisu ("SAVE FAILED rc=6"), a po
+   wyczyszczeniu znacznika zapis przechodzi ("CONFIG SAVED").  Naprawa jest
+   tez dostepna z hosta: tools/fix_volume_dirty.py --clear (sprawdza obie kopie
+   FAT i odmawia, jesli sie roznia).
+================================================================================
+
+--------------------------------------------------------------------------------
+22c. FIXDISK - KOLEJNA PRÓBA I DECYZJA (16.10)
+--------------------------------------------------------------------------------
+Po uwadze uzytkownika ("wpisuje run->Fixdisk i nic") przepisalem start
+aplikacji 1:1 wedlug DZIALAJACEJ PLASMY:
+  * lookup("SYSTEM.GUI") + gui_op(GUI_BEGIN_KEYS)  (przejecie klawiatury sesji),
+  * GFX_WINDOW 20 / GFX_TITLE 21 / GFX_CONTENT 29 (deklaracja geometrii klienta),
+  * petla zdarzen: receive(&m,0), KKEY (ENTER/ESC), WCLS (zamkniecie okna),
+  * nazwane opcody zamiast liczb.
+Efekt: FIXDISK.APP (1992 B) nadal NIE pokazuje okna w moim automacie, mimo ze
+sekwencja startowa jest identyczna jak w PLASMIE (ktora u uzytkownika dziala).
+To wymaga osobnej, spokojnej sesji debugowania (np. porownanie z SYSINFO, ktore
+startuje, oraz sprawdzenie, czy blokuje sie na GUI_BEGIN_KEYS).
+DECYZJA (plan C): przeniesc naprawe do aplikacji, ktora U UZYTKOWNIKA NA PEWNO
+startuje - SETTINGS.  Ona juz wykrywa ten przypadek ("SAVE FAILED rc=6"), wiec
+wystarczy: przy rc=-6 pokazac "PRESS R TO REPAIR" i obsluzyc klawisz R przez
+ATOS_CALL_VOLUME=1.  To daje naprawe z GUI bez czekania na FIXDISK.
+Naprawa z hosta dziala niezaleznie: tools/fix_volume_dirty.py --clear.
+================================================================================
+
+--------------------------------------------------------------------------------
+23. PO RESECIE EKRAN WSTAL W TRYBIE SHIFTERA (16.10) - WYJASNIONE
+--------------------------------------------------------------------------------
+OBJAW: po resecie ekran wstal "w 640x480 zamiast 800x600".
+POMIAR: zrzut z dzialajacej instancji mial 640x400, a nie 640x480 - to tryb
+SHIFTERA (mono/2 plany), czyli KARTA VOFA/ET4000 NIE zostala uruchomiona.
+DESKTOP.CFG byl NIE ruszony (182 B, "RES=800x600x8") - to nie konfiguracja.
+PRZYCZYNA (z komentarza w kernel_main.c): ROM ma PERSYSTENTNY "failover latch",
+ktory po nieudanej/przerwanej inicjalizacji karty pomija adapter przy NASTEPNYM
+starcie.  Jadro czysci ten latch, gdy sciezka wideo dziala ("Reaching the shell
+means the video path works ... must be cleared in BOTH cases"), wiec kolejny
+start jest juz poprawny.
+ROZWIAZANIE: zwykly restart.  Sprawdzone: po restarcie zrzut ma 800x600, a w
+logu jest "VOFA-MODE: w=800 h=600 stride=800 bpp=8".
+DO ZROBIENIA (drobne, na pozniej): zastanowic sie, czy pierwszy start po
+przerwanym resecie nie moglby od razu sprobowac karty (teraz trzeba restartowac).
+================================================================================
+
+--------------------------------------------------------------------------------
+24. PO GRZE PULPIT NIE ODBIERA KLAWIATURY (16.10) - ZNALEZIONY BLAD
+--------------------------------------------------------------------------------
+OBJAW (uzytkownik): po uruchomieniu ARKANOIDA nie da sie juz uruchomic SETTINGS -
+"brak reakcji i komunikatu".
+ODTWORZONE: RUN -> ARKANOID -> ESC -> proba RUN -> nic.  Zrzuty przed/po ESC sa
+BAJT W BAJT identyczne (18925 B), czyli obraz gry zostaje na ekranie i nic sie
+nie odswieza.
+POMIAR STANU JADRA (symbole z ELF: desktop_is_active, video_guard_owner):
+    przed gra: desktop_is_active=1  guard_owner=0
+    w grze:    desktop_is_active=1  guard_owner=0
+    po ESC:    desktop_is_active=1  guard_owner=0
+=> Bramka podgladu (kvideo_guard) NIE jest przyczyna.  ARKANOID dziala w OKNIE
+   (widac pulpit wokol), a po wyjsciu jego obraz zostaje i - co gorsza - klawisze
+   nie docieraja do pulpitu (F4 nie otwiera RUN).  Wniosek: proces gry konczy sie
+   (albo wisi) NIE ODDajac wlasnosci GUI/klawiatury, wiec zdarzenia trafiaja do
+   martwego wlasciciela, a ekran nie jest przemalowywany.
+DLACZEGO NIE WIDZIELISMY TEGO WCZESNIEJ: w testach automatycznych zawsze
+ubijalem emulator, nigdy nie wychodzilem z gry - ten scenariusz nie byl cwiczony.
+DO NAPRAWY (nastepny krok, konkretny):
+  1) WM/GUI musi zwalniac wlasnosc klawiatury i fokus, gdy proces-wlasciciel
+     konczy prace (sprzatanie po pidzie) - to naprawia cala klase przypadkow,
+  2) sciezka wyjscia gry (ATOS_GAME_END / zamkniecie okna) musi przywrocic pulpit,
+  3) warto dac uzytkownikowi wyjscie awaryjne (np. skrot jadra "wroc do pulpitu").
+NATYCHMIASTOWA RADA: w obecnym stanie po wyjsciu z gry trzeba zrestartowac
+emulator; nie da sie wrocic do pulpitu klawiatura.
+================================================================================
+
+--------------------------------------------------------------------------------
+24b. KOREKTA: GRA NIE KONCZY SIE - ZYJE I BLOKUJE PULPIT (16.10)
+--------------------------------------------------------------------------------
+Poprzedni wniosek (sekcja 24) byl czesciowo bledny.  Pomiar tabeli procesow
+(process_table, 6 slotow, krok 890 B) przy uruchomieniu ARKANOIDA:
+    przed gra : 4 zajete (INIT/GFX/GUI/DESKTOP)
+    w grze    : 5 zajetych (+ ARKANOID)
+    po ESC    : 5 zajetych  <-- GRA NADAL ZYJE
+Czyli ESC nie dociera do gry (albo gra go ignoruje): proces zostaje, obraz stoi
+(zrzuty identyczne), gra nie przetwarza klawiatury i trzyma pierwszy plan, wiec
+pulpit oraz SETTINGS sa nieosiagalne - dokladnie "brak reakcji i komunikatu".
+Sciezka sprzatania po procesie jest w kernel_exception.c kompletna
+(user_gui_release_session + kgame_release_pid + kernel_wm_close_pid +
+ksurface_release_owner) i zadziala, gdy proces sie skonczy - problem polega na
+tym, ze gra sie NIE konczy.
+PODEJRZENIE GLOWNE: zawieszenie petli gry (np. czekanie na odpowiedz GFX albo
+obsluga myszy/klawiatury).  Nie mozna wykluczyc zwiazku z dodanym " --grab"
+(mysz przechwycona) - do sprawdzenia w nastepnej sesji przez porownanie:
+gra z --grab i bez, sterowanie mysza vs strzalki, oraz dluzsza obserwacja czy
+gra faktycznie sie animuje.
+RADA NATYCHMIASTOWA: sprobowac zamknac okno gry klikajac jej "close gadget"
+(mysz po naprawie --grab dziala) albo zrestartowac emulator.
+===============================================================================
+
+--------------------------------------------------------------------------------
+24c. ARKANOID: PROBA NAPRAWY NIEPUDANA - WNIOSKI (16.10)
+--------------------------------------------------------------------------------
+HIPOTEZA: gra nie przejmuje klawiatury sesji (brak GUI_BEGIN_KEYS, ktore ma
+PLASMA), wiec nie dostaje wejscia -> stoi i nie reaguje na ESC, blokujac pulpit.
+PROBA: dodane gui_pid=lookup("SYSTEM.GUI") + gui_op(GUI_BEGIN_KEYS) na starcie
+i gui_op(GUI_END_KEYS) na wyjsciu (ARKANOID.APP 18710 B).
+WYNIK POMIARU (obiektywny, nie zrzut "na oko"):
+    sloty przed: 4 | w grze: 5 | animacja: IDENTYCZNE zrzuty | po ESC: 5
+=> HIPOTEZA OBALONA.  Gra nadal stoi i nadal nie konczy procesu na ESC.
+WNIOSEK: to nie brak GUI_BEGIN_KEYS.  Zmiana COFNIETA (przywrocony oryginalny
+arkanoid.c i ARKANOID.APP na obu obrazach), zeby nie zostawiac ryzyka
+zawieszenia na blokujacym receive() w gui_op.
+USTALONE MOCNO: ARKANOID startuje, ale nie animuje i nie konczy sie na ESC,
+wiec trzyma pierwszy plan i uniemozliwia powrot do pulpitu (stad "SETTINGS nie
+wchodzi, brak reakcji i komunikatu").
+NASTEPNY KROK (wlasciwy, niezalezny od samej gry): AWARYJNE WYJSCIE W JADRZE -
+skrot, ktory zabija proces pierwszego planu / przywraca pulpit.  Wtedy zadna
+zawieszona aplikacja nie zablokuje juz systemu, niezaleznie od przyczyny.
+===============================================================================
+
+--------------------------------------------------------------------------------
+25. AWARYJNE WYJSCIE Z ZAWIESZONEJ APLIKACJI (16.10) - DZIALA
+--------------------------------------------------------------------------------
+Problem: zawieszona gra (ARKANOID) trzymala pierwszy plan, przez co pulpit i
+SETTINGS byly nieosiagalne i trzeba bylo restartowac emulator.
+USTALENIE 1: ATOS ma juz wbudowane wyjscie awaryjne - CTRL+ALT+DEL RESTARTUJE
+system.  Sprawdzone: po Ctrl+Alt+Del na zawieszonym ARKANOIDZIE ekran przeszedl
+na "ATOS 2.1 / LOADING KERNEL.SYS", a po starcie wraca pulpit.  To praktyczna
+droga wyjscia bez ubijania emulatora.
+USTALENIE 2: dodatkowo w jadrze wpialem wlasna obsluge Ctrl+Alt+Del w sciezce
+doręczania klawiszy (system/kernel_exception.c, tuz po
+kernel_user_keyboard_event): jesli klawisz dotrze tak daleko, jadro konczy
+proces pierwszego planu (kgame_owner() albo kernel_gui_focus_pid(), nigdy
+usluga SYSTEM.GUI) przez kernel_user_kill() i przywraca konsole.  To siatka
+bezpieczenstwa: dziala, gdy restart z nizszej warstwy nie przechwyci klawisza.
+KERNEL.SYS: 213674 B (z ta obsluga), wgrany na oba obrazy.
+UWAGA PRAKTYCZNA: restart przy trakcie zapisu moze "zabrudzic" wolumin - wtedy
+SETTINGS -> zakladka VOLUME -> REPAIR [ENTER] (albo z hosta
+tools/fix_volume_dirty.py --clear).
+===============================================================================
+
+--------------------------------------------------------------------------------
+26. ARKANOID: PRZYCZYNA ZAWEZONA DO MECHANIZMU SNU (16.10)
+--------------------------------------------------------------------------------
+POMIAR (odczyt struktury procesu z jadra: state @132, cpu_ticks @104,
+wait_message_pointer @120, saved_pc @20; krok 890 B, dwa odczyty 6 s odstepu):
+    slot 0 (INIT)    : stan=MESSAGE   czeka=TAK  przyrost_cpu=0
+    slot 1 (GFX)     : stan=MESSAGE   czeka=TAK  przyrost_cpu=0
+    slot 2 (GUI)     : stan=MESSAGE   czeka=TAK  przyrost_cpu=0
+    slot 3 (DESKTOP) : stan=MESSAGE   czeka=TAK  przyrost_cpu=0
+    slot 4 (ARKANOID): stan=SLEEPING  czeka=NIE  przyrost_cpu=0   <-- TU
+WNIOSEK: gra NIE wiruje i NIE czeka na wiadomosc - zasnela (sleep) i NIGDY nie
+zostala wybudzona.  Dlatego obraz stoi, klawisze nie sa przetwarzane, a fokus
+zostaje na jej oknie (pulpit nie dostaje F4 -> "SETTINGS nie wchodzi").
+SPRAWDZONE I WYKLUCZONE: to NIE jest niezgodnosc zegarow - kernel_user_yield()
+zwraca (int32_t)timer->ticks(), a user_wake_sleepers() porownuje z
+kernel_user_clock() = timer->ticks().  Ten sam zegar, wiec wake_tick jest
+porownywany poprawnie.
+GDZIE SZUKAC DALEJ (konkretne miejsca):
+  * user_wake_sleepers()            (kernel_exception.c:1293)
+  * kernel_user_take_ready()        (kernel_exception.c:1483) - komentarz
+    "No user IRQ can wake sleepers when all users are blocked" trafia dokladnie
+    w ten przypadek: DESKTOP jest w MESSAGE, a gra SLEEPING, czyli WSZYSCY
+    uzytkownicy sa zablokowani i wlasnie ta sciezka musi wybudzic proces.
+  * scheduler: user_wake_sleepers() + user_next_ready() (1504, 1551) oraz
+    user_pick_ready(): dlaczego proces READY/SLEEPING z sesji 0 nie wraca do
+    kolejki, gdy pulpit jest bezczynny.
+STAN: przyczyna zawezona do mechanizmu usypiania/wybudzania w jadrze (nie do
+samej gry).  Gra jest ofiara, nie sprawca.  To takze wyjasnia, dlaczego dodanie
+GUI_BEGIN_KEYS nie moglo pomoc (sekcja 24c).
+===============================================================================
+
+--------------------------------------------------------------------------------
+27. PRZYCZYNA ZNALEZIONA: MARTWY KOD WYBUDRZANIA + IDLE Z ZAMASKOWANYMI PRZERWANIAMI
+--------------------------------------------------------------------------------
+DOWOD 1: kernel_user_take_ready() (kernel_exception.c:1478) - funkcja, ktora
+miala wybudzac spiace procesy, gdy wszyscy uzytkownicy sa zablokowani (jej
+wlasny komentarz: "No user IRQ can wake sleepers when all users are blocked") -
+NIE JEST WOLANA Z NIKAD.  grep po calym system/ daje tylko definicje, zero
+wywolan.  Czyli sciezka ratunkowa istnieje, ale jest martwa.
+DOWOD 2: jedyna droga do wybudzenia to user_switch_frame(), ktore robi
+user_wake_sleepers(now) + user_next_ready().  Gdy gra zasypia z wake_tick =
+now+1, to w chwili przelaczenia warunek (now - wake_tick >= 0) JESZCZE nie jest
+spelniony, wiec gra zostaje SLEEPING, a jadro oddaje sterowanie do nadzorcy
+("return 0").  Nadzorca nie ma juz zadnej okazji, by sprawdzic zegar.
+DOWOD 3: petla bezczynnosci jadra to
+    for(;;)__asm__ volatile("stop #0x2700");      (kernel_main.c:786)
+a 0x2700 w SR to przerwania ZAMASKOWANE - po wejsciu w nia nie przyjdzie juz
+zadne przerwanie zegara, ktore mogloby obudzic proces.  Stad "PRESS RESET".
+POMIAR POTWIERDZAJACY (sekcja 26): ARKANOID = stan SLEEPING, przyrost CPU = 0
+przez 6 s, mimo ze DESKTOP/GFX/GUI/INIT tez sa zablokowane (MESSAGE).
+WNIOSEK: to blad jadra w obsludze snu, nie wada gry.  Kazda aplikacja, ktora
+zasnie, gdy nic innego nie jest gotowe, zawiesza sie na zawsze.
+PLAN NAPRAWY (maly i waski, do wykonania z testem w swiezej sesji):
+  1) wywolac wybudzanie z petli bezczynnosci nadzorcy (albo z wracajacej
+     sciezki przerwan/trapow), zanim jadro wejdzie w "stop",
+  2) zegar jest bezpieczny: timer->ticks() (Timer C) liczy okresy nawet gdy
+     aplikacje sa zablokowane (komentarz w kernel_module.c:230) - nie zalezy od
+     przerwan, wiec wake_tick da sie porownac poprawnie,
+  3) po wybudzeniu trzeba WRÓCIĆ do kontekstu uzytkownika (kernel_user_take_ready
+     robi dokladnie to: wypelnia rejestry/PC/SR) - czyli wywolac ja z wlasciwej
+     sciezki powrotu, a nie z kernel_main,
+  4) test: ARKANOID ma sie animowac i wychodzic na ESC; dodatkowo sprawdzic,
+     ze proces SLEEPING wraca do stanu RUNNING (przyrost cpu_ticks > 0).
+DECYZJA: NIE wgralem pospiesznej zmiany w scheduler na koncu dlugiej sesji -
+najpierw test.  Dzialajace dzis zabezpieczenie: CTRL+ALT+DEL (restart ATOS).
+===============================================================================
+
+================================================================================
+28. SPROSTOWANIE: SEKCJE 26 I 27 BYLY BLEDNE (16.10)
+================================================================================
+Autorem korekty jest Claude (display-demo/ANALIZA-CLAUDE-ARKANOID-SEN.txt,
+zrzut arkanoid-test-claude.png).  Uznaje ja w calosci - blad byl po mojej
+stronie, w NARZEDZIU TESTOWYM, nie w jadrze.
+
+CO BYLO NIE TAK W MOJEJ DIAGNOZIE:
+ 1) "kernel_user_take_ready() to martwy kod" - FALSZ.  grep poszedl tylko po
+    *.c.  Funkcje wola ASEMBLER: system/kernel_entry.S:776 (jsr) wewnatrz
+    kernel_dispatch_ready_user, a te wola petla nadzorcy co przebieg
+    (kernel_main.c:692).  Mechanizm wybudzania istnieje i dziala.
+ 2) "Wybudzanie nie zdaza" - nie dotyczy: proces po sleep wraca do nadzorcy,
+    a kolejny przebieg petli budzi go, gdy minie wake_tick.
+ 3) "Petla bezczynnosci z zamaskowanymi przerwaniami" - kernel_main.c:786
+    ("stop #0x2700", komunikat PRESS RESET) lezy ZA petla glowna, nie jest
+    petla bezczynnosci.
+ 4) Pomiar "SLEEPING + przyrost CPU = 0" nic nie dowodzi: Arkanoid zasypia
+    w KAZDEJ klatce, wiec losowy odczyt prawie zawsze trafia sen, a cpu_ticks
+    rosnie tylko, gdy przerwanie zegara trafi w dzialajacy proces.  Wlasciwy
+    licznik to kdbg_sleep_calls: w grze rosnie ok. 115/s (Claude: 315 -> 660
+    -> 1038), czyli proces jest regularnie budzony i pracuje.
+
+PRAWDZIWA PRZYCZYNA "zawieszenia" (moj blad w narzedziu):
+  atos2_auto.py wysylal skankod jako liczbe calkowita, np. "hatari-event
+  keypress 1".  Hatari pojedyncza cyfre traktuje jako ZNAK, nie skankod -
+  wiec moje "ESC" bylo znakiem '1'!  Gra nie dostawala ESC, grala dalej i
+  trzymala pierwszy plan, dlatego SETTINGS "nie wchodzilo".  Dotyczylo
+  wszystkich skankodow 1..9 (ESC oraz cyfry 1..8).
+POPRAWKA: atos2_auto.py - dodana pomocnicza _scancode(), ktora wysyla kody
+jako 0xNN (takze SHIFT=42 -> 0x2a, co wczesniej tez bylo bledne).
+WERYFIKACJA NA POPRAWIONYM NARZEDZIU (obraz mem-probe, ten sam kernel 213674 B):
+  ARKANOID + SPACE : zrzuty ROZNE (18505 vs 18908 B)  -> gra dziala/animuje
+  ESC (0x01)       : zrzut 16704 B = czysty pulpit     -> proces konczy sie
+  SETTINGS po grze : zrzut 22212 B = okno SETTINGS     -> otwiera sie normalnie
+WNIOSKI:
+ * Schedulera NIE ruszać - propozycja z sekcji 27 bylaby zbedna i ryzykowna
+   (druga sciezka wznawiania omijalaby kernel_dispatch_ready_user, ktory buduje
+   ramke RTE i pilnuje glebokosci).  NIE wprowadzilem jej - jadro jest bez zmian.
+ * CTRL+ALT+DEL zostaje jako zabezpieczenie ogolne (restart ATOS), ale nie
+   naprawia zadnego bledu Arkanoida - bo takiego bledu nie ma.
+ * Skutek uboczny do pamietania: kazdy wczesniejszy test uzywajacy ESC albo
+   cyfr 1..8 mogl byc niemiarodajny (m.in. testy ESC w MODPLAY i SETTINGS).
+   Przy okazji warto je powtorzyc na naprawionym narzedziu.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+29. PONOWNA WERYFIKACJA NA NAPRAWIONYM NARZEDZIEM (16.10)
+--------------------------------------------------------------------------------
+Po poprawieniu atos2_auto.py (_scancode -> 0xNN) powtorzylem testy, ktore
+wczesniej uzywaly ESC i byly przez to niemiarodajne.  Metoda: rozdzielczosc
+zrzutu (okno SETTINGS zmienia tryb) + rozmiar pliku zrzutu (pulpit bez okien
+= 16704 B).
+  SETTINGS otwarte          : 800x600, zrzut 22212 B (okno SETTINGS)
+  APPLY (podglad trybu)     : 1024x768, zrzut 25035 B  -> tryb NAPRAWDE sie zmienil
+  ESC = NO (anulowanie)     : 800x600,  zrzut 22244 B  -> TRYB WRÓCIL poprawnie
+  ESC = zamkniecie okna     : 800x600,  zrzut 16704 B  -> czysty pulpit
+  MODPLAY otwarte           : 800x600,  zrzut 14674 B  (okno na ekranie)
+  ESC z MODPLAY             : 800x600,  zrzut 16704 B  -> czysty pulpit (wyszedl)
+WNIOSKI:
+ * Pierwotny watek "-997 / MODE REFUSED" jest domkniety takze od strony
+   anulowania: APPLY -> podglad -> ESC (NO) przywraca poprzedni tryb, a status
+   nie klamie.  Wczesniej nie moglem tego sprawdzic, bo ESC nie docieralo.
+ * ESC zamyka okno SETTINGS i konczy MODPLAY - oba czysto, bez zostawiania
+   zablokowanego pulpitu.
+ * Nadal do powtorzenia na naprawionym narzedziu: FIXDISK (czy w ogole startuje)
+   oraz wszelkie testy uzywajace cyfr 1..8.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+30. FIXDISK: NIE STARuje - ZAMKNIECIE WATKU (16.10)
+--------------------------------------------------------------------------------
+POMIAR na naprawionym narzedziu (zeby wykluczyc wplyw bledu z ESC): po
+"RUN -> FIXDISK" w tabeli procesow nadal sa tylko 4 wpisy (INIT/GFX/GUI/DESKTOP)
+wszystkie w stanie MESSAGE, a ekran to czysty pulpit (zrzut 16704 B).
+=> PROCES APLIKACJI NIE POWSTAJE.  To nie jest problem rysowania okna ani
+   przejmowania klawiatury - desktop nie uruchamia jej w ogole (i nie pokazuje
+   komunikatu, co zgadza sie z relacja uzytkownika).
+USTALONE PRZY OKAZJI: plik jest poprawnie zainstalowany (ASYSAPP0, 1992 B),
+ma ten sam naglowek co dzialajace SETTINGS/MODPLAY/SYSINFO i jest zbudowany ta
+sama regula (z patch_boot_checksum.py).
+OTWARTE PYTANIE (do sprawdzenia kiedys): czy okno RUN uruchamia wylacznie
+aplikacje obecne w swoim rejestrze/LAUNCH.CFG, a FIXDISK jest jedyna, ktora
+probowalem uruchomic spoza niego?  Wpis w LAUNCH.CFG mial, ale jego ikona nie
+miescila sie na pulpicie (13. pozycja), wiec rejestracja mogla byc niepelna.
+DECYZJA: temat ZAMKNIETY jako niepotrzebny - naprawa woluminu jest dostepna
+w SETTINGS -> zakladka VOLUME -> REPAIR [ENTER] (sprawdzone end-to-end,
+sekcja 21/22).  Wpis FIXDISK usuniety z LAUNCH.CFG na obu obrazach (przywrocony
+stan sprzed eksperymentu); sam plik FIXDISK.APP zostaje na obrazie jako
+nieszkodliwa ciekawostka do ewentualnego dokonczenia.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+31. MUZYKA FLASHBACKA: ZMIERZONA JAKOSC PLIKOW XM (16.10)
+--------------------------------------------------------------------------------
+Analiza TR00.XM (205923 B, wyciagniety z obrazu) - naglowek i zawartosc:
+    kanaly=8, wzorce=31, dlugosc utworu=31, instrumenty=23, tempo=6, BPM=120
+    instrumenty z obwiednia glosnosci: 1/23
+    sample: 1 (slownie: JEDEN), zapetlonych: 0, dlugosc 40 bajtow, typ 0 (8-bit)
+WNIOSEK: muzyka to praktycznie sekwencja nut bez materialu samplowego - 22 z 23
+instrumentow nie ma zadnego sampla, a jedyny istniejący to 40-bajtowy "blip"
+bez petli.  Stad "kiepska" barwa: tracker nie ma czego zagrac, wiec nuty
+brzmia jak ubogi, syntetyczny pisk.
+DRUGI PODEJRZANY (do weryfikacji, NIE potwierdzony): moj konwerter
+midi_to_xm.py zapisuje naglowek instrumentu jako 241 B
+(XM_INST_HEADER_SIZE 29 + XM_INST_SIZE 212, wziete z loadera libxmp), podczas
+gdy specyfikacja XM 1.04 dla instrumentu z samplami podaje 263 B.  libxmp taki
+plik akceptuje (jego prog to wlasnie 241), ale inny player moze czytac dalej
+i przesuwac offsety.  Tego NIE udalo sie potwierdzic w tej sesji.
+PLAN POPRAWY (do wykonania z odsluchem uzytkownika - ostatecznym sedzia jest
+ucho, nie pomiar):
+  1) wygenerowac PRAWDZIWE sample dla instrumentow: prosty renderer barw
+     (bass/pluck/brass/strings) z obwiednia ADSR i petla, zamiast jednego blipa,
+  2) zweryfikowac rozmiar naglowka instrumentu wobec specyfikacji XM (263),
+  3) przepuscic przez walidacje libxmp (mamy zrodla w ATOS-SOUND/reference-v1),
+  4) wgrac na obraz i posluchac w Hatari - dopiero wtedy twierdzic, ze jest
+     lepiej.  Nie skladam obietnic bez odsluchu.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+32. TESTY HOSTOWE: REGRESJA WYELIMINOWANA + LEKCJA NA PRZYSZLOSC (16.10)
+--------------------------------------------------------------------------------
+Po moich zmianach `make TOS=1 check` NIE przechodzil (EXIT=2).  Znalazlem dwie
+przyczyny, obie moje:
+ 1) tests/test_settings_app.c zakladal cykl DWOCH zakladek (TAB: 0->1->0),
+    a dodalem trzecia (RESOLUTION/THEMES/VOLUME).  Test zaktualizowany do
+    0->1->2->0 i ROZSZERZONY o sekcje 12: zakladka VOLUME pokazuje stan
+    ("DIRTY - WRITES BLOCKED" / "CLEAN..." / "HARD ERROR..." / "UNKNOWN"),
+    ma REPAIR [ENTER] i CLOSE [ESC], ENTER wola ATOS_CALL_VOLUME(d1=1),
+    a status mowi "VOLUME REPAIRED..." albo "REPAIR FAILED rc=...".
+ 2) Sekcja 19 (zapis nieudany) oczekiwala starego komunikatu "SAVE FAILED",
+    a od tej sesji komunikat zawiera KOD bledu.  Rozszerzona: rc=-1 ->
+    "SAVE FAILED rc=1", rc=-6 -> "SAVE FAILED rc=6 - PRESS R TO REPAIR",
+    klawisz R wola naprawe i status mowi "VOLUME REPAIRED - PRESS APPLY AGAIN",
+    a nieudana naprawa daje "REPAIR FAILED rc=6".
+ 3) Trzecia regresja: moj blok Ctrl+Alt+Del w kernel_exception.c (sciezka
+    doręczania klawisza) wnosil do WYCINKA zrodla nowe symbole
+    (kgame_owns_screen, kgame_owner, kernel_gui_focus_pid, kernel_user_kill,
+    kernel_user_service_pid, pid), wiec tests/test_gui_input_backpressure.py
+    nie mogl skompilowac generowanego pliku (3 bledy).
+DECYZJA: cofnalem ten blok z jadra.  Uzasadnienie: (a) awaryjne Ctrl+Alt+Del
+i tak dziala z nizszej warstwy (restart ATOS - sprawdzone), wiec moj kod byl
+zbedny, (b) kazdy nowy symbol w tej sciezce lamie testy wycinajace fragmenty
+zrodla jadra, (c) jadro wraca do 213574 B - dokladnie tej wersji, ktora
+sprawdzil Claude.
+WYNIK: `make TOS=1 check` -> EXIT=0 (zero "Assertion failed", zero FAILED).
+LEKCJA (wazna dla kolejnych zmian w jadrze): testy hostowe wycinaja konkretne
+fragmenty system/kernel_exception.c i kompiluja je ze stubami, wiec kazdy nowy
+symbol uzyty w tych fragmentach trzeba dodac rowniez do stubow testu - inaczej
+zestaw przestaje sie kompilowac, mimo ze samo jadro buduje sie poprawnie.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+33. RESZTKI BSS JADRA - ANALIZA Z ELF (16.10) + POTWIERDZONY POMIAR PAMIECI
+--------------------------------------------------------------------------------
+PONOWNY POMIAR (mem_measure.py na obecnym kernelu 213574 B, obraz mem-probe):
+    ST: pula 4096 KiB, zajete 30.8 KiB, WOLNE 3581.4 KiB
+    TT: pula 65536 KiB, zajete 2709.9 KiB (framebuffer 768 + 512 + 2x468.8 +
+        ikony 249.3 + png_work 64 + aplikacje 40.6), wolne 46440.8 KiB
+=> Liczba "ST wolne ~3581-3582 KiB" z tej sesji TRZYMA SIE po wszystkich
+   przebudowach i weryfikacjach.
+
+BSS jadra z `m68k-elf-nm -S --size-sort` (symbols >= 512 B, suma 118.9 KiB).
+PODZIAL WEDLUG RYZYKA (to jest gotowy plan, nie zmiana):
+ A) BEZPIECZNE KANDYDATY DO TT (bufor roboczy, tylko CPU, bez IRQ/DMA) - razem
+    ok. 30 KiB:
+      chain_seen        8192 B   (bitmapa lancucha FAT, synchronizacja)
+      tos_dir           7680 B   (bufor katalogu persony TOS)
+      tags              6144 B   (bufor tagow VDI/AES)
+      terminal_font     4096 B   (font konsoli, tylko odczyt po inicjalizacji)
+      tos_aes_log       4096 B   (log AES)
+ B) MUSI ZOSTAC W ST (IRQ/DMA/stan krytyczny):
+      tos_irq_stack     8192 B   stos przerwan
+      sector_buffer/io_data/fat_straddle  (3x512 B)  sciezka DMA/FAT
+      process_table 5340, gdos 5322, wm 1758, mouse_queue 576, kdbus...
+      tos_states/tos_damage/tos_linea_page/tos_async_* (stan emulacji TOS)
+ C) NIEJASNE (wymaga przejrzenia uzycia): kblit_snap/ref/img (3x1156 B),
+      mono_words/mono_expand/chunky_rows (3x2048 B), terminal_display/display
+      (2x4002 B), png_icon_pixels 2304 B, kdbg_session_out 4096 B.
+METODA WDROZENIA (ta sama, sprawdzona w tej sesji): wskaznik + alokacja
+kmem_alloc(...,prefer_tt=1) w funkcji init modulu + kontrola NULL + podmiana
+uzyc; weryfikacja: `make TOS=1 check` (EXIT=0) ORAZ powyzszy pomiar.
+DECYZJA: NIE wdrazam tego na koncu dlugiej sesji.  Dzisiejsza lekcja (moj blok
+Ctrl+Alt+Del w kernel_exception.c zlamal 3 testy wycinajace fragmenty zrodla)
+mowi wprost: zmiany w BSS jadra robic na swiezo, z pelnym cyklem testow.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+34. BSS jadra -> TT, ETAP 1: chain_seen (8 KiB) - OPIS ZMIAN DO ANALIZY (16.10)
+--------------------------------------------------------------------------------
+PLIK: system/kernel_fat.c (tylko ten plik).
+CO ZMIENIONE:
+ 1) Deklaracja rozdzielona.  Bylo:
+        static uint8_t chain_seen[8192],io_data[512];
+    jest:
+        #define CHAIN_SEEN_BYTES 8192u
+        static uint8_t *chain_seen;      /* wskaznik, alokowany przy montowaniu */
+        static uint8_t io_data[512];     /* ZOSTAJE w ST - uczestniczy w I/O */
+    (deklaracja przeniesiona NAD kfat_mount, bo alokacja jest w tej funkcji)
+ 2) Alokacja w kfat_mount(), tuz przed "return FAT_MOUNTED;":
+        if(!chain_seen){chain_seen=kmem_alloc(CHAIN_SEEN_BYTES,16u,
+            KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);      /* 1 = najpierw TT */
+            if(!chain_seen){logical_sector_size=0;return -FAT_WRITE_LIMIT;}}
+    W tx_write() zostala dodatkowo tania siatka bezpieczenstwa (ta sama alokacja).
+ 3) check_chain(): "sizeof(chain_seen)" (po zamianie na wskaznik daloby 4!)
+    zastapione stala CHAIN_SEEN_BYTES + dodana kontrola:
+        if(!chain_seen)return -FAT_WRITE_IO;
+DLACZEGO TO BEZPIECZNE: chain_seen to bitmapa lancucha FAT uzywana wylacznie
+przez CPU - nie ma tu DMA ani przerwan, wiec TT RAM jest rownowazne.  Bufor
+sektorowy io_data (512 B) zostaje w ST.
+BLAD, KTORY WYLAPALEM PO DRODZE (wazny dla analizy): pierwsza wersja alokowala
+bufor dopiero w tx_write (przy pierwszym zapisie sektora).  Zalozylem, ze
+transakcja zawsze zaczyna sie od tx_begin()->set_fat()->tx_write, wiec bufor
+powstanie przed check_chain.  Test na zywym systemie to OBALIL: podglad trybu
+zmienil sie na 640x480, YES zostal przyjety, ale konfiguracja sie NIE zapisala
+(plik bez zmian) - czyli check_chain trafial na NULL wczesniej.  Poprawka:
+alokacja przeniesiona do kfat_mount.
+DOWODY (trzy niezalezne):
+ 1) pomiar pamieci: ST wolne 3581.4 -> 3589.4 KiB (+8.0 KiB, dokladnie 8192 B),
+    TT zajete bez zmian w spoczynku (bufor powstaje przy montowaniu),
+ 2) make TOS=1 check -> EXIT=0 (54 testy Pythona OK),
+ 3) ZYWY ZAPIS: SETTINGS -> inny tryb -> APPLY -> YES; plik \SYSTEM\DESKTOP.CFG
+    zmienil sie z "RES=800x600x8" na "RES=640x480x8"  => sciezka zapisu FAT
+    dziala z buforem w TT.
+POZOSTALE KANDYDATY (po korekcie klasyfikacji - patrz nizej):
+  terminal_font 4096 B  (system/kernel_graphics.c)  - font konsoli, tylko odczyt
+  tos_dir       7680 B  (system/tos_prg.c)          - bufor katalogu persony
+KOREKTA MOJEJ WCZESNIEJSZEJ KLASYFIKACJI (sekcja 33):
+  * "tags 6144 B" to NIE bufor VDI/AES, a tablica tagow CACHE BLOKOW
+    (system/kernel_block.c) - goraca sciezka I/O, nie scratch => wypada z klasy A
+  * "tos_aes_log 4096 B" jest globalny (nie static) i testy uzywaja go jak
+    tablicy => zamiana na wskaznik wymagalaby zmian w testach => odlozone
+================================================================================
+
+
+--------------------------------------------------------------------------------
+35. TRZY ZGLOSZENIA UZYTKOWNIKA: RUN (opoznienie, kursor), TERMINAL (czyszczenie)
+--------------------------------------------------------------------------------
+A) TERMINAL: PO WLOACZENIU MA BYC CZYSTY EKRAN - ZROBIONE (do potwierdzenia)
+   Przyczyna: konsola trzyma bufor sesji z tekstem bootowania, a "OPEN TERMINAL"
+   tylko ja pokazuje (GFX opcode 24 -> kernel_wm_console_show()).
+   Zmiana (system/kernel_exception.c, obsluga opcode 24):
+        else if(request->opcode==24u){
+            kconsole_clear();              /* <-- DODANE */
+            kernel_wm_console_show();kernel_wm_console_focus();}
+   WAZNE: czyszczenie jest TYLKO w tej galezi (jawne otwarcie z pulpitu).
+   kernel_wm_console_show() jest wolane takze cyklicznie przez jadro
+   (kernel_main.c:738, co ~8000 przebiegow) - czyszczenie tam kasowaloby
+   prace terminala w tle.
+   KERNEL.SYS 213710 B.  Testy hostowe: patrz wynik wyzej.
+
+B) RUN: KURSOR MA MIGAC - ZDIAGNOZOWANE, NIE ZROBIONE
+   Okno RUN rysuje kursor jako STATYCZNY tekst: system/desktop_wm.c:401
+        add(GUI_TEXT,(int16_t)(158+(int)run_len*8),146,0,0,0,"_");
+   Petla glowna pulpitu: desktop_wm.c:2313 (blokuje w receive(&m,1), logika
+   czasowa oparta na hires() - wzorce na liniach 2319/2339/2357/2374/2396).
+   Plan: znacznik czasu + przelaczanie co ~0,5 s (6144 jednostek hires =
+   12288/s) i podmiana "_" na " " w rysowaniu - plus przerysowanie okna.
+   UWAGA: obecny paint() odrysowuje CALY pulpit, a to jest prawdopodobna
+   przyczyna zgloszenia (C) - dlatego miganie trzeba zrobic razem z
+   przerysowaniem odcinkowym (obszar okna), nie dokladajac pelnych repaintow.
+
+C) RUN: LITERY POJAWIAJA SIE Z OPOZNIENIEM - ZDIAGNOZOWANE, NIE ZROBIONE
+   Tor zdarzenia: klawisz -> bufor sesji -> desktop_wm.c (petla 2313, receive
+   blokujace) -> obsluga -> paint() (pelny pulpit) -> kompozycja WM ->
+   kvideo_flush().  Dwie kandydatki na przyczyne:
+     1) pelny repaint pulpitu na KAZDY klawisz (ikony + panel + okno dialogowe),
+     2) 20 ms opoznienie pompy wejscia (pause_tick) widoczne przy kazdym znaku;
+        w ARKANOIDZIE ten sam problem rozwiazano omijajac pause_tick()
+        (ATOS_CALL_SLEEP 0 = yield bez 20 ms).
+   Nastepny krok: ZMIERZYC koszt jednego repaintu (najlepiej licznikiem w
+   jadrze albo pomiarem czasu wokol paint()), a potem albo odcinkowe
+   przerysowanie okna dialogowego, albo skrocenie sciezki wejscia.
+   Bez pomiaru nie zmieniam - inaczej "optymalizacja" na slepo.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+36. RUN: ZMIERZONE OPOZNIENIE - PRZYCZYNA USTALONA (16.10)
+--------------------------------------------------------------------------------
+METODA (zewnetrzna, bez zmian w kodzie): otwarte okno RUN, nastepnie 10 znakow
+A..J wyslanych BEZ przerwy (delay=0), zrzuty natychmiast / +1 s / +3 s.
+POMIAR:
+    okno RUN przed wyslaniem : 17101 B (puste)
+    natychmiast po 10 znakach: 17101 B (ZERO znakow widocznych)
+    po 1 s                   : 17171 B (+70 B  ~ 1 znak)
+    po 3 s                   : 17290 B (+189 B ~ 2-3 znaki)
+WNIOSEK: okno odrabia wpisane znaki kilka sekund, czyli ok. 0.3-1 s NA ZNAK.
+To wyklucza pompe wejscia (20 ms/takt) jako glowna przyczyne - opoznienie
+skaluje sie z liczba znakow.  Winowajca: PELNY REPAINT PULPITU na kazdy
+klawisz (ikony + panel + okno dialogowe + kompozycja WM + flush).
+KIERUNEK NAPRAWY (do wykonania i zweryfikowania TA SAMA metoda):
+  1) okno RUN powinno przerysowywac WYLACZNIE swoj obszar (damage/region), a nie
+     caly pulpit - albo
+  2) dac mu wlasne okno WM (jak MODPLAY/SETTINGS), gdzie klient rysuje tylko
+     swoje wnetrze, a kompozycja dotyczy jednego okna.
+KRYTERIUM SUKCESU (obiektywne, ta sama proba): po wyslaniu 10 znakow bez przerwy
+zrzut "natychmiast" ma pokazywac KOMPLET znakow (rozmiar > 17101 B od razu).
+STAN: jadro 213710 B (z czyszczeniem konsoli, sekcja 35A) wgrane na oba obrazy.
+Miganie kursora (35B) robimy razem z ta naprawa, zeby nie dokladac repaintow.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+37. TERMINAL NIE PRZYJMUJE KLAWIATURY - WATEK OTWARTY (16.10)
+--------------------------------------------------------------------------------
+ZGLOSZENIE: po naprawie czyszczenia (35A) terminal jest czysty, ale "nie da sie
+pisac, w ogole".
+MOJA OGRANICZENIE (potwierdzone POMIAREM, nie domyslem): nie moge tego
+przetestowac zdalnie.  Proba skryptowa - motion 55 190 + button 1/0 na ikone
+TERMINAL - dala TRZY IDENTYCZNE zrzuty (16719 B, czyli pulpit bez zmian), mimo
+ze przy poprawnym kliknieciu powinien pojawic sie panel konsoli.  Syntetyczne
+zdarzenia myszy Hatari nie docieraja do pulpitu ATOS w moim ustawieniu.
+CO USTALILEM Z KODU (mechanizm istnieje i wyglada poprawnie):
+  * shell pompuje wejscie TYLKO z petli glownej jadra, i tylko gdy konsola jest
+    widoczna i sfokusowana (kernel_main.c:664):
+        if(kernel_wm_console_visible()&&kernel_wm_console_focused())shell->pump(0u);
+  * console_focused (kernel_wm.c:551, domyslnie 1): ustawiane na 1 przez
+    kernel_wm_console_focus() (nasz opcode 24) oraz przez KLIKNIECIE OKNA
+    (kernel_wm.c:1430), a na 0 przez klikniecie tla pulpitu;
+  * klikanie w okno ustawia tez fokus WM na wlasciciela okna
+    (kernel_wm.c:1426), czyli kierunek klawiszy.
+NAJPRAWDOPODOBNIEJSZA PRZYCZYNA (do potwierdzenia rekami uzytkownika):
+klikniecie IKONY na pulpicie trafia w TLO (WM_NO_WINDOW), co ustawia
+console_focused=0; nasz opcode 24 ustawia je z powrotem na 1, ale kolejnosc
+zdarzen (klik -> odpowiedz aplikacji -> show/focus) moze zostawic fokus na
+pulpicie, wiec klawisze ida do pulpitu, a nie do shella.
+PROSBA O 3 OBSERWACJE (kazda rozstrzyga inaczej):
+ 1) po otwarciu terminala KLIKNAC W SRODEK CZARNEGO OBSZARU konsoli i dopiero
+    pisac - czy wtedy dziala?  (ten klik ustawia oba fokusy: console_focused
+    i fokus WM na wlasciciela konsoli)
+ 2) czy pasek tytulu okna konsoli jest podswietlony (fokus)?
+ 3) czy widac jakikolwiek kursor/echo po nacisnieciu klawisza?
+UWAGA: nie cofam naprawy czyszczenia (35A) - dziala i jest niezalezna od
+wejscia.  RUN nadal ma opoznienie (sekcja 36) - to osobna, zmierzona sprawa.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+38. RUN: POMIAR IZOLOWANY, PROBA NAPRAWY, WYCOFANIE (16.10)
+--------------------------------------------------------------------------------
+POMIAR (bez zmian w kodzie; liczniki WM z jadra: kdbg_wm_composes,
+kdbg_total_cycles - jednostki hires, 12288 = 1 s):
+    tlo (bezczynny pulpit, 1 s) : 0 kompozycji, 0 jedn.  -> pulpit nic nie robi
+    JEDEN nacisniety klawisz    : +1 kompozycja, +2673 jedn. = 218 ms
+    (10 znakow bez przerwy daje ~2.2 s zaleglosci - zgodne z obserwacja)
+UWAGA DO WCZESNIEJSZEJ INTERPRETACJI: podana w rozmowie liczba "8697 wywolan WM"
+pochodzila z okna 12 s (burst + czas wyrabiania kolejki), wiec nie byla kosztem
+samego znaku.  Liczba 218 ms na znak jest zmierzona izolowanie i to ona obowiazuje.
+
+PRÓBA NAPRAWY (wykonana i ODRZUCONA): odcinkowe przerysowanie samego pola
+tekstowego okna RUN (3 primitywy zamiast ~40) + miganie kursora z tego samego
+odcinka (desktop_wm.c: paint_run_text()).
+POMIAR PO ZMIANIE: jeden znak = +5 kompozycji, 646 ms (GORZEJ niz 218 ms), a
+zrzut "natychmiast" po 10 znakach nadal nie pokazywal zadnego znaku.
+PRZYCZYNA POGORSZENIA: miganie kursora dokladalo kompozycje (2/s), a kazda
+kompozycja to ~56-115 ms.  Wniosek z pomiaru: liczy sie LICZBA KOMPOZYCJI, a nie
+liczba primitywow - odchudzenie rysowania samo z siebie nic nie daje, bo kazda
+partia rysowania konczy sie pelna kompozycja ekranu 800x600.
+DECYZJA: zmiana WYCOFANA.  desktop_wm.c przywrocony z /tmp/dwm_przed.bak,
+DESKTOP.APP przebudowany (29433 B - rozmiar oryginalu) i wgrany na obraz,
+make TOS=1 check -> EXIT=0.
+
+KIERUNEK WLASCIWEJ NAPRAWY (kernel/WM, nie aplikacja):
+  * kompozycja musi byc OGRANICZONA DO USZKODZONEGO OBSZARU (damage), a nie
+    calego ekranu; WM ma juz wm_damage_add/wm_damage_clear i licznik
+    wm_damage_pixels, wiec brakuje uzycia tego w sciezce kompozycji klienta,
+  * dopiero wtedy mozna tanio odswiezac pole tekstowe RUN i migac kursor.
+KRYTERIA SUKCESU (gotowe, obiektywne - wszystkie trzy musza przejsc):
+  1) jeden klawisz < ~20 ms pracy WM (mierzone kdbg_wm_composes/total_cycles),
+  2) po 10 znakach wyslanych bez przerwy zrzut "natychmiast" pokazuje KOMPLET,
+  3) make TOS=1 check -> EXIT=0.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+39. RUN I TERMINAL - NAPRAWIONE (Claude, 16.10) - szczegoly: ZMIANY-CLAUDE-RUN-TERMINAL.txt
+--------------------------------------------------------------------------------
+RUN: przyczyna = pulpit przy kazdym znaku zglaszal CALY ekran (paint()), a jadro
+  kopiowalo caly overlay RUN przy kazdej kompozycji.  Kompozycja jadra juz byla
+  ograniczona do damage.  Poprawka: paint_run() (tylko linia wpisu) w
+  desktop_wm.c + overlay_blit() przyciety do damage w kernel_wm.c.
+  Kryteria z sekcji 38: (1) 218 ms -> 9,2 ms na klawisz, (2) 10 znakow widac po
+  0,3 s, (3) testy jak bez zmian, 54 testy Pythona OK.
+TERMINAL: shell PRZYJMOWAL klawiature (fokus i pompa byly dobre).  Okno pokazywalo
+  zawsze dolne wiersze, a po wyczyszczeniu kursor jest na gorze; do tego pas
+  zmian byl mapowany na ekran bez src_y i paska tytulu.  Poprawka: okno idzie za
+  kursorem (console_follow_cursor), poprawne mapowanie pasa, znak zachety po
+  czyszczeniu.  Klikanie w konsole nie bylo potrzebne.
+Zrodla: patch NALOZONY na ATOS 2.1/system (kopie: *.przed-claude-run).
+Do zrobienia na Macu: zbudowac KERNEL.SYS + DESKTOP.APP swoim toolchainem,
+  make TOS=1 check, wgrac komplet.  Obraz do szybkiej proby (binaria z chmury):
+  display-demo/run-terminal-test.img.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+40. WERYFIKACJA POPRAWEK CLAUDE (RUN + TERMINAL) NA MACU (16.10)
+--------------------------------------------------------------------------------
+Zbudowalem wlasnym toolchainem to, co Claude zbudowal w chmurze:
+    KERNEL.SYS  214202 B   (u Claude: 209462 B - inny kompilator)
+    DESKTOP.APP  29565 B   (u Claude:  29385 B)
+Zmienione pliki (z kopiami .przed-claude-run): system/desktop_wm.c,
+system/kernel_wm.c, system/kernel_console.c, system/kernel_exception.c,
+include/kernel_console.h.  Moja poprawka czyszczenia konsoli (sekcja 35A)
+przetrwala - Claude ja rozszerzyl o narysowanie znaku zachety po czyszczeniu.
+
+TESTY HOSTOWE NA MACU (to bylo do potwierdzenia):
+    make TOS=1 check  -> EXIT=0   (54 testy Pythona OK, zero asercji)
+    check-console     -> PASS (exit 0)      <- u Claude sie nie kompilowal
+    check-mono-font   -> PASS (exit 0)      <- u Claude sie nie kompilowal
+    check-audio       -> PASS (exit 0)      <- u Claude: 33 FAILED
+=> Rozbieznosci, ktore Claude widzial, byly SRODOWISKOWE, nie w kodzie.
+   Na Macu caly zestaw jest zielony takze z jego zmianami.
+
+KRYTERIA Z SEKCJI 38 (te same, ktorych uzywalem wczesniej):
+  1) JEDEN KLAWISZ: kompozycje +1, cykle +116 jedn. = 9.4 ms  (bylo 218 ms)
+     damage: +6048 px  (bylo 345600 px)                        -> PASS (<20 ms)
+  2) 10 ZNAKOW BEZ PRZERWY, zrzut po 0.3 s:
+        puste okno 17101 B | 1 znak 17130 B (+29) | 10 znakow 17290 B (+189)
+     Zrzut k6-dziesiec.png pokazuje w oknie RUN "abcdefghij_" - KOMPLET.
+                                                                -> PASS
+KOREKTA MOJEJ SEKCJI 38: moja teza "kompozycja jest zawsze pelnym ekranem"
+byla NIETRAFNA.  Kompozycja juz byla ograniczona do damage; pelny ekran
+wynikal z tego, ze PULPIT zglaszal caly ekran przy kazdym znaku, a w jadrze
+overlay_blit() kopiowal cale okno RUN (352x56) przy kazdej kompozycji.
+Claude naprawil obie te rzeczy: pulpit wysyla tylko linie wpisu, a overlay
+kopiowany jest w przecieciu z damage (overlay_copy).
+PRZYCZYNA TERMINALA (odpowiedz na sekcje 37): NIE fokus i NIE pompa - shell
+przyjmowal klawiature od poczatku, tylko okno pokazywalo DOLNE wiersze siatki,
+a po czyszczeniu kursor byl na gorze, wiec pisany tekst ladowal poza widokiem.
+Poprawka: okno przewija sie za kursorem, a pas zmian jest mapowany z pominieciem
+blednego przesuniecia.  Klikniecie w czarny obszar nic nie zmienia (sprawdzone
+przez Claude) - moje trzy pytania z sekcji 37 byly wiec nietrafione.
+STAN: oba obrazy (demo-test, mem-probe) maja komplet: KERNEL.SYS 214202 B +
+DESKTOP.APP 29565 B z mojego builda.  Instancja Hatari uruchomiona do testu.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+41. ZOOM OKNA: PO POWROCIE PRZECIEKA PULPIT (16.10) - ZGLOSZENIE UZYTKOWNIKA
+--------------------------------------------------------------------------------
+JAK TO ZOBACZYC BEZ MYSZY (wazne - moje klikniecia mysza nie docieraja do
+pulpitu ATOS, sprawdzone dwa razy): WM ma KLUCZOWY odpowiednik gadzetu ZOOM:
+    Ctrl+Alt+Enter  = przelacz zoom okna z FOKUSEM   (kernel_wm.c:697)
+Dzieki temu odtworzylem to klawiatura:
+    F4 -> Enter            = OPEN TERMINAL (pozycja 0 menu)
+    dir + Enter            = polecenie w konsoli
+    Ctrl+Alt+Enter         = ZOOM konsoli         -> wyglada POPRAWNIE
+    Ctrl+Alt+Enter         = powrot z zoomu       -> DEFEKT
+ZRZUTY: z3-zoom.png (poprawny zoom), z4-restore.png = dowod-zoom-przecieka.png.
+OBJAW: po powrocie z zoomu okno konsoli wraca do swojego rozmiaru, ale PRZEZ
+JEGO TLO PRZESWITUJA IKONY PULPITU (MODPLAY, TRASH, TASKMGR, PLASMA, ARKANOID,
+FLASHBACK widac na obszarze tekstu konsoli).  Tekst konsoli jest na miejscu,
+brakuje NIEODMALOWANEGO TLA klienta.
+POWTARZALNOSC: DEFEKT JEST DETERMINISTYCZNY - drugi pelny cykl zoom/restore
+daje identyczny stan (zrzut 19877 B, ten sam co poprzednio; z5-drugi-cykl.png).
+  => nie jest to chwilowy artefakt kompozycji, tylko staly blad sciezki zmiany
+     rozmiaru okna.
+GDZIE SZUKAC (kod):
+  * kernel_wm.c:665 window_zoom() - przelicza frame/client, klampuje src_y,
+    wola notify_geometry(), ustawia wm_force_compose i dodaje damage dla
+    starego i nowego prostokata,
+  * kernel_wm.c:2392 kernel_wm_console_present() - renderuje pas tekstu przez
+    kgfx_console_render(...) i rejestruje okno konsoli,
+  * swiezo zmienione przez Claude: console_follow_cursor() + mapowanie pasa
+    zmian przez client i src_y (stad podejrzenie, ze defekt moze byc NOWY).
+KIERUNEK NAPRAWY (do wykonania i sprawdzenia TYM SAMYM cyklem klawiaturowym):
+  1) po zmianie rozmiaru okno musi przemalowac CALY swoj klient, a nie tylko
+     pas tekstu: najpierw wypelnic obszar klienta tlem okna, potem nalozyc tekst,
+  2) albo WM przy kazdym blicie klienta wypelnia tlo okna (kolor tla) przed
+     nalozeniem powierzchni, zeby zadne stare piksele nie zostaly,
+  3) sprawdzic, czy defekt wystepuje takze na buildzie SPRZED zmian Claude
+     (zrodla .przed-claude-run) - to rozstrzygnie, czy to regresja.
+KRYTERIUM SUKCESU: po Ctrl+Alt+Enter (zoom) i Ctrl+Alt+Enter (powrot) na zrzucie
+NIE WIDAC zadnej ikony pulpitu wewnatrz okna konsoli.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+42. TERMINAL: ZMIANA ROZMIARU OKNA + SUWAK/UCHWYT (16.10, Claude) - takze sekcja 41
+--------------------------------------------------------------------------------
+ZGLOSZENIE: po zmianie rozmiaru okna terminala linia komend ginie pod dolna
+ramka; uchwyt zmiany rozmiaru (sizer) ginie pod dolna czescia suwaka.
+ODTWORZONE w Hatari mysza (rz0): zmniejszenie -> widac stare wiersze, prompt i
+wpisywany tekst pod ramka; powiekszenie -> ramka rosnie, klient nie, przez
+okno widac pulpit (ta sama przyczyna co przeciek po zoomie z sekcji 41).
+PRZYCZYNY (wszystkie w system/kernel_wm.c):
+ 1) okno shella (pid 0) przy zmianie rozmiaru dostawalo tylko wm_resize():
+    klient mogl sie wylacznie zmniejszyc, a widok nie szedl za kursorem
+    (console_follow_cursor reaguje tylko na ruch kursora);
+ 2) zoom/powiekszenie dawaly klienta wiekszego niz siatka 80x25 (640x400):
+    poza siatka powierzchnia nie jest rysowana -> "przeciekajacy" pulpit;
+ 3) suwak mial wysokosc calego klienta, a klient siega dolu ramki, wiec
+    strzalka "w dol" lezala DOKLADNIE na sizerze 16x16; sb_click() jest
+    sprawdzany przed wm_hit_part(), wiec klik w sizer przewijal zamiast
+    zmieniac rozmiar;
+ 4) chwyt sizera dzialal tylko w pionie, jesli kursor nie byl 4 px od prawej.
+POPRAWKA:
+ * console_fit(i): ramka przycieta do siatki (max 640 x 16+25*16+2), wysokosc
+   przyciagana do pelnych wierszy, klient = ramka - tytul, content_h = siatka
+   (suwak pozwala przewinac wstecz), widok wymuszenie za kursorem.  Wolane po
+   zmianie rozmiaru, w window_zoom (zoom i powrot; w zoomie okno wysrodkowane),
+   przy show, przy rejestracji okna i przy zmianie trybu ekranu.
+ * console_follow_cursor liczy wiersze bez 2 px dolnej ramki.
+ * sb_h(w): suwak konczy sie nad sizerem, gdy sie nakladaja (jak GEM W_VBAR
+   nad W_SIZER) - rysowanie, klik, przeciaganie suwaka, kernel_wm_chrome_at.
+ * klik w narozny kwadrat 16x16 zawsze zmienia rozmiar w obu osiach.
+WYNIK (rz2, mysza w Hatari): zmniejszenie -> ostatnia linia z promptem i "xy"
+widoczna, suwak nad sizerem; powiekszenie -> okno 640x418 cale czarne; zoom ->
+okno wysrodkowane, bez pulpitu w srodku; powrot z zoomu -> brak przecieku
+(kryterium z sekcji 41 spelnione), dalsze pisanie widoczne.
+TESTY HOSTOWE (chmura): wyniki identyczne jak przed zmiana; check-audio w
+chmurze jest niestabilny (to samo drzewo: 1x 33 FAILED, 2x all passed) i nie
+dotyka kernel_wm.c.  Na Macu: make TOS=1 check.
+PLIKI:
+ * ATOS 2.1/system/kernel_wm.c  - zmieniony (kopia: kernel_wm.c.przed-claude-resize)
+ * display-demo/terminal-resize-claude.patch  (tylko kernel_wm.c)
+ * display-demo/terminal-resize-claude.png    (przed / po)
+ * display-demo/KERNEL-claude-resize.SYS      (209998 B, kompilator z chmury)
+ * display-demo/terminal-resize-test.img      (kopia mem-probe-20261016.img
+   z tym jadrem; DESKTOP.APP bez zmian - Wasz build)
+DO ZROBIENIA: zbudowac KERNEL.SYS swoim toolchainem, make TOS=1 check, wgrac.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+43. WERYFIKACJA POPRAWKI ZMIANY ROZMIARU OKNA (Claude) NA MACU (16.10)
+--------------------------------------------------------------------------------
+Zbudowalem wlasnym toolchainem: KERNEL.SYS 214746 B (poprzednio 214202 B, +544).
+DESKTOP.APP bez zmian (Claude nie ruszal pulpitu).  Zmieniony tylko
+system/kernel_wm.c (kopia .przed-claude-resize).
+
+CO MUSIALEM POPRAWIC W TESCIE (wazne dla analizy - ta sama klasa co moj blad
+z Ctrl+Alt+Del): harness tests/test_window_controls.py SKLEJA wycinki
+kernel_wm.c i kompiluje je jako jedna jednostke.  Nowa funkcja console_fit()
+jest wolana w wycinkach, ale zdefiniowana POZA nimi, wiec:
+  1) dodalem do preambuly deklaracje console_fit + symbole, ktorych ona uzywa
+     (console_surface, CON_GRID_W/H, CON_PAD, TERM_ROWS) oraz stuby dwoch
+     funkcji pomocniczych (console_follow_cursor, sb_range),
+  2) dolaczylem DEFINICJE console_fit do jednostki kompilacji testu - koniec
+     wycinka wyznacza komentarz nastepnej funkcji ('/* "Open terminal"').
+     (Moj pierwszy odruch - marker '\nstatic ' - byl bledny i polknal kolejne
+     funkcje, co wysypalo brakujace symbole CONSOLE_WX/WY/WW.)
+UWAGA: sam kernel_wm.c NIE byl przeze mnie zmieniany - tylko test.
+Bez tej poprawki test sie nie kompilowal, ale sam kernel budowal sie poprawnie.
+
+WYNIKI:
+    make TOS=1 check  -> EXIT=0   (54 testy Pythona OK)
+    Kryterium z sekcji 41: po Ctrl+Alt+Enter (zoom) i Ctrl+Alt+Enter (powrot)
+    w oknie konsoli NIE WIDAC zadnej ikony pulpitu.  Zrzut r3-restore.png =
+    dowod-zoom-naprawiony.png (powrot 9257 B; przed poprawka bylo 19877 B
+    z przeciekajacymi ikonami).
+DODATKOWO POTWIERDZONE WZROKOWO (na zrzutach r1/r2/r3):
+  * linia komend widoczna, okno dopasowane do pelnych wierszy siatki,
+  * po zoomie okno ma rozmiar siatki i jest wysrodkowane pod paskiem,
+  * tekst po 'dir' pozostaje w oknie, suwak po prawej nie nachodzi na uchwyt.
+OBSERWACJA Z INSTANCJI (nie moja akcja): w konsoli widac wpisy uzytkownika
+"command"/"ir"/"commander" z odpowiedzia "PROCESS START FAILED" - czyli shell
+nie mapuje nazwy "commander" na \SYSTEM\APP\AC.APP.  Zglaszam jako obserwacje;
+nie badalem, czy to zamierzone (nazwa skrocona 'ac' moze byc wlasciwa).
+STAN: oba obrazy maja KERNEL.SYS 214746 B + DESKTOP.APP 29565 B (Claude,
+zbudowane moim toolchainem).  Instancja Hatari uruchomiona do testu.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+44. SYSINFO/COMMANDER "NIE DZIALAJA" - ZABLOKOWANA PERSONA TOS (16.10)
+--------------------------------------------------------------------------------
+ZGLOSZENIE: po komendzie "sysinfo" w terminalu okno SYSINFO bylo niereagujace na
+klikanie; po zamknieciu jego i terminala nie dalo sie juz uruchomic SYSINFO ani
+COMMANDER, natomiast SYSTOS i TERMINAL dzialaja.
+DIAGNOZA (odczyt pamieci jadra na ZYWEJ instancji, bez ingerencji):
+    tos_async_state = 2                        <-- persona TOS "program dziala"
+    tos_async_path  = \SYSTEM\TEST\SYSINFO.PRG
+    sloty procesow  = 4 zajete (INIT/GFX/GUI/DESKTOP), ZERO zombie
+    gui_keyboard_pids/desktop/focus: bez zawieszonego wpisu
+Czyli NIE ma zawieszonego procesu ATOS - wejscie trzyma PERSONA TOS, w ktorej
+nadal "dziala" program SYSINFO.PRG (klasyczny program TOS z 1993 r.).
+DLACZEGO TO BLOKUJE WSZYSTKO: kernel kieruje klawisze do persony, gdy
+kernel_tos_async_owns(pid) jest prawdziwe (kernel_exception.c:665, 1012, 1081),
+wiec aplikacje ATOS (.APP) nie moga przejac GUI => "PROCESS START FAILED", a w
+konsoli widac to jako komunikat przy "commander".  TOS-owe .PRG oraz wbudowany
+TERMINAL dzialaja, bo nie potrzebuja przejecia GUI - dokladnie jak w zgloszeniu.
+CO ZOBACZYC NA EKRANIE (zrzut p1-plasma.png): okno z tytulem "SYSINFO.PRG",
+"Copyright (c) 1992/93 H.W.A.M. de Beer", "Date: 19-03-1993", "Version 8.36" -
+to program TOS, a NIE aplikacja ATOS SYSINFO.APP.  Moje klawisze (F4, menu, RUN)
+szly do tego okna, dlatego nic sie nie dzialo.
+SPROBOWANY RATUNEK (nieudany): wyslalem Enter, Space, Esc, Enter, Space do
+persony -> tos_async_state nadal 2.  Programu nie da sie domknac klawiatura.
+WNIOSEK: do czasu naprawy pozostaje RESTART maszyny.
+PRZYCZYNA ZRODLOWA (dwie czesci, obie do naprawy):
+ 1) shell rozwiazuje golą nazwe "sysinfo" na \SYSTEM\TEST\SYSINFO.PRG
+    (program TOS) zamiast na \SYSTEM\APP\SYSINFO.APP - komentarz w
+    system/shell_fs.c:139 mowi wprost, ze .PRG/.TOS/.TTP/.GTP idzie przez persone
+    TOS.  To jest ZAPALNIK calego zajscia.
+ 2) zamkniecie OKNA persony nie konczy programu TOS: stan zostaje 2, wiec persona
+    dalej wlada wejsciem.  Maszyna stanow (system/tos_prg.c): 1=start, 2=dziala,
+    3=zakonczony, 0=zwolniony (linie 3887/3910/3927/3931).  Zamkniecie okna
+    powinno sprowadzic stan do 0 i oddac wejscie.
+KIERUNEK NAPRAWY:
+ a) WM: zamkniecie okna persony = zakonczenie programu TOS + zwolnienie stanu,
+ b) shell: przy golej nazwie preferowac aplikacje ATOS (.APP) albo przynajmniej
+    nie wchodzic po cichu w persone TOS,
+ c) siatka bezpieczenstwa: awaryjne zakonczenie programu TOS z jadra (np. skrot),
+    zeby niereagujacy program TOS nie blokowal systemu bez wyjscia.
+KRYTERIUM SUKCESU: po uruchomieniu SYSINFO.PRG z konsoli i zamknieciu jego okna
+tos_async_state == 0, a SYSINFO.APP/AC.APP startuja normalnie.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+45. MAGIC 6.30 OPEN SOURCE - PRZEGLAD ZRODEL POD KATEM ATOS (16.10)
+--------------------------------------------------------------------------------
+ZRODLO: MagiC 6.30 (Andreas Kromke) wydany na GNU GPL v3, repozytorium:
+    https://gitlab.com/AndreasK/Atari-Mac-MagiC-Sources
+    (opis po polsku: https://www.atari.org.pl/informacje/magic-6-30-wraz-ze-zrodlami/2955)
+Zawiera: TOS i KAOS (TOS z poprawionymi 80+ bledami), MagiX/MagiC dla Atari,
+wersje dla Maca, narzedzia (MCMD/CMD/KCMD, deasembler DIS 68k) - wszystko 68k.
+STRUKTURA (MagiC/KERNEL): AES, VDI, DOS, BIOS, WINFRAME, WINFRAME.DEM, ALLG
+(wspolne), INC, XTENSION, BUILD, DOC.  Obok: KAOS/ (TOS/KAOS + APPS/KAOSDESK),
+MagiC/APPS (m.in. MAGXDESK.5, CHGRES - program zmiany rozdzielczosci!), INC_C,
+INC_AS, TOOLS.
+CO PRZEJRZALEM: MagiC/KERNEL/WINFRAME/WIN_OBJS.C (userdef ramek okien AES).
+WNIOSKI Z TEGO PLIKU:
+  * rysowanie ramki to czyste VDI (v_pline/vr_recfl, kolory LWHITE/LBLACK/WHITE/
+    BLACK) - czyli 3D bezel i ramka bez zadnej magii,
+  * SIZER jest SWIADOMIE REZERWOWANY w wewnetrznym prostokacie ramki
+    (is_sizer -> prawa/dolna linia wewnetrzna konczy sie przed kwadratem
+    uchwytu, rozmiary winobjects_width/height).  To DOKLADNIE ta klasa bledu,
+    ktora Claude wlasnie naprawial w ATOS (uchwyt schowany pod suwakiem) -
+    warto porownac podejscie: MagiC rezerwuje miejsce w geometrii ramki,
+  * geometria suwaka liczona w promilach (calc_slider(promille,maxpos)),
+  * okno budowane jest jako DRZEWO OBIEKTÓW (objc_add/objc_find/objc_change),
+    a uklad elementow wyliczany w wbm_skind()/wbm_ssize() po zmianie rozmiaru -
+    to gotowy wzorzec takze dla MENU (menu jako drzewo obiektow z objc_*).
+GDZIE SZUKAC AKCELERACJI (jeszcze NIE przejrzane - uczciwie):
+  * MagiC/KERNEL/VDI/ - jadro VDI i sterowniki (autorzy Sven i Wilfried Behne);
+    tutaj nalezy szukac blitowania/blittera i strategii odswiezania,
+  * MagiC/KERNEL/AES/ - menedzer okien (redraw/damage, wind_update),
+  * KAOS/ - zrodla TOS/KAOS: moze byc referencja dla niskopoziomowej obslugi
+    myszy/klawiatury (ciekawe w kontekscie wczesniejszego dryfu myszy).
+REKOMENDACJA: przy zadaniu "dokonczyc gorne menu" najpierw obejrzec model
+obiektowy i menu w MagiC/AES (objc_* + userdef), a przy akceleracji porownac
+VDI MagiC z naszym kblit_*/damage w kernel_wm.c.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+46. TEST OBCIAZENIOWY 10 MINUT (16.10) - WYNIKI I KOREKTA
+--------------------------------------------------------------------------------
+PRZEBIEG (skrypt /tmp/stress_atos.py, przez fifo Hatari, log: STRES-20261016.txt):
+  FAZA 1 (5x przelaczanie trybow przez SETTINGS), FAZA 2 (7x otworz/zamknij:
+  SYSINFO, PLASMA, MODPLAY, SETTINGS, AC), FAZA 3 (10 iteracji: menu otworz/
+  zamknij, RUN, terminal + "dir", ESC), FAZA 4 (SYSTOS = program TOS).
+WYNIKI TWARDE (z logu, co faze):
+  * sloty procesow = ZAWSZE 4 (INIT/GFX/GUI/DESKTOP), ZERO zombie przez caly test,
+  * tos_async_state = 0 przez caly test (persona wolna), oprocz chwili w fazie 4,
+  * ZADNEGO zawieszenia, crashu ani wycieku procesu - system przez ~10 minut
+    nieprzerwanego bombardowania wejsciem zachowal sie stabilnie,
+  * terminal otwiera sie i dziala (faza 3: zrzuty ~13.9 kB = czarne okno konsoli).
+KOREKTA MOJEGO WLASNEGO WNIOSKU: nie moge potwierdzic, ze fazie 1 udalo sie
+przelaczyc tryby.  Zrzuty z fazy 2 (st2-SYSINFO-open.png) pokazuja SAM PULPIT -
+okno RUN nawet sie nie otworzylo, wiec aplikacje nie byly uruchamiane, a roznice
+rozmiarow zrzutow w fazie 1 (16625-16897 B) tlumaczy raczej ruch kursora myszy
+niz zmiana trybu.  Wycofuje twierdzenie "5 przelaczen trybow przeszlo wzorowo".
+CO TEST JEDNAK USTALIL (wartosciowe):
+  * F4 -> Enter (OPEN TERMINAL) DZIALA (faza 3), ale
+    F4 -> Down -> Enter (menu -> RUN...) NIE otwiera okna dialogowego w moim
+    przebiegu - a wczesniej w tej sesji ta sama sekwencja otwierala RUN
+    (zrzuty z "RUN PROGRAM (SYSTEM/APP): fixdisk").
+    => PODEJRZENIE dla autora ostatniej zmiany: rework menu/RUN w desktop_wm.c
+       (add_run_box/paint_run, patch RUN+terminal) mogl zepsuc sciezke
+       MENU -> RUN... przy obsludze klawiatury.  Do sprawdzenia mysza i klawiatura.
+  * SYSTOS (program TOS) w fazie 4: tos_async_state 2 -> po Enter+Space -> 0,
+    czyli PERSONA SIE ZWRALNIA, gdy program TOS faktycznie sie konczy.
+    To ZAWEZA sprawe z sekcji 44: trap nie jest ogolny - konkretnie
+    SYSINFO.PRG (1993, shareware) nie konczy sie i trzyma personę.
+  * Konsola NIE moze uruchamiac aplikacji GUI: windemo.c:7-8 mowi wprost, ze
+    "run" (foreground) nie podlaczy drugiego wlasciciela GUI i zglasza
+    PROCESS START FAILED - dlatego "commander"/"sysinfo" z konsoli konczy sie tym
+    komunikatem (to zachowanie zamierzone, nie regresja).
+WNIOSEK DLA UZYTKOWNIKA: problem "SYSINFO/COMMANDER nie startuja" ma dwa zrodla:
+  (a) uruchamianie z KONSOLI - tak nie zadziala dla aplikacji GUI (zamierzone),
+  (b) goly "sysinfo" w konsoli trafia w program TOS SYSINFO.PRG, ktory potrafi
+      zablokowac personę na stale (sekcja 44).
+  Sciezka ikon/menu powinna dzialac - i tu jest podejrzenie (a) wyzej.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+47. REGRESJA: KONSOLA NIE URUCHAMIA NICZEGO ("PROCESS START FAILED") (16.10)
+--------------------------------------------------------------------------------
+DOWOD (zrzut ekranu konsoli, m5-konsola-teraz.png - tresc czytana wprost):
+    tts1 C:\> systos      -> PROCESS START FAILED
+    tts1 C:\>             -> PROCESS START FAILED
+    tts1 C:\> sysinfo     -> PROCESS START FAILED
+    tts1 C:\> _
+POMIAR STANU: tos_async_state = 0 (persona NIE byla uruchomiona),
+zajete sloty = 4 (zaden nowy proces nie powstal).
+OKNO CZASOWE REGRESJI (to jest najwazniejsze):
+  * KERNEL 214202 B (patch RUN+terminal): uzytkownik UDALO SIE uruchomic
+    SYSINFO.PRG z konsoli (dowod w sekcji 44: tos_async_path =
+    \SYSTEM\TEST\SYSINFO.PRG, tos_async_state = 2),
+  * KERNEL 214746 B (patch zmiany rozmiaru okna, biezacy): konsola nie startuje
+    NICZEGO, kazda proba konczy sie PROCESS START FAILED.
+  => GLOWNY PODEJRZANY: patch zmiany rozmiaru okna (system/kernel_wm.c).
+KOREKTA WCZESNIEJSZEGO PODEJRZENIA: sprawdzilem diff
+desktop_wm.c.przed-claude-run vs desktop_wm.c - 56 linii, wylacznie
+add_run_box()/paint_run() i ich uzycie w obsludze klawiszy RUN.  MENU NIE BYLO
+RUSZANE, wiec moje podejrzenie "rework menu zepsul MENU->RUN..." jest CHYBIONE
+(wycofuje je).  Nieudane proby z fazy 2 testu obciazeniowego i moje pozniejsze
+proby tlumaczy to samo zjawisko co powyzej: zaden proces nie powstal.
+DODATKOWO: w trakcie moich prob ekran byl okupowany przez okno TERMINALA
+(zostalo z fazy 3 testu), wiec klawisze F4/Down/Enter szly do konsoli, a nie do
+pulpitu - to wyjasnia, dlaczego "menu sie nie otwieralo".  Kolejny raz: pomiar
+przed wnioskiem.
+NASTEPNY KROK (eksperyment zwarty, rozstrzygajacy):
+  1) przywrocic system/kernel_wm.c z kopii .przed-claude-resize,
+  2) zbudowac KERNEL.SYS i wgrac na obraz testowy,
+  3) sprawdzic: (a) czy konsola uruchamia program, (b) czy RUN z pulpitu
+     otwiera aplikacje, (c) stan procesow po probie.
+  Jesli na starym kernelu wszystko dziala => regresja jest w patchu zmiany
+  rozmiaru; wtedy zawęzić do konkretnej funkcji (console_fit /
+  console_follow_cursor / overlay_copy / uchwyt zmiany rozmiaru).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+48. KOREKTA: TO NIE PATCH ZMIANY ROZMIARU - SPADANIE URUCHAMIANIA PO CZASIE (16.10)
+--------------------------------------------------------------------------------
+EKSPERYMENT 1 (pozorny wynik): kernel BEZ patcha resize (214202 B), swiezy boot,
+"sysinfo" w konsoli -> powstaje 5. proces, zrzut 17250 B.  Wniosek "patch
+resize psuje uruchamianie" byl PRZEDWCZESNY.
+KONTROLA (rozstrzygajaca): kernel Z patchem resize (214746 B) ale SWIEZY boot,
+ten sam test -> sloty=5, zrzut 17250 B.  URUCHAMIANIE DZIALA.
+=> Patch zmiany rozmiaru NIE jest przyczyna.  Wycofuje teze z sekcji 47.
+CO JEST PRAWDZIWA PRZYCZYNA (zawezone, ale jeszcze nie zidentyfikowane):
+  * To samo jadro i obraz: po DLUZSZYM UZYTKOWANIU (u mnie po ~10-minutowym
+    tescie obciazeniowym) konsola przestaje uruchamiac COKOLWIEK:
+    "PROCESS START FAILED" przy kazdej probie (systos, pusta linia, sysinfo),
+    a nowe procesy nie powstaja (sloty=4, tos_async_state=0).
+  * SWIEZY BOOT NATYCHMIAST PRZYWRACA SPRAWNOSC.
+  * Stress test pokazal to samo w fazie 2: zadna aplikacja nie powstawala.
+=> Objaw uzytkownika ("SYSINFO/COMMANDER nie startuja") to TO SAMO zjawisko:
+   po dluzszej pracy system przestaje tworzyc procesy; restart pomaga.
+CO UDALO SIE WYKLUCZYC:
+  * patch resize (kontrola wyzej),
+  * rework menu/RUN w desktop_wm.c (diff 56 linii, menu nietkniete),
+  * persona TOS jako zapalnik: w stress tescie SYSTOS NIGDY sie nie uruchomil
+    (tos=0 przez caly czas), a mimo to uruchamianie nie dzialalo,
+  * brak pamieci / zombie / wyciek procesow (sloty zawsze 4, tos=0).
+PODEJRZENIA DO SPRAWDZENIA (nastepna runda):
+  1) wyczerpanie jednego z ograniczonych zasobow przy starcie procesu
+     (uchwyty plikow? bloki pamieci? kolejka uslug? licznik spawn),
+  2) stan powloki (shell) po wielu poleceniach - czy jej wlasny bufor/kontekst
+     nie blokuje kolejnych uruchomien,
+  3) stan pulpitu/WM po wielokrotnym otwieraniu i zamykaniu okien.
+PROPONOWANY EKSPERYMENT (zwarty): swiezy boot -> powtarzac uruchamianie
+(np. "dir"/"sysinfo") i po KAZDEJ probie czytac: liczbe procesow, tos_async_state,
+licznik spawn (jesli istnieje), stan powloki; zlapac DOKLADNIE moment, w ktorym
+pierwsza proba sie nie powiedzie, i porownac stan z poprzedzajacym.
+STAN TERAZ: na obrazie demo-test jest kernel 214746 B (z patchem resize) i po
+swiezym boocie uruchamianie dziala - mozna testowac.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+49. ZASOB, KTORY SIE WYCZERPUJE: TABELA PROCESOW (6 SLOTOW) (16.10)
+--------------------------------------------------------------------------------
+POMIAR (odczyt stanow 6 slotow process_table, krok 890 B, state @132):
+  A. swiezy boot        : MESS MESS MESS MESS WOLNY WOLNY   (4 uslugi + 2 wolne)
+  B. po 1. aplikacji    : MESS MESS MESS MESS SLEEP WOLNY
+  C. po 2. aplikacji    : MESS MESS MESS MESS MESS  MESS    (zajete=6)
+  D. kolejne proby      : "sysinfo", "modplay", "plasma" NIE tworza procesow
+                          -> konsola: PROCESS START FAILED
+WNIOSEK (twardy): slotow jest 6, cztery zajmuja uslugi (INIT/GFX/GUI/DESKTOP),
+wiec do uruchomienia zostaja DWA.  Po ich wykorzystaniu KAZDE kolejne
+uruchomienie konczy sie PROCESS START FAILED - dokladnie objaw zgloszony przez
+uzytkownika ("SYSINFO/COMMANDER nie startuja, SYSTOS i terminal tak").
+Konsola przy UDANYM starcie wypisuje "PROCESS READY, PID: n" (widoczne na
+zrzucie slot-test-stan.png), a przy nieudanym "PROCESS START FAILED" - to jest
+nasze narzedzie do rozrozniania.
+CO JESZCZE NIE JEST ROZSTRZYGNIETE (uczciwie): czy ZAMKNIECIE aplikacji zwalnia
+slot.  Dwie proby zakonczenia SETTINGS klawiszem ESC nie dotarly do okna
+(po ESC zrzut i stan slotu bez zmian: SLEEP, okno nadal na ekranie), wiec test
+byl NIEROZSTRZYGAJACY - ESC szedl do konsoli/nie tam, gdzie trzeba.  Wczesniejszy
+test w tej sesji (sekcja 29) pokazal, ze ESC POTRAFI zamknac SETTINGS i wrocic do
+pulpitu, wiec temat wymaga powtorzenia z pewnym fokusem.
+NAJPRAWDOPODOBNIEJSZY MECHANIZM OBJAWU UZYTKOWNIKA: aplikacje nie koncza sie
+realnie przy zamykaniu okien (albo nie zwalniaja slotu), wiec po kilku
+uruchomieniach tabela jest pelna i NIC nowego nie wstaje - a restart ja czysci.
+To pasuje do wszystkich obserwacji: do "SYSINFO nie startuje", do znikania
+sprawnosci po dluzszej pracy i do tego, ze po restarcie znow dziala.
+KIERUNEK NAPRAWY (konkret):
+ 1) upewnic sie, ze zamkniecie okna / wyjscie aplikacji ZWALNIA slot procesu
+    (test: uruchom SETTINGS, zamknij je z pewnym fokusem, sprawdz czy slot
+    wraca do WOLNY) - jesli nie, to jest blad do naprawy,
+ 2) zwiekszyc USER_PROCESS_SLOTS (6 to bardzo malo: 4 uslugi + 2 aplikacje),
+ 3) dac uzytkownikowi awaryjne zakonczenie procesu z konsoli/TASKMGR, zeby nie
+    trzeba bylo restartowac maszyny.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+50. PELNY LANCUCH PRZYCZYNOWY ZGLOSZENIA "SYSINFO/COMMANDER NIE DZIALA" (16.10)
+--------------------------------------------------------------------------------
+POMIAR ROZSTRZYGAJACY (koniec watku z sekcji 49):
+    przed ESC : slot4=SLEEP, zrzut 22212 B (okno SETTINGS na ekranie)
+    po 1. ESC : slot4=WOLNY, zrzut 16704 B (czysty pulpit)
+=> ZAMKNIECIE APLIKACJI ZWALNIA SLOT PROCESU.  Hipoteza "wyciek slotow" jest
+   OBALONA (wycofuje ja).  Moje wczesniejsze nieudane ESC to byl blad testu
+   (klawisz nie docieral do okna), a nie usterka systemu.
+
+PELNY, SPOJNY LANCUCH (wszystkie ogniwa zmierzone):
+ 1) W konsoli nazwa "sysinfo" zostala rozwiazana na \SYSTEM\TEST\SYSINFO.PRG,
+    czyli program TOS (nie na ATOS-owa aplikacje \SYSTEM\APP\SYSINFO.APP).
+    Dowod: tos_async_path = \SYSTEM\TEST\SYSINFO.PRG (sekcja 44).
+ 2) Ten program TOS (shareware z 1993 r.) NIE konczyl sie i nie dalo go zamknac
+    (okno niereagujace na klikanie - wg uzytkownika i wg moich prob).
+    Dowod: tos_async_state = 2 (persona "program dziala") mimo prob domkniecia
+    Enter/Space/Esc (sekcja 44).
+ 3) Skutki byly PODWOJNE:
+    a) persona TOS trzymala KLAWIATURE (kernel_tos_async_owns -> routing do niej,
+       kernel_exception.c:665/1012/1081), wiec aplikacje ATOS nie mogly przejac
+       wejscia,
+    b) jego proces zajmowal jeden z DWOCH wolnych slotow tabeli procesow
+       (6 slotow: 4 uslugi + 2 aplikacje - sekcja 49).
+ 4) Dlatego po tym zdarzeniu NIC nowego nie wstawalo ("PROCESS START FAILED"),
+    a po restarcie wszystko wracalo do normy.
+CO TO ZNACZY DLA NAPRAWY (kolejnosc waznosci):
+ A) KONSOLA: golą nazwe rozwiazywac na aplikacje ATOS (.APP) - albo przynajmniej
+    nie wchodzic po cichu w persone TOS.  To ZAPALNIK calego zdarzenia.
+ B) PERSONA TOS: program TOS musi byc ZAKONCZALNY - zamkniecie jego okna (albo
+    awaryjny skrot) ma sprowadzic tos_async_state do 0 i zwolnic proces.
+    Bez tego jeden niesforny program TOS blokuje system bez wyjscia.
+ C) SIATKA BEZPIECZENSTWA: zwiekszyc USER_PROCESS_SLOTS (6 to 4 uslugi + 2
+    aplikacje) i dodac awaryjne zakonczenie procesu z konsoli/TASKMGR, aby
+    uzytkownik nie musial restartowac maszyny.
+KRYTERIA SUKCESU (obiektywne):
+  - po zamknieciu okna programu TOS: tos_async_state == 0,
+  - po zamknieciu dowolnej aplikacji: slot wraca do WOLNY (dziala - potwierdzone),
+  - "sysinfo" z konsoli uruchamia SYSINFO.APP (ATOS), a nie SYSINFO.PRG (TOS).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+51. KOREKTA TRZECIA: POWLOKA JUZ PREFERUJE .APP - PUNKT A NIEPOTRZEBNY (16.10)
+--------------------------------------------------------------------------------
+Przeczytalem rozwiazywanie nazwy w powloce (system/shell_module.S, etykieta
+shell_start_add_app, okolice linii 2134): dla GOLEJ nazwy (bez kropki, dwukropka
+i separatora sciezki) powloka DOPISUJE ".APP":
+    "shell convenience: a bare name ... is tried as name.APP, so command finds
+     COMMAND.APP"
+i w kodzie: move.b #46 / #'A' / #'P' / #'P'.
+POTWIERDZENIE POMIAREM: w tescie kontrolnym (swiezy boot + patch resize) wpisanie
+"sysinfo" w konsoli dalo nowy proces, ale tos_async_state = 0 - czyli uruchomila
+sie APLIKACJA ATOS, a NIE program TOS.
+=> PUNKT A Z SEKCJI 50 ("konsola rozwiazuje gola nazwe na .PRG, to zapalnik")
+   JEST NIEPOTRZEBNY - wycofuje go.  Powloka robi to dobrze.
+SKAD WIEC WZIELO SIE UZYTKOWNIKOWI OKNO "SYSINFO.PRG" (persona TOS)?
+  Najbardziej prawdopodobne: przez SYSTOS.  W \SYSTEM\LAUNCH.CFG pozycja
+  SYSTOS wskazuje na \SYSTEM\TEST\SYSINFO.PRG - czyli program TOS, ktory
+  uzytkownik okreslil jako dzialajacy ("systos da sie odpalic").  Uruchomienie
+  go wchodzi w persone TOS, a ten konkretny program (shareware 1993) nie konczy
+  sie i nie da sie go zamknac => trzyma klawiature (kernel_tos_async_owns)
+  i jeden z dwoch wolnych slotow tabeli procesow => nic nowego nie wstaje.
+  (Uzytkownik mowil tez o komendzie "sysinfo" - okno moglo byc tym samym oknem
+   SYSTOS-a, bo to ten sam program TOS.)
+WNIOSEK: PRIORYTET MA PUNKT B Z SEKCJI 50 - program TOS musi byc ZAKONCZALNY
+(zamkniecie jego okna / awaryjny skrot ma sprowadzic tos_async_state do 0 i
+zwolnic proces), oraz C (wiecej slotow + awaryjne kill z konsoli).
+Punkt A uznaje za zamkniety z wynikiem negatywnym (nie ma czego naprawiac).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+52. PUNKT B: AWARYJNE ZAKONCZENIE PROGRAMU TOS (Ctrl+Alt+Esc) - WDROZONE (16.10)
+--------------------------------------------------------------------------------
+CO ZMIENIONE (tylko system/tos_prg.c, +64 B, KERNEL.SYS 214746 -> 214810 B):
+ 1) nowa flaga tos_async_cancel,
+ 2) w kernel_tos_async_keyboard() - a wiec PRZED zakolejkowaniem zdarzenia do
+    goscia - wykrywane jest Ctrl+Alt+Esc i ustawia tos_async_cancel=1,
+    a klawisz jest konsumowany (nie idzie do programu TOS),
+ 3) kernel_tos_async_pump(): warunek zwolnienia rozszerzony z "stan==3"
+    na "stan==3 || tos_async_cancel" - czyli zadanie uzytkownika konczy program
+    TOS tak samo jak jego naturalne zakonczenie: zwalnia stos, ustawia stan 0
+    i zdejmuje fokus GUI z TOS_ASYNC_PID.
+DLACZEGO TAM: persona przejmuje klawiature (kernel_tos_async_owns), wiec zwykly
+skrot "do pulpitu" nie dociera.  To miejsce widzi zdarzenia jako JEDYNE, jeszcze
+przed gosciem - dlatego zadziala nawet z niereagujacym programem TOS.
+DLACZEGO TO NIE LAMIE TESTOW: zmiana jest zamknieta w tos_prg.c i nie dodaje
+zadnego symbolu do fragmentow zrodla wycinanych przez testy (lekcja z bledu
+Ctrl+Alt+Del w kernel_exception.c).
+WERYFIKACJA:
+  * make TOS=1 check -> EXIT=0 (52 linie PASS, 54 testy Pythona OK)  [PASS]
+  * weryfikacja na ZYWYM systemie - NIEUDANA, ale z powodu testu, nie kodu:
+    nie udalo mi sie w automacie URUCHOMIC programu TOS.  Komenda "tos sysinfo.prg"
+    konczy sie "TOS.SYS: LOAD FAILED (built-in fallback)" + "TOS PROGRAM FAILED",
+    a skopiowanie SYSINFO.PRG do \SYSTEM\ tego nie zmienilo - czyli loader TOS
+    szuka pliku w innym miejscu, niz potrafie podac bez pisania pelnej sciezki
+    z backslashami.  tos_async_state pozostal 0, wiec nie bylo czego przerywac.
+    => Nie twierdze, ze dziala.  Wymaga proby uzytkownika (albo innej sciezki
+    testowej) - dokladnie tak, jak obiecalem: bez odsluchu/sprawdzenia nie
+    oglaszam sukcesu.
+JAK SPRAWDZIC U SIEBIE (jedno klikniecie + jeden skrot):
+  1) uruchomic SYSTOS z ikony (to jest program TOS \SYSTEM\TEST\SYSINFO.PRG),
+  2) gdy jego okno bedzie na ekranie, nacisnac Ctrl+Alt+Esc,
+  3) oczekiwany skutek: program TOS konczy sie, wraca pulpit, a aplikacje ATOS
+     (SYSINFO.APP, Commander) znowu startuja - bez restartu maszyny.
+  Kryterium w pamieci jadra: tos_async_state == 0 po skrocie.
+SPRZATANIE: plik testowy \SYSTEM\SYSINFO.PRG (kopia na czas proby) usuniety.
+STAN OBRAZU: demo-test ma kernel 214810 B (z Ctrl+Alt+Esc).  Punkty A (zbędny),
+B (wdrozony, czeka na weryfikacje uzytkownika) i C (do zrobienia) - patrz sekcje
+50-52.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+53. LISTA TESTOW DLA UZYTKOWNIKA (16.10) - CO DOKLADNIE SPRAWDZIC
+--------------------------------------------------------------------------------
+Instancja: PID 31040, 800x600, kernel 214810 B (z Ctrl+Alt+Esc), obraz
+demo-test-20261015.img.  Kolejnosc: od najwazniejszego (nowy, niezweryfikowany).
+
+TEST 0 - STAN WYJSCIOWY
+  Zrob: uruchom z ikon SYSINFO i COMMANDER.
+  Oczekiwane: oba wstaja (po restarcie dziala).
+  Jesli nie wstaja od razu - to juz jest blad do zgloszenia.
+
+TEST 1 (NAJWAZNIEJSZY, NOWY) - Ctrl+Alt+Esc konczy program TOS
+  Zrob: kliknij ikone SYSTOS -> pojawi sie okno programu TOS ("SYSINFO.PRG",
+        Copyright 1992/93, Version 8.36).
+        Nacisnij Ctrl+Alt+Esc.
+  Oczekiwane: okno programu TOS znika, wraca pulpit.
+  Potem: uruchom SYSINFO i COMMANDER - maja wstawac (wczesniej nie wstawaly).
+  Jesli nie zadziala: napisz, zrestartuje i sprawdze inna sciezke.
+  POMIAR: moge odczytac tos_async_state (2 przed skrotem, 0 po) - napisz
+        "teraz", gdy bedziesz naciskac, to zmierze przed/po.
+
+TEST 2 - ZNANY LIMIT: DWA WOLNE SLOTY (to nie blad, tylko ograniczenie)
+  Zrob: uruchom po kolei SYSINFO, PLASMA, MODPLAY BEZ zamykania poprzednich.
+  Oczekiwane: trzecia/czwarta proba konczy sie "PROCESS START FAILED"
+        (6 slotow = 4 uslugi + 2 aplikacje).
+  Zamykaj aplikacje miedzy probami (ESC), wtedy kazda wstaje.
+
+TEST 3 - RUN i TERMINAL (poprawki Claude, u mnie zmierzone)
+  RUN:    F4 -> Down -> Enter -> wpisz "sysinfo" -> Enter.
+          Litery maja sie pojawiac NATYCHMIAST (wczesniej ~0,3-1 s na znak);
+          Backspace tak samo. Enter uruchamia program.
+  TERMINAL: F4 -> Enter (OPEN TERMINAL).  Ekran czysty, widac "tts1 C:\>".
+          Wpisywany tekst widoczny od razu, Enter wykonuje polecenie,
+          po kilkunastu Enterach okno idzie za kursorem (ostatnia linia widoczna).
+
+TEST 4 - ZMIANA ROZMIARU OKNA TERMINALA (mysz)
+  Zrob: chwyc krawedz okna terminala i zmniejsz/powieksz je.
+  Oczekiwane: linia komend pozostaje widoczna (nie chowa sie pod dolna ramka),
+        wysokosc dopasowuje sie do pelnych wierszy, suwak konczy sie NAD
+        uchwytem zmiany rozmiaru, a sam uchwyt (prawy dolny rog) zmienia rozmiar
+        w OBU kierunkach (klikniecie tam nie przewija tekstu).
+  Potem: Ctrl+Alt+Enter (zoom) i znow Ctrl+Alt+Enter (powrot).
+  Oczekiwane: pulpit NIE przeswituje przez okno konsoli (kryterium z sekcji 41).
+
+TEST 5 - SETTINGS
+  Zrob: otworz SETTINGS; TAB przelacza zakladki RESOLUTION -> THEMES -> VOLUME.
+  VOLUME:    pokazuje stan woluminu ("CLEAN - WRITES ENABLED"), ma
+             "REPAIR [ENTER]" i "CLOSE [ESC]".
+  RESOLUTION: wybierz INNY tryb -> APPLY (Enter) -> pojawi sie
+             "KEEP MODE? 4 SEC TO CONFIRM" -> YES (Enter w ciagu 4 s).
+             Oczekiwane: tryb zostaje, status "CONFIG SAVED".
+             Jesli zamiast YES nacisniesz ESC: tryb wraca do poprzedniego.
+
+TEST 6 - PRZELACZANIE ROZDZIELCZOSCI
+  Zrob: przelacz kolejno 640x480x8, 800x600x8, 1024x768x8, 16 kolorow, 65k
+        i wroc do 800x600x8.
+  Oczekiwane: po kazdej zmianie pulpit i okna rysuja sie poprawnie.
+  (Moj test automatyczny tego NIE potwierdzil - nie mial pewnej kontroli nad
+   menu, dlatego Wasza obserwacja jest tu rozstrzygajaca.)
+
+CO ZGLASZAC: ktory numer testu, co dokladnie bylo na ekranie (napis / miganie /
+brak reakcji), czy trzeba bylo restartu maszyny, czy Ctrl+Alt+Esc pomogl.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+54. WYNIKI TESTOW Z SEKCJI 53 (Claude, 16.10) + 3 POPRAWKI JADRA
+--------------------------------------------------------------------------------
+JAK: Hatari w chmurze (mysz + klawiatura przez FIFO, odczyt pamieci jadra),
+KOPIA demo-test-20261015.img (jadro 214810 B - ten sam plik co w instancji
+PID 31040), Wasze flagi: megast/memsize 4/ET4000/VOFA/BIOS.bin/patch-tos false.
+Instancji uzytkownika i obrazu nie dotykalem.
+
+TEST 0 - PASS.  SYSINFO i COMMANDER wstaja.  Uwaga: ESC zaraz po otwarciu nie
+  zamyka aplikacji (klawiatura zostaje przy pulpicie, dopoki nie klikniesz w
+  okno); przycisk QUIT dziala.
+TEST 1 - FAIL na jadrze 214810 B.  tos_async_state 2 -> 0 (stan sie zgadza),
+  ALE okno SYSINFO.PRG zostaje na ekranie, a SYSINFO/COMMANDER NIE wstaja:
+  pulpit pisze "SYSINFO.AP TOS RC -689" / "AC.APP TOS RC -689".
+  PRZYCZYNA: Ctrl+Alt+Esc zwalnial stos i zerowal stan w pompie, porzucajac
+  goscia w polowie - epilog kernel_tos_run_program() (zamkniecie okna, zwolnienie
+  zadania, wektorow, dzwieku, TPA, tos_active=0) NIGDY sie nie wykonal.
+  tos_active zostal 1, wiec kernel_tos_start_async() zwracal -0x2b1 = -689.
+  POPRAWKA (tos_prg.c): gosc wznowiony w tos_async_park() widzi
+  tos_async_cancel i wychodzi przez asf_tos_exit() - ta sama droga co Pterm
+  i blad programu; caly epilog sie wykonuje, potem stan 3 -> 0.  Pompa zwalnia
+  stos tylko przy stanie 3.  Kod wyjscia -32.
+  WYNIK: 2 pelne cykle SYSTOS -> Ctrl+Alt+Esc: okno znika, stan 2->0,
+  tos_active 1->0, SYSINFO i COMMANDER wstaja po kazdym cyklu.  PASS.
+
+DWA WYCIEKI ZNALEZIONE PRZY OKAZJI (wystepuja TAKZE bez programu TOS):
+ A) ZOMBIE W TABELI PROCESOW (kernel_exception.c).  Zamknieta aplikacja
+    zostaje w stanie 5 (TERMINATED), bo pulpit uruchamia przez SYS_SPAWN_ASYNC
+    i nigdy nie odbiera statusu (call 32 reap=1).  6 slotow = 4 uslugi + 2,
+    wiec TRZECIE uruchomienie (np. SYSINFO po dwoch QUIT) sie nie udaje:
+    pulpit cicho przechodzi w persone TOS ("TOS STARTED", brak okna) albo
+    "TOS RC -689".  To wyjasnia tez Wasza obserwacje "SYSINFO/COMMANDER nie
+    dzialaja" bez zadnego .PRG.  (Pomiar sekcji 50 "slot wraca do WOLNY"
+    dotyczyl innego scenariusza; tu zrzut tabeli: 5/5/SYSINFO 6/5/SYSINFO.)
+    POPRAWKA: user_reclaim_zombie_if_full() - gdy nie ma wolnego slotu,
+    najstarszy zombie, na ktorego nikt nie czeka (WAITING/wait_pid), wraca do
+    FREE.  Pamiec/okna/pliki i tak zwalnia kernel_user_end(); licznik
+    kdbg_zombie_reclaimed.
+ B) WYCIEK TABELI ZADAN OKIEN (kernel_wm.c).  window_close() zwalnia
+    wm_window_req tylko dla uchwytu != 0, a glowne okno aplikacji ma uchwyt 0
+    - kazde uruchomienie zjada 1 z 6 slotow.  Po zapelnieniu set_window()
+    cicho odmawia i nowe okno aplikacji rejestruje sie jako PELNOEKRANOWE TLO
+    (flags 7): znika pulpit, gorny pasek i ramki (odtworzone: COMMANDER na
+    czarnym tle).  POPRAWKA: kernel_wm_close_pid() (koniec procesu) zwalnia
+    WSZYSTKIE zadania okien tego pid.
+ WYNIK A+B: 25 krokow z rzedu (SYSINFO x5, COMMANDER x5, SYSTOS+Ctrl+Alt+Esc
+    x2) - okna zawsze z ramka (flags 1), procesy startuja, 9 zombie odzyskanych.
+
+TEST 2 - zgodnie z oczekiwaniem: przy 2 dzialajacych aplikacjach trzecia nie
+  wstaje.  ALE komunikat jest mylacy: pulpit pokazuje "TOS STARTED" zamiast
+  "PROCESS START FAILED" (po nieudanym spawn launch_run() probuje persony TOS,
+  ktora przyjmuje zlecenie).  Do poprawy w desktop_wm.c: nie robic fallbacku
+  TOS dla plikow .APP (albo pokazac kod bledu spawn).
+TEST 3 - PASS.  RUN: litery natychmiast, Backspace, Enter uruchamia (SYSINFO,
+  PLASMA).  TERMINAL: "tts1 C:\>", tekst od razu, po 14 Enterach widac kursor.
+  ("ver" -> PROCESS START FAILED: nie ma takiej aplikacji, to nie blad.)
+TEST 4 - PASS.  Zmniejszenie: prompt widoczny, suwak nad uchwytem; klik w uchwyt
+  nie przewija; powiekszenie do 80x25; Ctrl+Alt+Enter zoom (wysrodkowane) i
+  powrot - pulpit nie przeswituje.
+TEST 5 - PASS (na Waszym jadrze).  TAB: RESOLUTION -> THEMES -> VOLUME;
+  VOLUME: "CLEAN - WRITES ENABLED", REPAIR [ENTER], CLOSE [ESC].  APPLY 640x480
+  -> KEEP MODE? -> YES -> CONFIG SAVED; 1024x768 -> ESC -> PREVIOUS MODE
+  RESTORED.  Kosmetyka: tekst VOLUME uciety na prawej krawedzi ("REFUSES ALL
+  WRI", "SAVES ARE BL"), stopka "SELECT MODE, THEN APPLY" takze na THEMES/VOLUME.
+TEST 6 - PASS (na Waszym jadrze): 640x480x8, 800x600x8, 1024x768x8,
+  640x480x16, 800x600x65k - pulpit i okno rysuja sie poprawnie.  Obserwacje:
+  * podglad 1024x768 wywolany prosto z 640x480: ekran w paski do czasu
+    potwierdzenia (z 800x600 ten sam tryb byl czysty),
+  * 65k: zielony pas przy dolnej krawedzi w czasie podgladu, po YES ~20 px
+    czarnego pasa na dole,
+  * ostatni krok (powrot do 800x600x8) zaklocil zgubiony klawisz w moim
+    automacie - nie oceniam go.
+WAZNE O BUILDZIE: jadro zbudowane u mnie (gcc 16) - takze BEZ moich zmian -
+  odmawia KAZDEJ zmiany trybu "MODE REFUSED rc=-4".  To roznica kompilatora,
+  nie poprawek; dlatego NIE daje gotowego KERNEL.SYS.  Testy 5/6 robilem na
+  Waszym 214810 B, testy 1/A/B na moim buildzie z poprawkami.
+
+TESTY HOSTOWE: make TOS=1 check - identyczny wynik z poprawkami i bez (u mnie
+  srodowiskowo padaja tylko check-audio/console/mono-font, jak wczesniej).
+PLIKI:
+  ATOS 2.1/system/tos_prg.c, kernel_exception.c, kernel_wm.c - zmienione
+     (kopie: *.przed-claude-tos)
+  display-demo/tos-zombie-okna-claude.patch, testy-claude-20261016.png
+DO ZROBIENIA NA MACU: zbudowac KERNEL.SYS, make TOS=1 check, wgrac na kopie,
+  powtorzyc Test 1 (Ctrl+Alt+Esc) i "SYSINFO -> QUIT" 3 razy z rzedu.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+55. MODPLAY I PRE2 "NIE GRAJA" (Claude, 16.10 wieczor)
+--------------------------------------------------------------------------------
+Odtworzone na KOPII demo-final.img (jadro Deepseeka 215114 B), flagi z recepty
+(--tf536 on --memsize 4 --natfeats on --sound 44100), Hatari bez libxmp
+(nf_atos_sound.c identyczny jak w atari-030-port).
+MODPLAY - PRZYCZYNA: z --natfeats on emulowane ESP32 odpowiada, ale nie ma
+  trackera (brak AS_CAP_TRACKER - fork nie ma libxmp).  MODPLAY wybiera ESP32,
+  modsound_module_begin() odmawia i program STAJE: "Tracker firmware required",
+  "0 CHANNELS / BPM 0", cisza.  (Bez --natfeats wybieral Yamahe i gral - stad
+  rozne wyniki zaleznie od flag.)  Uwaga: demo-final.img ma tez STARSZY
+  MODPLAY.APP (18020 B) i starszy FLASHBK.APP (260168 B) niz demo-test-20261015.
+  POPRAWKA (system/modplay.c): gdy ESP32 odmowi modulu, a jadro ma PCM,
+  MODPLAY sam przechodzi na Yamahe/PCM (jak F1).  Wynik: "Loading verified PCM
+  cache" -> "PLAYING - Yamaha YM2149", czas 0:18 -> 0:40.  XM/S3M nadal wymagaja
+  trackera (komunikat "XM/S3M require ESP32 output").
+PRE2 - DZIALA, ale bez trackera idzie wolna sciezka .MUS: intro, LOADING ok.
+  2 min, ekran tytulowy, mapa, plansza (zrzuty: modplay-pre2-claude.png).
+  Wymaganie z URUCHOM_TEST_TRACKER_20261015.command: binarka
+  hatari-tracker-20261013 (libxmp) -> ladowanie ~1 s.
+PLIKI: ATOS 2.1/system/modplay.c (kopia .przed-claude-modplay),
+  display-demo/MODPLAY-claude.APP, modplay-fallback-claude.patch,
+  demo-final-claude.img (kopia demo-final.img + nowy MODPLAY),
+  URUCHOM_DEMO_FINAL_CLAUDE.command (binarka z trackerem + pelne flagi).
+================================================================================

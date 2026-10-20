@@ -1,0 +1,13 @@
+RESTART PULPITU PO ZMIANIE TRYBU - 2026-10-20 12:03
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-console-stress.img (klon demo-guard.img)
+
+krok                 polecenie/akcja                    stan           wynik   hash
+tryb 1024x768        APPLY+YES                          800x600        UWAGA   
+zamkniecie 1024x768  FILE>CLOSE                         konsola        OK      
+restart 1024x768     desktop.app + RES=                 800x600        UWAGA   
+tryb 640x480         APPLY+YES                          1024x768       UWAGA   
+zamkniecie 640x480   FILE>CLOSE                         konsola        OK      
+restart 640x480      desktop.app + RES=                 1024x768       UWAGA   
+tryb 800x600         SETTINGS                           brak okna      UWAGA   -
+
+krokow: 7, uwag: 5

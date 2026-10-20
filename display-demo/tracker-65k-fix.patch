@@ -1,0 +1,20 @@
+--- a/src/vofa.c
++++ b/src/vofa.c
+@@ -137,7 +137,7 @@
+ 	 * LINIOWY bufor 8 bitow na piksel. Dokladnie tak programuje ET4000
+ 	 * sterownik Nova w EmuTOS ("set_idxreg(TS_I, 0x04, 0x0C)"). Wczesniej
+ 	 * dekoder zwracal tu 2 bpp i cala pamiec byla czytana w zlym formacie. */
+-	if (seq4 & 0x08)
++	if ((seq4 & 0x08) && !packed16)
+ 		bits = 8;
+ 	/* Uwaga: mapa planow 0x0F NIE oznacza 16 kolorow - EmuTOS powiela obraz
+ 	 * mono do wszystkich czterech planow, zeby byl widoczny niezaleznie od
+@@ -539,7 +539,7 @@
+ 	 * ConvST_Refresh() asks VOFA_Active() during the very same frame: deciding
+ 	 * the flag after the print left the first frame of a mode change rendering
+ 	 * the Shifter while the card was already scanning it. */
+-	vofa_drive = ((bpp == 1 || bpp == 8) && width >= 640 && height >= 400);
++	vofa_drive = ((bpp == 1 || bpp == 4 || bpp == 8 || bpp == 16) && width >= 640 && height >= 400);
+ 
+ 	if ((nVBLs % 100) == 0)
+ 		fprintf(stderr, "VOFA-MODE: w=%d h=%d stride=%d bpp=%d drive=%d seq4=%02x crtc13=%02x crtc17=%02x\n",

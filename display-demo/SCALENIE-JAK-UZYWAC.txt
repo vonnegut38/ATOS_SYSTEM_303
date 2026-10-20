@@ -1,0 +1,37 @@
+ATOS - CO UZYWAC DO CZEGO (stan 16.10.2026)
+=====================================================================
+Obraz z kompletnym ATOS-em: display-demo/ATOS-2026-10-16.img
+  (kopia robocza; zawiera: KERNEL.SYS 216554 B z siatka bezpieczenstwa
+   zmiany trybu, DESKTOP.APP 28395 B bez martwego kodu, SETTINGS.APP 6320 B,
+   GFX.APP 401 B, ET4000.SYS 5564 B, ICONS.DAT 107524 B (PackBits v3),
+   pelny DESKTOP.CFG z pozycjami ikon)
+
+DWIE BINARKI HATARI - dwie różne mocne strony (nie da się ich scalic bez
+cmake+ninja, ktorych w tym srodowisku nie ma; libxmp jest vendoryzowany
+w work/tracker-player/libxmp, wiec po instalacji cmake da sie to zrobic):
+
+A) DZWIEK / PRE2 / ESP32  ->  display-demo/hatari-tracker-20261013
+   (ma libxmp i emulowane ESP32; PRE2 laduje moduly ~1 s)
+   Uruchomienie:
+     cd display-demo
+     ./hatari-tracker-20261013 -c ../ATOS_AKTUALNY/hatari.cfg \
+       --machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 \
+       --tf536 on --graphics-card vofa --gfx-chip et4000 --fast-forward off \
+       --ide-master "$PWD/ATOS-2026-10-16.img" --tos ../ATOS_AKTUALNY/BIOS.bin \
+       --patch-tos false --mmu off --statusbar false --borders false --zoom 1 \
+       --sound 44100 --natfeats on --confirm-quit false --window
+   OGRANICZENIE: tryby 4 bpp (16 kolorow) i 16 bpp (65K) sa RYSOWANE ZLE
+   (podwojna szerokosc, smieci) - to bug TEJ binarki, nie ATOS-a.
+
+B) TRYBY 16 KOLOROW / 65K  ->  atari-030-port/hatari-src/build/src/hatari
+   (ma poprawke Claude'a: wlasciwe 4/16 bpp)
+   Uruchomienie: jak wyzej, tylko podmien nazwe binarki; BEZ --cmd-fifo
+   (ta binarka nie czyta fifo).
+   OGRANICZENIE: brak libxmp, wiec PRE2 muzyka laduje sie wolno (~20 s)
+   i MODPLAY nie ma wyjscia ESP32 (gra tylko przez Yamaha YM2149 - to
+   poprawne zachowanie, MODPLAY wypisze "ESP32 Sound Accelerator unavailable").
+
+NAPRAWA docelowa (gdy bedzie cmake):
+  cmake/ninja + patch tracker-65k-fix.patch na work/tracker-player/hatari-src
+  (2 linie w src/vofa.c) => JEDNA binarka z audio i poprawnymi trybami.
+  Patch lezy w display-demo/tracker-65k-fix.patch (gotowy, sprawdzony).

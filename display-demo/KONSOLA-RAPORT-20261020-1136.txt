@@ -1,0 +1,7 @@
+KONSOLA PRZY ZAMKNIETYM PULPICIE - 2026-10-20 11:36
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-console-stress.img (klon demo-guard.img)
+
+krok                 polecenie/akcja                    stan           wynik   hash
+zamkniecie pulpitu   -                                  pulpit nadal   UWAGA   -
+
+krokow: 1, uwag: 1

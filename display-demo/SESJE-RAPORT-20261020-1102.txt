@@ -1,0 +1,22 @@
+SESJE + ZAMYKANIE PULPITU + TRYB Z OKNEM - 2026-10-20 11:02
+obraz: /Users/xxx/Documents/Deepseek_test/display-demo/demo-sessions.img (klon demo-guard.img)
+
+faza     krok             zmierzone                        oczekiwane         wynik    uwagi
+BOOT     -                pulpit 800x600                   pulpit 800x600     OK       02e7e5cc228c527f
+SESJE    add-desk x2      hash ce96bacca766dbae            inny niz desk1     ROZNICA  hash desk1=176bda98549b5be4
+SESJE    przelaczenie 0   hash ce96bacca766dbae            -                  OK       Shift+Alt+F10
+SESJE    przelaczenie 1   hash ce96bacca766dbae            -                  OK       Shift+Alt+F10
+SESJE    przelaczenie 2   hash ce96bacca766dbae            -                  OK       Shift+Alt+F10
+SESJE    czy sesje rozne  1 roznych ekranow                >=2                ROZNICA  porownanie hashy
+SESJE    app w sesji      hash e2468193836defa4            inny niz ce96bacca766dbae ROZNICA  terminal + dir
+SESJE    powrot na inna   hash e2468193836defa4            -                  OK       terminal zostal w swojej sesji
+SESJE    powrot           hash e2468193836defa4            hash e2468193836defa4 OK       ten sam ekran = stan zachowany
+DESKTOP  zamkniecie 0     konsola (mono)                   konsola            ROZNICA  
+DESKTOP  restart 0        pulpit wrocil                    pulpit             ROZNICA  c3841677594f5eb5
+DESKTOP  zamkniecie 1     hash 84bb355d86dd3a61            konsola            ROZNICA  pulpit nadal widoczny?
+DESKTOP  restart 1        pulpit wrocil                    pulpit             ROZNICA  c3841677594f5eb5
+TRYB+OKNO 1024 z oknem     800x600                          1024x768           ROZNICA  ab34960e06ed58e3
+TRYB+OKNO powrot           1024x768                         800x600            ROZNICA  593628bbbe6fc870
+KONIEC   -                hash dbb91ba2f300c46b            -                  OK       pulpit po sesji
+
+krokow: 16, zgodnych: 7, roznic: 9

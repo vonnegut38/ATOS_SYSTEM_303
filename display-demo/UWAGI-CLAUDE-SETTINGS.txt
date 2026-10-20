@@ -1,0 +1,47 @@
+SETTINGS (zmiana rozdzielczosci) - sprawdzenie Claude, 2026-10-14
+=====================================================================
+Test: ten sam BIOS i konfiguracja co ATOS_AKTUALNY (Mega ST + TF536 + VOFA/ET4000),
+Hatari zbudowany z atari-030-port/hatari-src, sterowanie myszka ze skryptu.
+
+1) DLACZEGO OKNA NIE BYLO WIDAC
+   Kod jest dobry.  Winny jest obraz display-demo/demo.img: ma STARE pliki,
+   nie te z build/system (stan z 13:28-13:31):
+     \SYSTEM\APP\SETTINGS.APP   4 609 B (stara wersja ze znacznikami)  -> build 5 156 B
+     \SYSTEM\KERNEL.SYS       465 836 B                               -> build 467 056 B
+     \SYSTEM\APP\DESKTOP.APP   29 581 B                               -> build 29 433 B
+     \SYSTEM\GFX.APP             401 B  (broker przepuszcza opcody tylko do 37!)
+     \SYSTEM\DRV\ET4000.SYS    5 169 B  (stary VOFA.SYS, bez 640x480x4 i 800x600x16)
+   Sama wymiana SETTINGS.APP na build -> okno SETTINGS pokazuje sie od razu.
+   Uwaga na sciezki: sterownik karty jadro laduje z \SYSTEM\DRV\ET4000.SYS
+   (tak robi tools/build_atos2.py), a nie z \SYSTEM\VOFA.SYS.
+
+2) STARY GFX.APP = "MODE REFUSED"
+   Z nowym SETTINGS.APP, ale starym GFX.APP, APPLY konczy sie bledem -994 (-0x3e2,
+   "nieznany opcode"): broker SYSTEM.GFX odrzuca opcody 39 (GUARD) i 40 (DISPLAY_SET)
+   zanim dotra do jadra.  Nowy GFX.APP (cmpi #40) to naprawia.
+   Sugestia (nie wprowadzalem): w settings_app.c pokazywac kod bledu, np.
+   "MODE REFUSED -994" zamiast samego "MODE REFUSED" - to od razu wskazalo przyczyne.
+
+3) WYNIK NA KOMPLECIE Z build/system  (display-demo/demo-poprawiony.img)
+   - okno SETTINGS: widoczne, zakladki, radio, APPLY/CLOSE dzialaja (mysz i klawiatura)
+   - 640x480 / 256: podglad, "KEEP MODE? 4 SEC", YES -> CONFIG SAVED,
+     DESKTOP.CFG = RES=640x480x8; bez potwierdzenia -> "PREVIEW EXPIRED - RESTORED"
+   - 16 COLORS z 800x600 i 65K z 640x480: poprawnie odrzucone komunikatem
+   - 640x480 / 16 kolorow i 800x600 / 65K: jadro i sterownik przelaczaja karte
+     poprawnie, ale stary Hatari nie umial tego pokazac (patrz 4)
+
+4) HATARI - 3 bledy w modelu karty (poprawione w hatari-src, patch obok)
+   a) vofa.c: "if (seq4 & 0x08) bits = 8" nadpisywalo 16 bpp (tabela seq16 ma Chain 4)
+      -> 65K bylo pokazywane jako 8 bpp (zle kolory, podwojna szerokosc)
+   b) vofa.c: vofa_drive nie obejmowal bpp == 16 -> Hatari wracal do obrazu Shiftera
+      (bylo widac stare logo ATOS z rozruchu)
+   c) conv_st.c: brak sciezki wyswietlania 4 bpp, a vofa.c liczyl dla 4 bpp stride
+      z CRTC (160 B) zamiast 4 bajtow na grupe 8 px (320 B, jak kgfx_present_planar4)
+   Po poprawkach: 16 kolorow i 65K widac poprawnie, potwierdzenie i powrot po 4 s dzialaja.
+   Patch: display-demo/hatari-vofa-4bpp-16bpp-fix.patch (juz nalozony na
+   atari-030-port/hatari-src; kopie przed zmiana: src/vofa.c.przed-claude, src/conv_st.c.przed-claude).
+   Hatari na Macu trzeba przebudowac, zeby to zadzialalo.
+
+5) DO ZROBIENIA PRZY WDROZENIU
+   Wgrywac zawsze KOMPLET: KERNEL.SYS, GFX.APP, \SYSTEM\APP\DESKTOP.APP,
+   \SYSTEM\APP\SETTINGS.APP i VOFA.SYS jako \SYSTEM\DRV\ET4000.SYS.

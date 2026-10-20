@@ -1,0 +1,227 @@
+--- a/system/kernel_wm.c	2026-10-16 15:21:58.295328177 +0200
++++ b/system/kernel_wm.c	2026-10-16 15:51:06.362902209 +0200
+@@ -468,13 +468,28 @@
+ {
+     return w<wm.count&&!(wm.win[w].flags&2u)&&(int32_t)wm.win[w].content_h>(int32_t)wm.win[w].client.h;
+ }
++/* Height of the scrollbar column.  The client reaches the bottom of the frame,
++   so a full-height bar put its down arrow exactly on the GEM sizer (the 16x16
++   bottom-right corner): the sizer was painted over and a click there scrolled
++   instead of resizing.  Like GEM (W_VBAR ends above W_SIZER), stop the bar
++   above the sizer whenever the two overlap. */
++static int32_t sb_h(unsigned w)
++{
++    int32_t h=(int32_t)wm.win[w].client.h;
++    int32_t cb=(int32_t)wm.win[w].client.y+h;
++    int32_t sz=(int32_t)wm.win[w].frame.y+(int32_t)wm.win[w].frame.h-16;
++    int32_t cr=(int32_t)wm.win[w].client.x+(int32_t)wm.win[w].client.w;
++    int32_t fr=(int32_t)wm.win[w].frame.x+(int32_t)wm.win[w].frame.w;
++    if(cr>fr-16&&cb>sz)h-=cb-sz;
++    return h>0?h:0;
++}
+ static int32_t cxs_of(unsigned w)
+ {
+     return (int32_t)wm.win[w].client.x+(int32_t)wm.win[w].client.w-(int32_t)WM_SB_W;
+ }
+ static int32_t sb_thumb_size(unsigned w)
+ {
+-    int32_t track=(int32_t)wm.win[w].client.h-2*(int32_t)WM_SB_W;
++    int32_t track=sb_h(w)-2*(int32_t)WM_SB_W;
+     int32_t t=track*(int32_t)wm.win[w].client.h/(int32_t)wm.win[w].content_h;
+     if(t<(int32_t)WM_SB_W)t=WM_SB_W;
+     if(t>track)t=track;
+@@ -490,18 +505,19 @@
+     if(wm.win[hit].flags&2u)return 0; /* client draws its own decorations */
+     if(wm_hit_part(&wm,hit,(int16_t)x,(int16_t)y)!=WM_PART_CLIENT)return 1;
+     /* The scrollbar overlays the client surface, but belongs to the WM too. */
+-    return sb_visible(hit)&&wm.win[hit].client.h>2u*WM_SB_W&&
+-           x>=cxs_of(hit)&&x<cxs_of(hit)+(int32_t)WM_SB_W;
++    return sb_visible(hit)&&sb_h(hit)>2*(int32_t)WM_SB_W&&
++           x>=cxs_of(hit)&&x<cxs_of(hit)+(int32_t)WM_SB_W&&
++           y<(int32_t)wm.win[hit].client.y+sb_h(hit);
+ }
+ /* Handle a click in window w's scrollbar.  Returns 1 when it was consumed. */
+ static int sb_click(unsigned w,int32_t mx,int32_t my)
+ {
+-    int32_t cxs,cys,chs,range;
++    int32_t cxs,cys,chs,page,range;
+     if(w>=wm.count||(wm.win[w].flags&2u))return 0;
+     if(!sb_visible(w))return 0;
+     cxs=cxs_of(w);
+     if(mx<cxs||mx>=cxs+(int32_t)WM_SB_W)return 0;
+-    cys=(int32_t)wm.win[w].client.y;chs=(int32_t)wm.win[w].client.h;
++    cys=(int32_t)wm.win[w].client.y;chs=sb_h(w);page=(int32_t)wm.win[w].client.h;
+     if(chs<=2*(int32_t)WM_SB_W||my<cys||my>=cys+chs)return 0;
+     range=sb_range(w);
+     if(my<cys+(int32_t)WM_SB_W){
+@@ -512,8 +528,8 @@
+         int32_t track=chs-2*(int32_t)WM_SB_W;
+         int32_t ths=sb_thumb_size(w);
+         int32_t thp=range?(track*(int32_t)wm.win[w].src_y/range):0;
+-        if(my<cys+(int32_t)WM_SB_W+thp){int32_t v=(int32_t)wm.win[w].src_y-chs;wm.win[w].src_y=(int16_t)(v>0?v:0);}
+-        else if(my>=cys+(int32_t)WM_SB_W+thp+ths){int32_t v=(int32_t)wm.win[w].src_y+chs;wm.win[w].src_y=(int16_t)(v<range?v:range);}
++        if(my<cys+(int32_t)WM_SB_W+thp){int32_t v=(int32_t)wm.win[w].src_y-page;wm.win[w].src_y=(int16_t)(v>0?v:0);}
++        else if(my>=cys+(int32_t)WM_SB_W+thp+ths){int32_t v=(int32_t)wm.win[w].src_y+page;wm.win[w].src_y=(int16_t)(v<range?v:range);}
+         else{sb_drag_win=(int)w;sb_drag_grab=my-(cys+(int32_t)WM_SB_W+thp);return 1;}
+     }
+     sb_damage(w);
+@@ -639,6 +655,7 @@
+ uint32_t kernel_gui_focus_pid(void);
+ void kernel_gui_focus_set(uint32_t pid);
+ 
++static int console_fit(unsigned i);
+ static void window_minimize(unsigned i)
+ {
+     if(i>=wm.count)return;
+@@ -683,10 +700,14 @@
+     wm.win[i].client.y=(int16_t)(wm.win[i].frame.y+16);
+     wm.win[i].client.w=wm.win[i].frame.w;
+     wm.win[i].client.h=(uint16_t)(wm.win[i].frame.h>16u?wm.win[i].frame.h-16u:0u);
++    if(console_fit(i)){
++        /* the shell window: geometry fitted to its 80x25 grid */
++    }else{
+     if(wm.win[i].content_h<=old_h)wm.win[i].content_h=wm.win[i].client.h;
+     {int32_t range=(int32_t)wm.win[i].content_h-wm.win[i].client.h;
+      if(range<0)range=0;
+      if(wm.win[i].src_y>range)wm.win[i].src_y=(int16_t)range;}
++    }
+     notify_geometry(i);
+     kernel_gui_focus_set(window_owner_pid(i));
+     wm_force_compose=1;
+@@ -1463,6 +1484,9 @@
+                              rsz_edge=(uint8_t)(((px>=wm.win[hit].frame.x+wm.win[hit].frame.w-4)?1u:0u)|
+                                                 ((py>=wm.win[hit].frame.y+wm.win[hit].frame.h-4)?2u:0u));
+                              if(!rsz_edge)rsz_edge=3u;
++                             /* the 16x16 GEM sizer always resizes both ways */
++                             if(px>=wm.win[hit].frame.x+wm.win[hit].frame.w-16&&
++                                py>=wm.win[hit].frame.y+wm.win[hit].frame.h-16)rsz_edge=3u;
+                              rsz_active=1;rsz_drawn_valid=0;++wm_dbg_rsz_start;
+                          }else{
+                              wm_raise(&wm,hit);   /* click to focus/raise */
+@@ -1486,7 +1510,7 @@
+                  unsigned w=(unsigned)sb_drag_win;
+                  if(w<wm.count){
+                      int32_t cys=(int32_t)wm.win[w].client.y;
+-                     int32_t track=(int32_t)wm.win[w].client.h-2*(int32_t)WM_SB_W;
++                     int32_t track=sb_h(w)-2*(int32_t)WM_SB_W;
+                      int32_t ths=sb_thumb_size(w),range=sb_range(w),thp,den;
+                      thp=my-(cys+(int32_t)WM_SB_W)-sb_drag_grab;
+                      if(thp<0)thp=0;
+@@ -1615,7 +1639,14 @@
+                  if(window_owner_pid(rsz_win)!=0u){
+                      wm_resize_commit(&wm,rsz_win,(uint16_t)rsz_nw,(uint16_t)rsz_nh);
+                      wm_force_compose=1;
+-                 }else wm_resize(&wm,rsz_win,(uint16_t)rsz_nw,(uint16_t)rsz_nh);
++                 }else{
++                     /* The shell window: the text area follows the frame too
++                        (clamped to the 80x25 grid) and the view re-follows the
++                        cursor, so the command line never ends up under the
++                        bottom border. */
++                     wm_resize(&wm,rsz_win,(uint16_t)rsz_nw,(uint16_t)rsz_nh);
++                     if(console_fit(rsz_win))wm_force_compose=1;
++                 }
+                  notify_geometry(rsz_win);
+                  rsz_active=0;
+              }
+@@ -1801,9 +1832,9 @@
+           }
+           /* GEM vertical scrollbar (W_VBAR): up arrow, track, down arrow, thumb.
+              Scrolling moves src_y into the surface, so the client never redraws. */
+-          if(sb_visible(i)&&wm.win[i].client.h>2u*(uint16_t)WM_SB_W){
++          if(sb_visible(i)&&sb_h(i)>2*(int32_t)WM_SB_W){
+               int32_t cxs=cxs_of(i);
+-              int32_t cys=(int32_t)wm.win[i].client.y,chs=(int32_t)wm.win[i].client.h;
++              int32_t cys=(int32_t)wm.win[i].client.y,chs=sb_h(i);
+               int32_t range=sb_range(i),track=chs-2*(int32_t)WM_SB_W;
+               wm_rect_t u,dn,tk,th;
+               u.x=(int16_t)cxs;u.y=(int16_t)cys;u.w=WM_SB_W;u.h=WM_SB_W;
+@@ -2221,6 +2252,7 @@
+             wm.win[i].frame.w=CONSOLE_WW;wm.win[i].frame.h=CONSOLE_WH;
+             wm.win[i].client.w=CONSOLE_WW;
+             wm.win[i].client.h=(uint16_t)(CONSOLE_WH-16);
++            (void)console_fit(i);
+         }else if(wm.win[i].flags==7u){
+             /* Full-screen application canvas (the desktop background).  It was
+                registered for the old mode; grow it so the compositor does not
+@@ -2301,7 +2333,7 @@
+ static void console_follow_cursor(unsigned i,int force)
+ {
+     static unsigned last_cur=0xFFFFu;
+-    unsigned rows=(unsigned)wm.win[i].client.h/16u,cur=kconsole_cursor_row(),first=0u;
++    unsigned rows=(unsigned)(wm.win[i].client.h>2u?wm.win[i].client.h-2u:0u)/16u,cur=kconsole_cursor_row(),first=0u;
+     if(cur>=TERM_ROWS)cur=TERM_ROWS-1u;
+     if(!force&&cur==last_cur)return;
+     last_cur=cur;
+@@ -2314,6 +2346,51 @@
+         wm_damage_add(&wm,wm.win[i].client);
+     }
+ }
++/* Fit the shell window to its frame.  The shell draws a fixed 80x25 grid of
++   8x16 cells (640x400); the window can show a part of it, never more.
++     * the frame is clamped to the grid plus the chrome (title 16, bottom 2), so
++       a zoom or an enlarge never exposes surface pixels outside the grid (the
++       desktop "leaking" through the terminal after zoom/restore, section 41),
++     * the frame height is snapped to whole text rows, so the last visible row
++       is not cut by the bottom border,
++     * the client follows the frame (wm_resize() only ever shrank it),
++     * content_h is the grid height, so the scrollbar can look back,
++     * the view re-follows the cursor (the prompt stays visible).
++   Returns 1 when window i is the shell window. */
++#define CON_GRID_W 640u
++#define CON_GRID_H ((uint16_t)(TERM_ROWS*16u))
++#define CON_PAD 2u
++static int console_fit(unsigned i)
++{
++    wm_rect_t old;uint16_t fw,fh,rows;
++    if(i>=wm.count||!console_surface||wm.win[i].pid!=(uint32_t)(uintptr_t)console_surface)return 0;
++    old=wm.win[i].frame;
++    fw=wm.win[i].frame.w;fh=wm.win[i].frame.h;
++    if(fw>CON_GRID_W)fw=CON_GRID_W;
++    if(fw<64u)fw=64u;
++    rows=(uint16_t)(fh>16u+CON_PAD?(fh-16u-CON_PAD)/16u:1u);
++    if(rows<1u)rows=1u;
++    if(rows>TERM_ROWS)rows=TERM_ROWS;
++    fh=(uint16_t)(16u+rows*16u+CON_PAD);
++    wm.win[i].frame.w=fw;wm.win[i].frame.h=fh;
++    if(wm.win[i].flags&16u){
++        /* zoomed: centre the grid-sized window horizontally under the bar */
++        int16_t x=(int16_t)(((int)wm.screen_w-(int)fw)/2);
++        wm.win[i].frame.x=x>0?x:0;
++    }
++    wm.win[i].client.x=wm.win[i].frame.x;
++    wm.win[i].client.y=(int16_t)(wm.win[i].frame.y+16);
++    wm.win[i].client.w=fw;
++    wm.win[i].client.h=(uint16_t)(fh-16u);
++    wm.win[i].content_h=(uint16_t)(CON_GRID_H+CON_PAD);
++    wm.win[i].src_x=0;
++    if(wm.win[i].src_y>(int16_t)sb_range(i))wm.win[i].src_y=(int16_t)sb_range(i);
++    console_follow_cursor(i,1);
++    wm_damage_add(&wm,old);
++    wm_damage_add(&wm,wm.win[i].frame);
++    wm_rebuild_clip(&wm);
++    return 1;
++}
+ /* "Open terminal": bring the existing shell window back instead of appending a
+    second one.  kernel_wm_console_hide() parked it off-screen at x=-2048, so the
+    window (matched by its backing surface) is moved back and re-raised. */
+@@ -2330,7 +2407,7 @@
+             wm.win[i].client.x=CONSOLE_WX;wm.win[i].client.y=(int16_t)(CONSOLE_WY+16);
+             wm.win[i].client.w=CONSOLE_WW;wm.win[i].client.h=(uint16_t)(CONSOLE_WH-16);
+             wm.win[i].src_x=0;
+-            console_follow_cursor(i,1);
++            (void)console_fit(i);
+             wm_surface[0]=console_surface;
+             console_registered=1;
+             wm_rebuild_clip(&wm);
+@@ -2450,9 +2527,10 @@
+          wm.win[w].title[6]='A';wm.win[w].title[7]='L';wm.win[w].title[8]=0;
+          for(k=9;k<24u;++k){wm.win[w].title[k]=0;}}
+         wm.count=w+1u;
++        console_registered=1;
++        (void)console_fit(w);             /* rows snapped, scroll range, cursor */
+         wm_rebuild_clip(&wm);
+         wm_damage_add(&wm,wm.win[w].frame);
+-        console_registered=1;
+         console_raise();
+     }else{
+         unsigned k;
