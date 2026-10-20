@@ -2896,6 +2896,12 @@ static uint8_t *tos_client_surface;
    Ustawia TYLKO prosbe wyjscia - te sama, ktorej uzywa zamkniecie okna pulpitu
    (kernel_tos_window_closed), ale BEZ ruszania stanu powierzchni, bo program
    uruchomiony z konsoli nie ma okna WM. */
+/* 1 = program zostal zakonczony kill-switchem (Ctrl+Alt+Esc), a nie normalnie.
+   Tylko wtedy epilog kaze pulpitowi przemalowac CALY ekran: przy normalnym
+   wyjsciu robi to aplikacja, ktora program uruchomila, a dodatkowe
+   przemalowanie w trakcie bootu zmienialo zloty zrzut startowy. */
+static uint8_t tos_kill_switch;
+
 int kernel_tos_running(void)
 {
     /* Program w oknie (async) NIE ustawia tos_active - to flaga sciezki
@@ -2905,6 +2911,7 @@ int kernel_tos_running(void)
 
 void kernel_tos_request_exit(void)
 {
+    tos_kill_switch=1u;
     tos_exit_request=1u;
     /* Program konczy sie w asf_tos_exit(), ale okno na ekranie zostaje jako
        "widmo" ostatniej klatki - dokladnie tak wygladalo "kill-switch nie
@@ -3861,8 +3868,11 @@ int32_t kernel_tos_run_program(const char *path)
             przemalowac CALY ekran.  ATOS_DISPLAY_CHANGED robi dokladnie to
             (desktop_wm.c: bg_dirty=1; paint()).  Bez tego po prawej stronie
             zostawal pas starej klatki. */
-         {uint32_t dp=kernel_desktop_active_pid();
-          if(dp)kernel_user_notify_display(dp);}}
+         if(tos_kill_switch){
+             uint32_t dp=kernel_desktop_active_pid();
+             tos_kill_switch=0u;
+             if(dp)kernel_user_notify_display(dp);
+         }}
         tos_task_free(slot);
         for(k=0u;k<13u;++k)vec[vidx[k]]=tos_saved_vec[k];
         tos_vec_snapshot_restore();   /* nothing may point into freed TPA */

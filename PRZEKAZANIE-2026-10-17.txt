@@ -1377,3 +1377,14 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    UWAGA: napis "TRASH" w lewym gornym rogu na tym zrzucie to NOTICE launchera
    (podswietlenie ikony po strzalkach), nie artefakt.
    KERNEL.SYS: 222390 B, md5 aaef895f...
+
+   UZUPELNIENIE 10ap - WAZNA POPRAWKA (20.10):
+   Pierwsza wersja wysylala ATOS_DISPLAY_CHANGED przy KAZDYM wyjsciu programu
+   TOS - i to ZMIENILO ZLOTY ZRZUT STARTOWY (0e821ede -> inny): dodatkowe
+   przemalowanie w trakcie bootu rysowalo pulpit bez czesci ikon (brak
+   SETTINGS).  ZLOTA REGULA DZIALA - wykryla to natychmiast.
+   POPRAWKA: flaga tos_kill_switch ustawiana TYLKO przez
+   kernel_tos_request_exit() (czyli kill-switch); notify leci wylacznie wtedy.
+   Po poprawce: zloty zrzut 0e821ede... BAJT W BAJT, a kill-switch nadal
+   czysci ekran (p2-po-kill.png, biale 0%, hash 7fbac6e8...).
+   KERNEL.SYS: md5 2af687e5...
