@@ -171,7 +171,7 @@ build/system/acsi_module.o: system/acsi_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/ACSI.SYS: build/system/acsi_module.o linker/module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/module-sys.ld -Wl,--gc-sections -o build/system/acsi_module.elf build/system/acsi_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/module-sys.ld -Wl,--gc-sections -o build/system/acsi_module.elf build/system/acsi_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/acsi_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -180,7 +180,7 @@ build/system/core_module.o: system/core_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/CORE.SYS: build/system/core_module.o linker/core-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/core-module-sys.ld -Wl,--gc-sections -o build/system/core_module.elf build/system/core_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/core-module-sys.ld -Wl,--gc-sections -o build/system/core_module.elf build/system/core_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/core_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -189,7 +189,7 @@ build/system/vfs_module.o: system/vfs_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/VFS.SYS: build/system/vfs_module.o linker/vfs-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/vfs-module-sys.ld -Wl,--gc-sections -o build/system/vfs_module.elf build/system/vfs_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/vfs-module-sys.ld -Wl,--gc-sections -o build/system/vfs_module.elf build/system/vfs_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/vfs_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -198,7 +198,7 @@ build/system/proc_module.o: system/proc_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/PROC.SYS: build/system/proc_module.o linker/proc-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/proc-module-sys.ld -Wl,--gc-sections -o build/system/proc_module.elf build/system/proc_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/proc-module-sys.ld -Wl,--gc-sections -o build/system/proc_module.elf build/system/proc_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/proc_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -207,7 +207,7 @@ build/system/timer_module.o: system/timer_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/TIMER.SYS: build/system/timer_module.o linker/timer-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/timer-module-sys.ld -Wl,--gc-sections -o build/system/timer_module.elf build/system/timer_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/timer-module-sys.ld -Wl,--gc-sections -o build/system/timer_module.elf build/system/timer_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/timer_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -216,14 +216,14 @@ build/system/event_module.o: system/event_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/EVENT.SYS: build/system/event_module.o linker/event-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/event-module-sys.ld -Wl,--gc-sections -o build/system/event_module.elf build/system/event_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/event-module-sys.ld -Wl,--gc-sections -o build/system/event_module.elf build/system/event_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/event_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
 # TOS compatibility module: loaded on demand when a TOS program starts, or into
 # TT RAM right after START when the user ticks the SETTINGS option.
 build/system/TOS.SYS: build/system/tos_module.o linker/tos-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/tos-module-sys.ld -Wl,--gc-sections -o build/system/tos_module.elf build/system/tos_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/tos-module-sys.ld -Wl,--gc-sections -o build/system/tos_module.elf build/system/tos_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/tos_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -236,7 +236,7 @@ build/system/input_module.o: system/input_module.S
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
 
 build/system/INPUT.SYS: build/system/input_module.o linker/input-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/input-module-sys.ld -Wl,--gc-sections -o build/system/input_module.elf build/system/input_module.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/input-module-sys.ld -Wl,--gc-sections -o build/system/input_module.elf build/system/input_module.o -lgcc
 	$(OBJCOPY) -O binary build/system/input_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -260,7 +260,7 @@ build/system/shell_fs.o: system/shell_fs.c include/kernel_module.h
 	$(CC) $(SHELL_CFLAGS) -c $< -o $@
 
 build/system/SHELL.SYS: build/system/shell_module.o build/system/shell_path.o build/system/shell_complete.o build/system/shell_fs.o linker/shell-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/shell-module-sys.ld -Wl,--gc-sections -o build/system/shell_module.elf build/system/shell_module.o build/system/shell_path.o build/system/shell_complete.o build/system/shell_fs.o
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/shell-module-sys.ld -Wl,--gc-sections -o build/system/shell_module.elf build/system/shell_module.o build/system/shell_path.o build/system/shell_complete.o build/system/shell_fs.o -lgcc
 	$(OBJCOPY) -O binary build/system/shell_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 
@@ -1480,7 +1480,7 @@ build/system/vofa_entry.o: system/vofa_entry.S
 build/system/vofa_module.o: system/vofa_module.c include/kernel_video_service.h include/kernel_module.h
 	$(CC) $(CFLAGS) -mpcrel -fno-tree-loop-distribute-patterns -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
 build/system/VOFA.SYS: build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o linker/vofa-module-sys.ld tools/patch_boot_checksum.py
-	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/vofa-module-sys.ld -Wl,--gc-sections -o build/system/vofa_module.elf build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o
+	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/vofa-module-sys.ld -Wl,--gc-sections -o build/system/vofa_module.elf build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o -lgcc
 	$(OBJCOPY) -O binary build/system/vofa_module.elf $@
 	python3 tools/patch_boot_checksum.py $@
 build/system/video_bus.o: system/video_bus.S
