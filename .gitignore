@@ -21,3 +21,23 @@ atari-030-port/tools/py/
 commander-v9/work/
 commander-v10/work/
 *.img.bak-recon
+
+# --- Sprzatanie 2026-10-20 (miejsce na dysku: 25 GB -> 7,6 GB) ---
+TRASH/
+*.avi
+# Duze, odtwarzalne artefakty ATOS 2.1 (obrazy testowe, checkpointy, build)
+"ATOS 2.1"/work/
+"ATOS 2.1"/PRZEKAZANIE_DEEPSEEK/
+*.tar.gz
+# Instancje i kopie obrazow uzytkownika (dane, nie zrodla)
+ATOS_AKTUALNY/
+ATOS_KOPIA/
+ATOS-SOUND/reference-v1/
+PRE2/
+PRE2-ATOS/
+display-demo/*.log
+display-demo/mem-*.txt
+*.jpeg
+# Binarki emulatora (odtwarzalne ze zrodel: scalony/hatari-src, atari-030-port/hatari-src)
+display-demo/hatari-*
+display-demo/_claude_tmp/
