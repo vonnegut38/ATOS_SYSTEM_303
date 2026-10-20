@@ -3692,7 +3692,7 @@ int32_t kernel_tos_run_program(const char *path)
                fallback silently doing the work. */
             tos_screen=(uint8_t *)kmem_alloc(65536u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
             if(tos_screen){for(i=0u;i<65536u;++i)tos_screen[i]=0u;}
-            tos_screen_owned=(tos_screen!=0u);
+            tos_screen_owned=(tos_screen!=0);   /* 0, nie 0u: GCC 13 -Wpointer-compare */
             ++kdbg_tos_screen_fallbacks;
         }else tos_screen_owned=0u;
     }else{
