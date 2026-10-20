@@ -3852,8 +3852,17 @@ int32_t kernel_tos_run_program(const char *path)
            programu ("widmo okna") - patrz przekazanie, punkt 10ah. */
         {extern void kconsole_invalidate(void);extern void kconsole_flush(void);
          extern void kernel_wm_compose_now(void);
+         extern void kernel_user_notify_display(uint32_t);
+         extern uint32_t kernel_desktop_active_pid(void);
          kconsole_invalidate();kconsole_flush();
-         if(kgfx_desktop_active())kernel_wm_compose_now();}
+         if(kgfx_desktop_active())kernel_wm_compose_now();
+         /* Pulpit rysuje TLO sam (kompozytor go nie odtworzy), wiec po wyjsciu
+            programu TOS - zwlaszcza zabitego Ctrl+Alt+Esc - trzeba mu kazac
+            przemalowac CALY ekran.  ATOS_DISPLAY_CHANGED robi dokladnie to
+            (desktop_wm.c: bg_dirty=1; paint()).  Bez tego po prawej stronie
+            zostawal pas starej klatki. */
+         {uint32_t dp=kernel_desktop_active_pid();
+          if(dp)kernel_user_notify_display(dp);}}
         tos_task_free(slot);
         for(k=0u;k<13u;++k)vec[vidx[k]]=tos_saved_vec[k];
         tos_vec_snapshot_restore();   /* nothing may point into freed TPA */

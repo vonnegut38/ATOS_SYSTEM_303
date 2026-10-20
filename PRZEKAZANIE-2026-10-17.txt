@@ -1364,3 +1364,16 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    Czyli strony sie zmieniaja i powrot trafia DOKLADNIE w te same strony.
    JAK TESTOWAC (przepis, ktory zadzialal): prepare() -> 30x install_file.py
    "\SYSTEM\Pxx.TXT" -> boot -> F8 -> Right/Right/Left/Left + zrzuty.
+
+10ap. KILL-SWITCH: KONIEC Z WIDMEM OKNA (20.10, ZAMKNIETE):
+   ZOSTAWALO: po zabiciu programu TOS prawa strona ekranu trzymala pas starej
+   klatki (tlo pulpitu rysuje DESKTOP.APP, kompozytor go nie odtworzy).
+   POPRAWKA: epilog programu TOS wysyla do pulpitu ATOS_DISPLAY_CHANGED
+   (kernel_user_notify_display), na ktory pulpit reaguje bg_dirty=1; paint().
+   Desktop pid: nowy accessor kernel_desktop_active_pid() w kernel_main.c
+   (kernel_desktop_pid jest static).
+   DOWOD: zrzut p2-po-kill.png - po Ctrl+Alt+Esc CZYSTY pulpit (biale 0%,
+   zadnego widma), program zamkniety, ikony i pasek normalnie.
+   UWAGA: napis "TRASH" w lewym gornym rogu na tym zrzucie to NOTICE launchera
+   (podswietlenie ikony po strzalkach), nie artefakt.
+   KERNEL.SYS: 222390 B, md5 aaef895f...

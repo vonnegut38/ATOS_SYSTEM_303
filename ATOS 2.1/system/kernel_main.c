@@ -225,6 +225,13 @@ static void (*rom_boot_progress)(uint16_t,const char *);
    board on screen (quiet mode hid the completion line) and the machine looked
    hung.  Both events now end up on a visible text console. */
 static uint32_t kernel_desktop_pid;
+
+/* Dostep dla innych czesci jadra (np. epilog programu TOS musi kazac pulpitowi
+   przemalowac ekran po zabiciu programu). */
+uint32_t kernel_desktop_active_pid(void)
+{
+    return kernel_desktop_pid;   /* 0 takze po zatrzymaniu pulpitu */
+}
 static uint8_t kernel_desktop_stopped;
 extern int kernel_user_take_completion(uint32_t pid,int32_t *status);
 static void kernel_desktop_report(int32_t status,int spawn_failed)
