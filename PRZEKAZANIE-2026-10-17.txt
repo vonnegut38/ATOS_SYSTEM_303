@@ -1033,3 +1033,41 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    README.txt w katalogu kopii opisuje zawartosc, sumy kontrolne iProcedure
    odtworzenia repo i srodowiska testowego.
    CALOSC KOPII: 22,6 MB (repo) + 1,5 GB (obrazy) + dokumenty/raporty.
+
+10ae. REPO NA GITHUB + CI ZIELONE (20.10, ZROBIONE):
+   Repozytorium: https://github.com/vonnegut38/ATOS_SYSTEM_303  (konto vonnegut38,
+   branch main, public). Push z tej maszyny dziala przez credential.helper=osxkeychain
+   (token GitHuba Desktopa) - nie trzeba klikac w GUI.
+   PIERWSZY ZIELONY RUN: 39415828430 (54 s): build TOS=1 + check-graphics +
+   check-video + artefakt atos21-system (322 KB: KERNEL.SYS, DESKTOP.APP,
+   SETTINGS.APP, GFX.APP, VOFA.SYS, ICONS.DAT).
+   CI ZLAPALO 6 PROBLEMOW PRZENOSNOSCI, ktorych lokalny toolchain (Homebrew
+   m68k-elf-gcc 16) NIE widzial, bo w CI jest m68k-linux-gnu-gcc 13:
+     1) .github/workflows/ci.yml - dwukropek w nazwie kroku ("Testy (grafika: ...)")
+        psul YAML -> workflow nie startowal (0 jobow, brak logow). Walidowac YAML
+        przed commitem (ruby -ryaml -e 'YAML.load_file(...)').
+     2) tos_prg.c:3695 - (tos_screen!=0u): GCC 13 traktuje 0u przy wskazniku jak
+        stala znakowa (-Wpointer-compare) -> (tos_screen!=0).
+     3) Makefile - moduly (VOFA.SYS, ACSI, CORE, VFS, PROC, TIMER, EVENT, TOS,
+        INPUT, SHELL) linkowaly sie BEZ -lgcc, a GCC 13 nie inline'uje __mulsi3
+        -> dopisane -lgcc do wszystkich regul modulow.
+     4) Narzedzia mialy twarde "m68k-elf-*" -> nowy tools/toolchain.py (CROSS,
+        potem m68k-elf-, potem m68k-linux-gnu-), uzywany w check_gui_apps,
+        abi_check, mk_tosprg, run_modplay_live.
+     5) Jadro: GCC 13 generuje wywolanie memcpy w kgfx_self_test (petla ->
+        -ftree-loop-distribute-patterns), a freestanding jadro nie ma libc ->
+        nowy system/kernel_libc.c (memcpy/memmove/memset/memcmp, z #pragma
+        no-tree-loop-distribute-patterns) + obiekt w linku i w prerekwizytach
+        KERNEL.SYS.
+     6) tests/test_video_strips.c - fbuf[y*W+x^1u] bez nawiasow -> GCC 13
+        -Werror=parentheses -> fbuf[(y*W+x)^1u].
+   WAZNE: zaden z tych punktow nie zmienil zachowania systemu - KERNEL.SYS po
+   wszystkich poprawkach ma nadal md5 911b12b3... (221774 B), a zrzut startowy
+   po pierwszej zmianie byl BAJT W BAJT z wzorcem 0e821ede... (sprawdzone
+   test-wall-custom.py golden). Kolejne zmiany dotycza tylko Makefile, narzedzi
+   i testow, wiec wzorzec stoi.
+   JAK SPRAWDZIC STAN CI: https://github.com/vonnegut38/ATOS_SYSTEM_303/actions
+   (albo API: /repos/vonnegut38/ATOS_SYSTEM_303/actions/runs?per_page=1).
+   UWAGA: repo publiczne zawiera tez archiwum starej linii v10 (commander-v9/v10,
+   files-pasted-by-the-user-projekt, atari-030-port) - jesli ma byc czystsze,
+   to osobny commit/przebudowa historii.
