@@ -1,0 +1,8 @@
+Przeczytaj RAPORT.md. Najważniejsze: My Atari omija ustawienia użytkownika, icp_assign zapisuje wszystkie ikony pulpitu pod APP, a ic_load/ic_save są wzajemnie niezgodne. Napraw to jako osobny mechanizm przypisań z testem restartu.
+
+01-renderer.patch ma test regresji, który pada na wersji bazowej i przechodzi po poprawce. Usuwa pomijanie ikon w gui_damage i brak przycinania powierzchni.
+02-menu-kandydat.patch przeszedł kompilację, ale wymaga testów interakcji i kompozytora. To zachowawcze czyszczenie tła przy zamknięciu, nie docelowa optymalizacja prostokątna.
+
+Nie instaluj automatycznie ani nie nadpisuj nowszych źródeł. Porównaj source-manifest.json, zastosuj patche w kopii, przebuduj i sprawdź oddzielny obraz systemu. Pliki PNG mają inne znaczenie niż komentarze kodu: sprawdź obrazy, a nie tylko ich nazwy. My Atari obecnie wskazuje koło zębate, kosz kopertę, terminal film.
+
+Zakończenie: zmiana pojedynczej ikony działa od razu i po restarcie, nie zmienia innych skrótów; menu i INFO nie pozostawiają śladów nad pulpitem ani oknami; picker nie zapisuje przez kliknięcie ostatniego rzędu; brak zapisu poza powierzchnią. Zweryfikuj kolor i mono.

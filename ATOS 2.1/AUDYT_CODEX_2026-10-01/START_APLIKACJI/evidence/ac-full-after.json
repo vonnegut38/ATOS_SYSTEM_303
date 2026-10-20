@@ -1,0 +1,7 @@
+{
+  "spawn": 0.15,
+  "file_read": 0.15,
+  "loaded": 0.15,
+  "window": 0.21,
+  "paint_done": 0.8
+}

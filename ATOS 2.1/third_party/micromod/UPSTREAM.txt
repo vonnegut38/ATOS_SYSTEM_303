@@ -1,0 +1,4 @@
+https://github.com/martincameron/micromod
+Commit: 83b5d9aebddb528ea177e115b0afed5d75f6b92a
+ATOS changes: PIC version string; defined random wrap; complete channel reset; 128-order length; diagnostics accessors.
+Bounded song-duration scan. ATOS cache builder is an integration tool, not upstream.

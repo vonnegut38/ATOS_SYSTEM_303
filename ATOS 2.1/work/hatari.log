@@ -1,0 +1,8 @@
+INFO : Hatari v2.6.1-devel (Oct 12 2026), compiled on:  Oct 12 2026, 22:50:47
+INFO : Mounting ACSI HD image '/Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-v2.img'
+INFO : Mounting IDE hard drive image /Users/xxx/Documents/Deepseek_test/display-demo/demo-final.img
+WARN : Bus Error reading at address $ffff8282, PC=$e00278 addr_e3=e00278 op_e3=3290
+WARN : Bus Error reading at address $ffff8400, PC=$e00278 addr_e3=e00278 op_e3=3290
+INFO : IDE: Tried to send command to non-existent IDE device #1!
+3 repeats of: INFO : IDE: Tried to send command to non-existent IDE device #1!
+WARN : Storing NVRAM to '/Users/xxx/Library/Application Support/Hatari/hatari.nvram' failed

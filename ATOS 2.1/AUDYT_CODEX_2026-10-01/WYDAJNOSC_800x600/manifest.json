@@ -1,0 +1,38 @@
+{
+  "Makefile": {
+    "before": "ee117f9debef178126f812cb3dc481a69c880198d1bac4f5bf180dc3705ba312",
+    "after": "79385c8dc86f93935fd8fdd1ba8b486e3c437f688b1f1aa450606a4080580f92"
+  },
+  "system/boot_main.c": {
+    "before": "fb1b8092fff2250fdc3abd3f2eaad8a4e632243e73225083984a0289512b8a40",
+    "after": "064257678b292108f635c1c03856872e2e6b7d45334d5c134a76a1aed32bb3a6"
+  },
+  "system/kernel_console.c": {
+    "before": "7598982d6dc1e9c19ee6eafd297a539f2498ff063079cae448d74f827bfa9b93",
+    "after": "83db4551f6f835ce18281872bf618c1e7751e8292d3d856bba7fe351a81d4597"
+  },
+  "system/kernel_video.c": {
+    "before": "7469bd1f439cab53e7abd0fe347edb1ab4eb720766c37ef41a7cdefeb7fb1be7",
+    "after": "451c6f56ccd66b2f74a4de9a4a734d452f80807163257a880930f062fb59cd01"
+  },
+  "system/text_terminal.c": {
+    "before": "8213a46e75ed1dc2d6f2a27e3389acd546d601d293e334f17b3bd2cb6d86b77f",
+    "after": "3fc2d884f44da524245420756e82ccbee9fa69b2b9a07475ebbc512a66991fef"
+  },
+  "tests/test_kernel_console.c": {
+    "before": "2c9c0aaff3a8021a0d37fc7d56e71293463dcf298cf9ee08a15c16ee5be9e9b5",
+    "after": "af5f6ef623d2bd1e3593d1aa7ee1990608f413fc54a16de22b0dffb10f875aa7"
+  },
+  "tests/test_terminal_chunky.c": {
+    "before": null,
+    "after": "c411034457f67b8f72a72994d13173abdb02e0ee0f529a95fb32798ce798ac24"
+  },
+  "tests/test_video_output.c": {
+    "before": "1d71b9a03cf75d226c80e50e54155cc8d1c3b58a4d05b74104098cc70712ea75",
+    "after": "d13763aaed833b83f01e61a4e07055802685f3f91b871cdd39888fb9b54f3387"
+  },
+  "ui/console.c": {
+    "before": "fdd54ee945aad968011f8a1379ffd2d50d151aea4dc9bb3dbdffb9e832980d65",
+    "after": "f0622df9b59e57176aa2088bcbcc90b894f117ca0d5cd323e525c3598c0b5100"
+  }
+}

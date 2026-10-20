@@ -1,0 +1,4 @@
+Hatari window launched, waiting for the ATOS shell ...
+shell ready: False
+typing: run \SYSTEM\TEST\TOSDEMO.PRG
+demo started - window stays open; Ctrl-C here to close it

@@ -1,0 +1,8 @@
+Przeczytaj RAPORT.md. Pakiet dotyczy dalszych artefaktów po poprzedniej naprawie ikon.
+
+01-kompozytor.patch: nie gub odświeżeń po przepełnieniu WM_DAMAGE_MAX; kopiuj content_h wraz z oknem. Testy przed/po i istniejące testy WM przechodzą po poprawce.
+02-pulpit-kandydat.patch: czyść cały obszar długich podpisów; najpierw wszystkie tła, potem wszystkie ikony; ikony przed popupami; czyść stare RUN/status; nie odmalowuj hover pod INFO; pomiń zbędne czyszczenie komórek po pełnym tle. Wymaga testów interakcji w emulatorze.
+
+UWAGA: WM_CLIP_MAX=16 nadal gubi widoczne fragmenty przy złożonym nakładaniu okien. test_clip_capacity.c celowo nadal kończy się błędem. Napraw przepełnienie regionów dokładnym fallbackiem; pełny damage sam tego nie naprawia. Przejrzyj również częściowe odrysowanie dekoracji (deco_all) i zdejmowanie ramki XOR przed kompozycją.
+
+Patche nie naprawiają wszystkich opisanych problemów. Nie wdrażaj bez testu obrazu systemu; porównaj sumy bazowych źródeł, żeby nie nadpisać nowszych zmian. Najpierw poprawność regionów, potem odświeżanie tylko starej/nowej ikony i prostokąta zamkniętego menu. Nie zgłaszaj przyspieszenia bez pomiaru.

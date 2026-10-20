@@ -1,0 +1,59 @@
+ARKANOID: szarpanie paletki po wypuszczeniu pilki — 2026-10-10
+
+Przyczyna potwierdzona porownaniem READY/PLAY:
+Gra w PLAY zajmowala CPU krotkimi trapami HIRES/RECV oraz synchronicznym
+GUI_FRAME. Przerwanie zegara w supervisorze nie przekazuje zadania do glownej
+petli. To ona przetwarza/routuje wejscie. Dobre FPS nie oznaczalo aktualnego
+sterowania. W READY pause_tick regularnie oddawal jej sterowanie.
+
+Naprawa:
+- SLEEP(0) zapisuje poprawny kontekst, zostawia zadanie READY i wraca przez
+  supervisor. Nie doklada oczekiwania na nastepny takt 50 Hz. Kontrole stosu,
+  sterty i poprawnosci kontekstu pozostaja. Dodatni SLEEP bez zmian.
+- Arkanoid wykonuje SLEEP(0) po kazdej zakonczonej klatce.
+- Petla routingu GUI konczy odpytywanie, gdy wake() nie przekazal zdarzenia
+  (kolejka pusta albo odbiorca zapchany). Nie wykonuje do 31 zbednych rund;
+  nie usuwa nowych zdarzen. Zachowuje limit 32 dla serii wejscia.
+- Kursor 8bpp: obwodka wyliczana raz na wiersz maska bitowa. Ten sam obraz,
+  poprawne save-under i przycinanie przy krawedziach.
+- WM odmalowuje pasek pulpitu, gdy przecina go damage albo zamykany popup
+  wymaga naprawy. Dotychczas repaint nastepowal przy kazdej klatce gry.
+
+Pomiar kontrolowany (nie pomiar fizycznej myszy):
+Hatari 68030 32 MHz, ET4000 800x600x8, fast-forward OFF, SDL dummy z wlaczonym
+renderowaniem. Test podaje kompletne 3-bajtowe pakiety myszy IKBD do surowej
+kolejki; nie omija INPUT.SYS, dekodera, sesji ani routingu mailboxow. Trace
+wylacznie w osobnych diagnostycznych APP/obrazach, nie w instalowanej grze.
+
+Zoptymalizowany renderer bez naprawy routingu (lean):
+PLAY ~40.31 FPS, lecz odstęp nowego wejscia myszy mediana 83.17 ms,
+p95 101.48 ms. Sredni wiek zdarzenia od utworzenia w sesji do odbioru 19.94 ms.
+SLEEP(0) bez skrocenia pustej petli: ~31.85 FPS, mysz mediana 33.73 ms.
+Pelna poprawka (cooperate): ~40.56 FPS, odstęp wejscia mediana 25.15 ms,
+p95 43.86 ms; sredni wiek zdarzenia 3.31 ms. Odstepy klatek PLAY: mediana
+24.98 ms, p95 31.25 ms, max 35.48 ms w probie 80 interwalow. Nie oznacza to
+braku sporadycznych opoznien ani gwarancji dla fizycznego 68030.
+
+Konczacy test binarki produkcyjnej, bez trace i nagrywania:
+39.96 FPS wedlug zegara hosta, 6 okien pomiarowych: 39.52–40.44 FPS.
+Strzalki, Space, pauza/wznowienie, restart, wyjscie i odzyskanie pulpitu PASS.
+Fault=0. Flashback: start gry, ruch, Alt+X, oddanie ekranu (owner=0), fault=0.
+Test Flashback byl testem funkcjonalnym; nie sluzy do porownania wydajnosci.
+
+Testy:
+Wszystkie cele C uruchamiane przez make check przeszly; odkryto tez dwa bledy
+wycinania kodu w harnessach Python (foreground_input po dodaniu petli oraz
+stary sysinfo_api obejmujacy przypadkiem galezie audio). Poprawiono granice
+wycinkow, zachowano asercje. Rozszerzono test routingu o pusta kolejke i serie,
+a test rzeczywistego kursora o chunky, save/restore i wszystkie krawedzie.
+Nowy test_user_yield sprawdza stan READY bez taktu, zachowanie rejestrow,
+dodatni sleep, bledne argumenty oraz odrzucenie zepsutej sterty/stosu.
+Ponowny kompletny zestaw Python: 50 testow PASS (check-python-clean.log).
+
+Wdrozenie:
+work/atos-v2.img: wylacznie /SYSTEM/KERNEL.SYS i /SYSTEM/APP/ARKANOID.APP.
+FAT: 394 pliki, kopie zgodne, brak crosslinks. Manifest pozostalych plikow
+identyczny. BIOS bez zmiany. Czarne tlo i klawisze zachowane.
+
+Materialy, kopia obrazu przed wdrozeniem, skrypty odtworzenia i logi:
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-latency-20261010/

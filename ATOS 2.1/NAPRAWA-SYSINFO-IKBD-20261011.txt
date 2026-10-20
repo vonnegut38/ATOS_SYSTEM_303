@@ -1,0 +1,92 @@
+SYSINFO zamyka się od ruchu myszy — przyczyna IKBD i naprawa
+11.10.2026
+
+STAN UŻYTKOWNIKA, NIE DOMYSŁ Z TESTU
+Zapisano pamięć otwartego Hatari skrótem SaveMem po zgłoszeniu problemu.
+KERNEL.SYS: 2cccd13486e4609b6c5d2c91aae1bb8db63c1f6f772021ca210554d3123a98db.
+Odczyt kdbg_end_name=SYSI, pid=5, status=0; kdbg_uf_count=0,
+kernel_fault_vector=0; kdbg_wm_close_window=0. Program sam zakończył się
+normalnie. To nie fault i nie zamknięcie z gadżetu WM.
+Ślad: ../sysinfo-click-fix/live-failure-counters.json oraz live-current.snapshot.
+Snapshot obejmował także później ponownie uruchomiony SYSINFO — liczniki końca
+zachowały wynik wcześniejszego zakończenia. Nie wywodzimy samej przyczyny
+Escape wyłącznie z tego snapshotu; potwierdził ją test poniżej.
+
+ODTWORZENIE REALNEGO TORU WEJŚCIA
+Poprzednie testy wkładały kompletne pakiety do ikbd_raw_data. Omijały serial
+ACIA i wyścig między IRQ a bezpośrednim pollingiem INPUT.SYS.
+Nowy test używa poleceń relmotion w testowym Hatari: ustawiają wejściowe dx/dy
+jak normalny ruch gospodarza, następnie działa zwykły generator IKBD, ACIA,
+IRQ gościa i INPUT.SYS. To nie wstrzykiwanie komunikatu GUI ani kolejki kernela.
+Wyłącznie testowa kompilacja emulatora; nie podmieniono emulatora użytkownika.
+
+Stary INPUT.SYS ma 1022 B, SHA256
+771e9ef39335f573e205dc7af29f165ff8b9b2988e3c3c71c54f81f632a2419b.
+Źródło work/arkanoid/kernel-probe/system/input_module.S odtworzyło dokładnie
+te same bajty. Nowsze źródła Deepseeka zawierają dodatkowo joystick; nie
+przypisujemy im przyczyny problemu myszy i nie mieszamy tej zmiany do obrazu.
+
+Stary moduł + diagnostyczne jądro: ruchy z deltami 1 / 68 i przeciwnymi.
+Najpierw klawisze trafiały do PID 4 (desktop): otwierały menu jak F10.
+Po diagnostycznym ustawieniu focus na SYSINFO PID 5, następny fałszywy ESC
+zakończył SYSINFO. Końcowy zapis: [pid=5,type=1,scan=1,modifiers=0].
+Łącznie key_count=13, raw_count=1197, diag_frozen=1; status zakończenia 0.
+W fazie ruchu nie wysyłano żadnych klawiszy ani kliknięć.
+Dowody: serial-old/input-diag.json, serial-old/raw.bin, serial-old.log.
+
+PRZYCZYNA W KODZIE
+input_poll najpierw pobierał bajt z kolejki IRQ; gdy kolejka była pusta,
+odczytywał bezpośrednio status/dane ACIA ($fffffc00/$fffffc02).
+Komentarz zakładał, że kod kernela blokuje przerwania level 6, co nie jest
+prawdą dla ścieżek działających przy IPL5.
+IRQ mógł odebrać bajt między odczytem statusu a danych, albo dopisać starszy
+bajt do kolejki tuż przed bezpośrednim odczytem nowszego bajtu.
+W efekcie ginęła kolejność/nagłówek pakietu; legalna delta 1 stawała się ESC,
+a 68 (0x44) — F10. To dokładnie klawisze zamykające SYSINFO.
+
+NAPRAWA
+INPUT.SYS nie czyta już ACIA bezpośrednio w zwykłym input_poll.
+Przy pustej kolejce woła api->ikbd_capture (offset 172), potem ponownie
+pobiera NAJSTARSZY bajt z kolejki. Kernelowy capture podnosi IPL do 7 na czas
+status/data/zapisu do ringa i odtwarza maskę. Zachowuje też polling na
+maszynach, gdzie IRQ jest niedostępne. Nie wyłączamy IRQ na stałe.
+Moduł sprawdza rozmiar API >=176 i niezerowy callback przed użyciem.
+Pozostaje wyłącznie dawny bezpośredni drain inicjalizacyjny przed sesją.
+
+PORÓWNANIE A/B
+Atomic-only wariant bazujący dokładnie na starym module: 1038 B (+16 B).
+Zawiera tylko zmianę transportu, bez dodatków joysticka.
+480 poleceń ruchu przez serial IKBD, aplikacja z focusem: key_count=0,
+raw_count=1397, diag_frozen=0, SYSINFO pozostaje otwarty, zero faultów.
+Dowody: serial-atomic/PASS.json i input-diag.json oraz zrzuty motion-00..11.
+
+WERSJA PRODUKCYJNA
+Do obrazu trafia wyłącznie release/INPUT.SYS (1038 B), SHA256:
+3dd5b5e7b73bd7229a9c0303b086bf66765cafe5764157b0dacbe61879b12ca4
+Źródło odpowiadające dokładnie temu modułowi: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/sysinfo-input-fix/input-atomic-old.S
+KERNEL.SYS, SYSINFO.APP, Hatari i pozostałe pliki zostają te same.
+Diagnostyczne diag_key_ring/diag_raw_ring NIE trafiają do systemu użytkownika.
+Poprawka przeniesiona także do bieżącego system/input_module.S Deepseeka,
+z zachowaniem istniejącej tam obsługi joysticka. input-capture.patch jest
+łatką dla tego bieżącego źródła; atomic-old.S jest źródłem binarki w obrazie.
+
+Akceptacja na prawdziwym produkcyjnym jądrze: production-final.py,
+production-final/PASS.json i production-final.log. Skrypt wdrożenia wymaga PASS,
+sprawdza FAT i jedyną zmianę SYSTEM/INPUT.SYS, zachowuje kopię obu obrazów.
+
+Pozostałe wcześniejsze poprawki myszy WM/kolejki są zachowane. Usuwały inne
+rzeczywiste błędy, lecz nie naprawiały fałszywych klawiszy od transportu IKBD.
+Nie deklarujemy naprawy wszystkich pozostałych problemów TOS/VDI.
+
+UWAGA O NARZĘDZIU TESTOWYM
+Pierwszy test produkcyjny przeszedł 480 ruchów i rzeczywiste F1/F2 oraz klik DISK,
+ale nie zakończył aplikacji w kontroli Escape: atos2_auto.py wysyłał keydown 1,
+co Control_InsertKey Hatari interpretuje jako znak "1", nie scancode 1.
+W poprawionym teście kody są jednoznaczne: keydown/keyup 0x01 (Escape).
+Dlatego production.log nie jest pełnym PASS; finalny dowód jest osobno
+w production-final/PASS.json. Warto analogicznie poprawić wspólny harness
+Deepseeka dla jednocyfrowych scancode; nie modyfikowano go w tej rundzie.
+
+WYNIK KOŃCOWY: production-final/PASS.json — PASS. Ruch, F1/F2, kliknięcie DISK oraz prawdziwy Escape sprawdzone. Zero faultów; SYSI kończy się statusem 0 dopiero po celowym Escape.
+
+WDROŻONO: ATOS_AKTUALNY/ATOS.img i ATOS_HYDRA_PROBA/ATOS_OPT.img. Jedyna zmiana w każdym obrazie: SYSTEM/INPUT.SYS. FAT: 396 plików, zgodne kopie, zero crosslinków. Kopie przed zmianą wskazuje deployment.json.

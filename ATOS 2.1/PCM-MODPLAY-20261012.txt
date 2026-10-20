@@ -1,0 +1,59 @@
+MODPLAY PCM / MICROMOD — 2026-10-12
+
+Działa prawdziwe odtwarzanie czterech głosów sampli MOD przez YM2149:
+12288 Hz, mono, wejście U8. Rdzeń Micromod (BSD-3-Clause), integer 68020+;
+jadro nadal kompilowane dla 68000. Źródła i licencja: third_party/micromod.
+
+Wykryty problem systemowy: modalne przeciąganie okna i sesja TOS potrafią
+wstrzymać natywną aplikację na dłużej niż bufor strumienia. Pierwszy wariant
+miał 54 016 brakujących próbek po przeciąganiu, 162 118 przy SysInfo TOS.
+Samo zwiększenie częstotliwości pętli nie rozwiązałoby tego problemu.
+
+Rozwiązanie dla MODPLAY: cały utwór przygotowany jako PCM w RAM należącym
+do jądra. IRQ Timera A odczytuje próbki bez współpracy pętli aplikacji.
+HYMN.MOD: 3 104 640 próbek, 252,66 s, około 3 MB (preferowane TT-RAM).
+Opcjonalny HYMN.PCM skraca start: nagłówek sprawdza wersję, częstotliwość,
+rozmiar MOD-a i sumy FNV-1a MOD/PCM. Nieaktualny/uszkodzony cache nie jest
+odtwarzany: aplikacja wraca do renderowania Micromodem. Bez cache przygotowanie
+tego utworu na emulowanym 030 trwało około 75 s; okno pokazuje postęp i reaguje
+na zamknięcie. Pełny utwór zapętla się. Limit klipu 8 MiB.
+
+ABI 1.5: 82 PCM_CONTROL (open/run/pause/close), 83 PCM_SUBMIT (U8, 1..512 B),
+84 PCM_STATE (8 słów), 85 PCM_CLIP (alokacja pełnego klipu). Strumień pierścieniowy
+nadal dostępny dla przyszłych klientów, ale wymaga regularnego producenta.
+Nie deklarujemy, że naprawiono ogólną modalność scheduler/GUI dla streamingu.
+
+Timer A jest rezerwowany; zajęty timer/PSG daje błąd. Bufor jest kopiowany,
+IRQ nie przechowuje wskaźnika do aplikacji. Własny stos ISR, bez alokacji,
+VDI, plików i callbacków aplikacji. Wyjście/błąd/kill zatrzymują timer przed
+zwolnieniem RAM. Porty PSG 14/15 i kierunki portów pozostają chronione.
+TOS Dosound/Giaccess zachowuje zasady właściciela; teardown TOS nie ucina
+natywnego PCM. To NIE jest implementacja XBIOS DMA sound ani zgoda na surowe
+przejęcie MFP przez dowolny program TOS.
+
+Weryfikacja:
+- testy hostowe z ASan/UBSan: ring wrap/full, odmowa właściciela, timer zajęty,
+  pauza, zachowanie kolejki, zamknięcie, zwolnienie klipu, teardown TOS;
+- prawdziwa pętla MODPLAY: wypełnianie samplami, input, pauza, cache poprawny
+  i uszkodzony (fallback), ograniczone porcje pracy;
+- check-psg/audio/irq/app-abi/game: PASS;
+- Hatari: start, odtwarzanie, pauza/wznowienie, Escape, ponowny start, krzyżyk;
+- Hatari: przeciąganie okna + SysInfo TOS, dalszy postęp odtwarzania, 0 underruns,
+  0 kernel faults / user faults. Oba profile jąder zbudowane i przetestowane.
+
+Granice: analityczna tabela amplitud YM jest przybliżeniem. IRQ próbki może
+czekać na inne ISR poziomu 6 / sekcje IPL7; zero underruns nie oznacza idealnego
+jitteru. Jakość i obciążenie na rzeczywistym 030 wymagają testu sprzętowego.
+Nie dodano wybierania pliku: jak wcześniej, player otwiera SYSTEM/APP/HYMN.MOD.
+
+Obrazy: zmienione wyłącznie SYSTEM/KERNEL.SYS, SYSTEM/APP/MODPLAY.APP,
+SYSTEM/APP/HYMN.PCM i SYSTEM/MICROMOD.LIC. BIOS, INPUT.SYS, pulpit, gry i
+ich dane zachowane. Różne jądra obrazu aktualnego i roboczego zachowane jako
+osobne profile; nie cofnięto poprawek HYDRA z gotowego obrazu.
+
+Dowody, kopie i patch: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/modplay-pcm
+Kopie obrazów: current-before-pcm.img, tree-before-pcm.img.
+Przywrócenie kopii tylko przy zamkniętym Hatari.
+
+Budowanie cache: gmake mod-cache MOD_INPUT=/.../HYMN.MOD PCM_OUTPUT=/.../HYMN.PCM
+Licencja Micromod dołączona w źródłach i jako SYSTEM/MICROMOD.LIC w obrazie.

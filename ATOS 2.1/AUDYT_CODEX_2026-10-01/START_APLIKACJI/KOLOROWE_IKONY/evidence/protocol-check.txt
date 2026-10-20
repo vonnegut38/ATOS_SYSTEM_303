@@ -1,0 +1,1 @@
+PASS: desktop opcode 35 fits broker range; assembled GFX.APP contains CMP.L #35,D2; native image size and checksum valid.

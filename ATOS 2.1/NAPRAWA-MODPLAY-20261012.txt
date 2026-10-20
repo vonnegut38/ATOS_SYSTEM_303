@@ -1,0 +1,81 @@
+NAPRAWA MODPLAY — 2026-10-12
+
+Zakres: start i responsywne sterowanie natywnym MODPLAY.APP. Bez zmian kernela,
+BIOS-u, INPUT.SYS, pulpitu i pozostałych aplikacji.
+
+Przyczyny znalezione w kodzie:
+1. GUI_END_KEYS w każdej iteracji, a po sukcesie break: aplikacja sama wychodziła.
+2. Oczekiwanie receive(...,1) wiązało postęp muzyki z nadejściem zdarzenia.
+3. AUDIO_STATE udostępnia liczniki sumaryczne, a nie zajętość kolejki.
+   Odejmowanie queued-events było błędne. Dodatkowo pętla czytała je tylko raz,
+   więc mogła próbować przetworzyć cały utwór / zapętlić się na Bxx.
+4. KKEY: typ zdarzenia jest w wysokim bajcie, scancode w dolnych 7 bitach.
+   Dotychczas dowolny keydown (typ 1) był interpretowany jako Escape.
+5. Odczyt MOD ze stałych sektorów 21746.. był zależny od jednego układu FAT.
+   Tablica wskaźników do nazw plików wymagała relokacji nieobsługiwanej przez APP.
+6. libgcc __umodsi3 dołączony przez operator % zawierał absolutne JSR.
+   W odtworzeniu awarii: image=0x01092470, illegal instruction PC=0x00001e18,
+   poza aplikacją. Samo -mpcrel dla własnych źródeł nie naprawia libgcc.
+7. Nowe okno wymaga nadania fokusu po pierwszym rysowaniu, które tworzy
+   powierzchnię WM. Żądanie aktywacji przed pierwszym paint było za wczesne.
+8. W ATOS_AKTUALNY nie było ani MODPLAY.APP, ani HYMN.MOD; były tylko w obrazie
+   roboczym. Zwykły launcher ATOS miał --sound off.
+
+Naprawa:
+- standardowe STAT/ALLOC/OPEN/READ/CLOSE/FREE, bez surowego dysku; komunikat błędu
+  pozostaje w oknie; limit wejścia 1 MiB, alokacja rzeczywistego rozmiaru;
+- pojedynczy PC-relative literal ścieżki \SYSTEM\APP\HYMN.MOD;
+- nieblokująca pętla zdarzeń, do 16 zdarzeń i 8 ticków na iterację;
+- monotoniczny zegar 12288 Hz, akumulacja czasu także w pustych tickach;
+- natychmiastowe TONE/STOP przez usługę audio; bez przyszłych zdarzeń w kolejce,
+  więc pauza nie zostawia nut do późniejszego wykonania;
+- odrysowanie co 200 ms lub na zmianę; bez przejęcia globalnej klawiatury;
+- poprawne skany, keydown/key-up, lokalne współrzędne i krawędź kliknięcia;
+- przyznanie fokusu przez GFX 32 dopiero po pierwszym paint;
+- sprawdzanie właściciela audio i czytelna odmowa przy zajętym PSG;
+- wyeliminowanie nie-PIC __umodsi3 przy zachowaniu ułamka czasu;
+- granice tablicy patternów, Dxx poza 0..63, Bxx, F00 i zachowanie długości
+  ostatniego ticka utworu.
+
+Ograniczenia:
+To aranżacja patternów M.K. 4-kanałowych na 3 kanały tonu YM2149, z ograniczoną
+obsługą efektów. Nie jest to odtwarzanie sampli PCM ani pełna zgodność ProTracker.
+Nie można uznać startu MODPLAY za akceptację całej warstwy dźwiękowej TOS.
+HYMN.MOD pochodzi z istniejącego obrazu użytkownika, bez pobierania nowych danych.
+Pauza zachowuje własność PSG; zamknięcie procesu ją zwalnia.
+
+Powtarzanie testów:
+gmake TOS=1 modplay check-mod check-modplay
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude \
+  tests/test_modplay_app.c system/mod_play.c system/mod_psg.c -o /tmp/test_modplay_app
+/tmp/test_modplay_app
+
+Kontrola PIC (skrypt w katalogu audytu): check_pic.py.
+Sprawdza brak __umodsi3, absolutnych JSR/JMP i R_68K_32 w obiektach aplikacji.
+Testy hostowe obejmują zegar, granicę catch-up, pauzę, odmowę właściciela,
+key-up/key-down, współrzędne kliknięcia, brak pliku i granice dekodera.
+
+Wyniki emulatora (testy na kopiach obrazów, ten sam produkcyjny APP):
+ATOS_AKTUALNY: start, odtwarzanie, Spacja pauza/wznowienie, Escape, ponowne
+otwarcie i krzyżyk — PASS. {"audio": [{"kaudio_state_owner": 5, "kaudio_state_events": 285}, {"kaudio_state_owner": 5, "kaudio_state_events": 521}, {"kaudio_state_owner": 5, "kaudio_state_events": 539}, {"kaudio_state_owner": 5, "kaudio_state_events": 539}, {"kaudio_state_owner": 5, "kaudio_state_events": 719}, {"kaudio_state_owner": 0, "kaudio_state_events": 740}], "health": {"kernel_fault_vector": 0, "kdbg_uf_count": 0, "kdbg_end_status": 0, "kdbg_end_name": 1297040464}, "app_sha256": "fbac16c42dcc71921d25ff40049e414a480c28695b475438d4b0804cae4b997f"}
+
+roboczy Deepseek: start, odtwarzanie, Spacja pauza/wznowienie, Escape, ponowne
+otwarcie i krzyżyk — PASS. {"audio": [{"kaudio_state_owner": 5, "kaudio_state_events": 282}, {"kaudio_state_owner": 5, "kaudio_state_events": 512}, {"kaudio_state_owner": 5, "kaudio_state_events": 533}, {"kaudio_state_owner": 5, "kaudio_state_events": 533}, {"kaudio_state_owner": 5, "kaudio_state_events": 704}, {"kaudio_state_owner": 0, "kaudio_state_events": 725}], "health": {"kernel_fault_vector": 0, "kdbg_uf_count": 0, "kdbg_end_status": 0, "kdbg_end_name": 1297040464}, "app_sha256": "fbac16c42dcc71921d25ff40049e414a480c28695b475438d4b0804cae4b997f"}
+
+WAV: 6 s, stereo 44100 Hz, niezerowy sygnał (peak 25768, RMS ~5807).
+
+Wdrożenie: MODPLAY.APP 5232 B, SHA256 fbac16c42dcc71921d25ff40049e414a480c28695b475438d4b0804cae4b997f
+Obraz: /Users/xxx/Documents/Deepseek_test/ATOS_AKTUALNY/ATOS.img
+Kopia: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/modplay-fix/current-before-modplay.img
+Zmiany: SYSTEM/APP/HYMN.MOD, SYSTEM/APP/MODPLAY.APP, SYSTEM/DESKTOP.CFG, SYSTEM/ICONS.CFG, SYSTEM/LAUNCH.CFG
+FAT: {"files": 398, "referenced_clusters": 2666, "fat_copies_equal": true, "crosslinks": 0}
+
+Obraz: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-tree-full.img
+Kopia: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/modplay-fix/tree-before-modplay.img
+Zmiany: SYSTEM/APP/MODPLAY.APP
+FAT: {"files": 402, "referenced_clusters": 2704, "fat_copies_equal": true, "crosslinks": 0}
+
+Kod, patch, skrypt kontroli PIC, testy, zrzuty i nagrania: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/modplay-fix
+Uruchamianie: ATOS_AKTUALNY/ATOS.app, ikona MODPLAY na pulpicie.
+Spacja: pauza/wznowienie; Escape/krzyżyk/CLOSE: zamknięcie.
+Dźwięk 44100 Hz włączony w .app, .command i hatari.cfg.

@@ -1,0 +1,8 @@
+{
+  "system/kernel_sessions.c": "64e36595b8c8bfd75f28e2d4385b7764946e5e4c2f272b8d0fc35dcc553778f8",
+  "system/kernel_exception.c": "f1888bbab361e3ff4c66cb65fe3818807acf1c0d6d8b43b94c8e8198ff2a4905",
+  "system/desktop_wm.c": "d5764837f5fc7e023fa046e876e483a757cf70d0a8199f350488cbbea34f4b7d",
+  "system/kernel_graphics.c": "6fef2fd039842b2690f472d49f7e1d9d6466df7abef41a839482062a86de5995",
+  "system/kernel_wm.c": "5d70a8c067cb3e1fffdd0b00e6d10847d94c96a480d8e78a8e0b5d32f322df0f",
+  "include/gui_damage.h": "c24ef8f9698b6982fa6d26b5e52fac01dc0073cd2b135e8f20a4a36b4d64c843"
+}

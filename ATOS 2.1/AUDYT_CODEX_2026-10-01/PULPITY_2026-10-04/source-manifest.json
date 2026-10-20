@@ -1,0 +1,14 @@
+{
+  "system/kernel_wm.c": {
+    "base_sha256": "08bbef62eb1ec23f665f3bbcc32a72285c654446a0c29005ea343b4f703f474c",
+    "live_unchanged": true
+  },
+  "system/kernel_sessions.c": {
+    "base_sha256": "db88c1020b89ef03f76127adb5292f4270888457a1719dfd0a6eb0cc85f5d7aa",
+    "live_unchanged": true
+  },
+  "system/wm_core.c": {
+    "base_sha256": "40cdbe98d08a5b2f281c2b2404633595aaf2058748fdcdf5de510c284dc115d3",
+    "live_unchanged": true
+  }
+}

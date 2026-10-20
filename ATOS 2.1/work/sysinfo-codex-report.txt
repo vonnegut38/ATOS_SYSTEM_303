@@ -1,0 +1,88 @@
+ATOS / SysInfo — mono i dane systemowe, 2026-10-07
+
+Źródła: /Users/xxx/Documents/Deepseek_test/ATOS 2.1
+Obraz: work/atos-sysinfo-codex.img
+BIOS: work/bios-sysinfo-codex.bin (bez zmian w tej rundzie)
+Uruchamiacz: run-sysinfo-codex.command
+Program: SYSTEM/TEST/SYSTOS.PRG (SysInfo 8.36, binarka bez zmian).
+
+NAPRAWIONE
+1. Prywatna paleta mono: białe tło, czarny tekst. Menu, zaznaczenia
+   i VT52 korzystają z tego samego obrazu. Paleta pulpitu wraca po zamknięciu.
+   Setcolor(index,-1) odczytuje poprzedni kolor zamiast zapisywać -1.
+2. BIOS Getbpb/Drvmap oraz GEMDOS Dgetdrv/Dsetdrv/Dgetpath/Dfree:
+   montowany wolumin jest udostępniany jako C:. BPB pochodzi z FAT,
+   z przeliczeniem fizycznych sektorów 512 B na logiczne sektory woluminu.
+   Wolne klastry są liczone z FAT; błędy odczytu nie udają sukcesu.
+   _bootdev i _drvbits są spójne z tym mapowaniem. Persona obecnie używa
+   katalogu głównego; nie dodano obsługi Dsetpath ani mapowania innych dysków.
+3. OSHEADER: poziom zgodności TOS 2.06, data budowy ATOS, wskaźnik bieżącej
+   strony bazowej i stanu klawiatury. To nagłówek warstwy zgodności ATOS,
+   a nie deklaracja oryginalnego ROM-u Atari. Data/czas pochodzą z RTC;
+   przy braku RTC data startowa pochodzi z daty budowy.
+4. _phystop/_membot/_memtop opisują ST-RAM; _ramtop/_ramvalid opisują
+   wykryte TT-RAM. Pamięć prywatnego programu TT nie jest już wpisywana
+   w granice ST-RAM. Kopia rejestru MMU pod $424 zgadza się ze sprzętem.
+5. Malloc i Mxalloc: prawdziwe, osobne pule ST/TT; tryby preferencji 2/3,
+   zapytanie -1 zgodne z możliwością późniejszej alokacji. Usunięto
+   prywatną 4 MB stertę TT, która była przedstawiana jako pamięć ST.
+   Rezerwa dla kernela: 256 KB ST, 64 KB TT; maks. 128 śledzonych bloków.
+   Mfree/Mshrink sprawdzają właściciela i dokładny wskaźnik; bloki są
+   zwalniane przy końcu programu. Mshrink puli kmem zwalnia końcówkę bloku.
+   Rezerwacja 16 MB TPA pozostaje osobna; Mshrink strony bazowej pilnuje
+   rozmiaru, lecz nie udostępnia tej rezerwacji przez kmem/Mxalloc.
+6. Trap #1/#13/#14 wybierają stos wywołującego również w supervisor mode,
+   uwzględniają ramkę 68000/68010+ i pomijają WORD numeru funkcji.
+7. Ctrl/Alt/Shift/Caps są śledzone i przekazywane do AES/BIOS. Ctrl+B
+   w menu SysInfo przełącza prezentację adresów na 32 bity.
+   Kolejka klawiszy zachowuje stan Ctrl/Alt/Shift z chwili naciśnięcia,
+   również gdy puszczenie modyfikatora poprzedza odebranie zdarzenia AES.
+   evnt_dclick nie nadpisuje już ośmiu słów wyniku, gdy ma tylko jedno.
+
+WERYFIKACJA
+- Build TOS=1: PASS; 429224 B. Hash w manifest.json.
+- Wyekstrahowany SYSTEM/KERNEL.SYS jest identyczny z buildem (cmp PASS).
+- ASan/UBSan: test_tos_disk_info.py, test_tos_memory_info.py,
+  test_tos_console_events.py, test_tos_aes_objects.py: PASS.
+- Geometria obliczona niezależnie z sektora startowego obrazu:
+  BPB = 512,8,4096,32,256,257,545,65467,1.
+  Taki sam BPB odczytano z pamięci działającego gościa; image-geometry.json
+  i geometry.json. Dysk C: jest widoczny, katalog C:\.
+- Hatari TF536/ET4000: 68030, 4 MB ST, 64 MB TT. Render SDL dummy,
+  rzeczywiste zrzuty gościa. Szczegóły prób w runtime.json, final-runtime.json i plikach PNG.
+- Środowisko terminalowe nie udostępnia SDL ekranów macOS. Test nie oznacza
+  otwarcia widocznego okna Hatari; do tego służy wskazany uruchamiacz.
+
+POZOSTAŁE OGRANICZENIA SYSINFO — KONKRETNA PRZYCZYNA
+1. TOTAL ST-RAM = 13312 KB nie jest wynikiem Malloc ani _phystop.
+   SysInfo wbudowuje własny kod sondowania: zapisuje i odczytuje wzorce
+   0x631A i 0xAECE pod adresami od 0x00DFFFFE w dół. Pod 0x00CFFFFE
+   odpowiada okno pamięci ET4000. Program bierze tę pamięć za ST-RAM
+   i zwraca 0x3400 = 13312 KB. Rzeczywiste _phystop = 0x00400000,
+   oba banki ST = 2048 KB. Zmiana samego _phystop tego nie naprawi.
+2. TOTAL TT-RAM = 0: w tej wersji SysInfo odczyt _ramtop jest wykonywany
+   tylko dla typu maszyny TT (warunek w rozpakowanym kodzie 0x040028E8).
+   Nasza maszyna to Mega ST z rozszerzeniem TF536, więc warunek odpada.
+   _ramtop = 0x05000000, _ramvalid = 0x1357BD13. Mxalloc(−1,1) zwraca
+   rzeczywiście dostępną pulę TT — w teście około 47 MB, a nie całe 64 MB:
+   część zajmuje system i wydzielone 16 MB TPA.
+3. FREQUENCY to pomiar SysInfo na emulowanym CPU; przy kompozycji okna
+   i fast-forward nie odpowiada stabilnie ustawieniu 32 MHz.
+4. Obsługa automatycznego powtarzania klawiszy, klików dźwiękowych oraz
+   pełnego evnt_dclick nadal nie jest zaimplementowana. Zera w tych polach
+   nie są już dowodem błędnego BPB, ale nie oznaczają pełnej zgodności TOS.
+
+CO DALEJ
+Aby TOTAL ST/TT i zegar CPU były wiarygodne na TF536 + ET4000, potrzebna
+jest wersja narzędzia świadoma tej konfiguracji: dane systemowe zamiast
+zapisów próbnych do całej przestrzeni sprzętowej i _ramtop niezależnie
+od typu TT. Nie należy fałszować _MCH=TT ani ukrywać wyjątków programu.
+Nie zmieniałem binarki SysInfo ani mapy sprzętowej emulatora.
+
+Ostatnia korekta klawiatury: final-ctrl-b.png pokazuje 32 BIT po krótkim
+naciśnięciu Ctrl+B. Odczyt po puszczeniu: bieżący Ctrl=0, zapisane
+modyfikatory ostatniego zdarzenia=4, wyjątek CPU=0.
+
+Końcowy build: zamknięcie active=0, vector=0, pozostałe alokacje=0.
+Ponowne uruchomienie active=1, vector=0; final-runtime.json.
+Wszystkie instancje Hatari uruchomione na potrzeby tego testu zamknięto.

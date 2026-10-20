@@ -1,0 +1,6 @@
+[on] pulpit po ~15 s
+[on] probka 0: owner=5 caps=2
+[on] probka 1: owner=5 caps=2
+[on] probka 2: owner=5 caps=2
+[on] probka 3: owner=5 caps=2
+[on] rc 0

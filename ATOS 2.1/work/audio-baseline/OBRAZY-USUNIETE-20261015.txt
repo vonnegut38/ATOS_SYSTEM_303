@@ -1,0 +1,7 @@
+UWAGA: 15.10.2026 usunieto TRWALE wszystkie obrazy .img z tego katalogu
+(atos-audio-*.img, atos-v2-before-audio.img) oraz work/atos-tree-full.img,
+work/atos-live-sync.img, work/atos-nftest.img, work/atos-audio-demo.img
+i work/ATOS_AKTUALNY-backup-20261012.img.
+Manifesty manifest-*.md zostaly CELOWO: opisuja te obrazy przez SHA-256 i sa
+zapisem historii eksperymentow audio. Scenariusze wymagajace tych obrazow
+wymagaja odtworzenia obrazu od zera (build/system + install).

@@ -1,0 +1,18 @@
+{
+  "check_gfx_depth.py": "f95db268c83e95ca2cfd3823b3d63396dfd868edad26f756e1e9059bca45a895",
+  "RAPORT.md": "0b215343b7b12e8d09dd4e24196b04a0068081192a40c56627c46951174f8b3d",
+  "manifest.json": "2fb897268c56496eec3b13b3f3be54ea3175794b81401c27af9635f31c9f45b5",
+  "DLA_DEEPSEEK.txt": "8fd6c77c120a2af436bb876b3f7b6a4b4663859ab42d3854ccde9c8769f96624",
+  "GFX-depth-query.patch": "fc514a466c336e047241f9f9fd685f6fcb049260487665dff9007b2f11319086",
+  "evidence/icons-after.png": "24fdf815edb2c388bb29789ed881072e4f878f11f7415b1a434beab94e882053",
+  "evidence/icons-after.json": "57ed727f4a701acf8fc86364c90b96ddc56676563bd5c0cf9b9c06f206af2dfb",
+  "evidence/icons-before.json": "de50568e9e83f39818e561c81225ca5d0df43d7e986b347d620c29b002e7f45b",
+  "evidence/icons-before.png": "23cf21bc737c275e84b672f5d6a03ef9edcc0f003ba63cdd4af0ce4a20f4d98a",
+  "evidence/protocol-check.txt": "619454b51c8380e04fe8d0f3403acd96c7e3f94b61f865285a037c09e97a37d9",
+  "evidence/icons-mono-after.png": "0e1e7412111bc286218fefe983fd3892ab950c610cc68c4e36e4b371f496fd77",
+  "evidence/build-gfx.log": "caf00af71fd8c5d3d009f4d65a799e7a85d7a95ce2021a06fd2816a34ab1b72e",
+  "evidence/icons-mono-after.json": "005e37903b53be7e39bce8f63b9bf5436ae625ca46d0217a6ef7c64559aa88d4",
+  "evidence/icons-mono-before.png": "0e1e7412111bc286218fefe983fd3892ab950c610cc68c4e36e4b371f496fd77",
+  "evidence/icons-mono-before.json": "e18e216f0c2497bfa4caaf359a17b26db82e2acf420efdd8e2aab2aa0220e64d",
+  "sources/system/gfx_service_app.S": "d2db11773c27499c40ef2740d052d081fb88ee73a38f267792c290b1aee66aaa"
+}

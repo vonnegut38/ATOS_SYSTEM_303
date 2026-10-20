@@ -1,0 +1,27 @@
+--- a/system/wm_core.c
++++ b/system/wm_core.c
+@@ -81,6 +81,7 @@
+     dst->client.w=src->client.w;dst->client.h=src->client.h;
+     dst->pid=src->pid;dst->flags=src->flags;
+     dst->src_x=src->src_x;dst->src_y=src->src_y;
++    dst->content_h=src->content_h;
+     /* Titles and the saved frame must survive a Z-order move too, otherwise
+        raising a window (click-to-focus) erased its task-list title. */
+     {unsigned k;for(k=0;k<sizeof(dst->title);++k)dst->title[k]=src->title[k];}
+@@ -276,6 +277,16 @@
+         }
+     }
+     if(s->damage_count<WM_DAMAGE_MAX)s->damage[s->damage_count++]=r;
++    else{
++        /* Never lose invalidation. Collapse only on overflow; ordinary small
++           updates retain the existing area-aware merging policy. */
++        wm_rect_t all=r,u;
++        for(i=0;i<s->damage_count;++i){
++            (void)wm_rect_union(&all,&s->damage[i],&u);
++            all=u;
++        }
++        s->damage[0]=all;s->damage_count=1;
++    }
+ }
+ 
+ void wm_damage_clear(wm_state_t *s){if(s)s->damage_count=0;}

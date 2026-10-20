@@ -1,0 +1,71 @@
+ATOS — uporządkowanie startu, 2026-10-10
+
+Wdrożenie: work/atos-v2.img + build/bios_mste.bin (także obrazy/splity ROM ST/MSTE/TF536).
+Ważne: używać nowego BIOS-u razem z nowym obrazem. Samo podmienienie dysku
+nie zmieni ekranu rysowanego przez stary ROM. Flashback.app i jego osobny
+obraz nie były zmieniane w tej rundzie.
+
+Efekt:
+- Ten sam znak odwróconego E od pierwszej inicjalizacji ekranu.
+- BIOS: logo i ATOS 2.1, wykryty CPU/ST-RAM/TT-RAM, skróty F.
+- Po BIOS-ie informacje sprzętowe i skróty znikają; zostaje logo,
+  jeden graficzny pasek i nazwa aktualnego etapu.
+- Postęp: BOOT.SYS 0–5%, KERNEL.SYS 5–45%, moduły 45–80%,
+  sterownik wideo 82%, usługi 85–94%, pulpit 96–99%; pierwszy
+  gotowy rysunek pulpitu kończy prezentację ekranu startowego.
+- Brak sztucznego czekania na animację. Zapisana sekunda odliczania
+  BIOS-u jest respektowana (wcześniej kod wymuszał dwie).
+
+Istotne poprawki:
+1. Jeden renderer ROM do końca startu; usunięty drugi splash w kernelu.
+   Naprawione nachodzenie napisu na logo, geometria znaku i kasowanie
+   starego paska przy zmianie etapu.
+2. Brak CFG-DBG/adresów loadera/tekstowego statusu na normalnym ekranie.
+   Rzeczywiste błędy pozostają widoczne.
+3. Kernel przejmuje istniejący tryb karty i cel prezentacji. Nie programuje
+   tej samej rozdzielczości ponownie i nie czyści wtedy VRAM.
+4. Konsola i nakładki sesji nie nadpisują logo. Prezentacja bufora karty
+   jest wstrzymana do pierwszej zweryfikowanej listy rysowania pulpitu;
+   kompozycja następuje przed zwolnieniem blokady. Błąd startu i panic
+   wyłączają blokadę. Zasoby pulpitu ładowane przed przejęciem ekranu.
+5. Poważny istniejący błąd nadzoru pulpitu: kernel_user_take_completion()
+   zwraca -1, gdy proces nadal żyje. Kod traktował każdą wartość niezerową
+   jako zakończenie, zgłaszał DESKTOP.APP STOPPED, kasował ekran i PID.
+   Teraz wyłącznie wynik == 1 oznacza rzeczywiste zakończenie.
+6. BIOS.CFG na obrazie: tryb 800x600x256 zgodny z istniejącym DESKTOP.CFG
+   (RES=3), zapamiętany wykryty nośnik IDE 0, partycja 0. Zniknęła
+   niepotrzebna ponowna enumeracja całej magistrali podczas normalnego startu.
+   Zniknięcie zapamiętanego urządzenia nadal uruchamia istniejący fallback.
+
+Walidacja:
+- Hatari z Flashback.app, Mega ST / 68030 32 MHz, TF536, ET4000,
+  bez fast-forward. Kopie dysku, główny obraz zatrzymany przy instalacji.
+- Przed: pełny pulpit w próbce 16 s (próbkowanie co 2 s).
+  Po: pełny pulpit w próbce 12,25 s (próbkowanie co 0,25 s).
+  To pomiar emulatora, nie deklaracja czasu na fizycznym komputerze.
+- Kursor/logo/pasek i pełny pulpit sprawdzone na zrzutach gościa;
+  brak czarnej przerwy przed pierwszą prezentacją pulpitu w końcowym przebiegu.
+- kernel_desktop_pid=4 i kernel_fault_vector/pc=0 po starcie.
+- F1 otwiera SETUP. Brak DESKTOP.APP daje widoczny błąd i konsolę.
+- Awaryjny Shifter mono dochodzi do pulpitu, fault=0. Ten test nie jest
+  osobnym audytem wyglądu motywu pulpitu w mono.
+- Testy C konsoli, sesji, grafiki, wideo, konfiguracji i GUI/PIC przechodzą.
+  Dodane sprawdzenie zatrzymania prezentacji konsoli i obejścia dla błędów.
+- Zestaw gmake check: cele C przeszły; pierwszy przebieg testów Python
+  ujawnił brak atrapy nowej funkcji w teście sesji. Po aktualizacji atrapy
+  i dodaniu regresji wszystkie 47 testów Python przeszło (ASan/UBSan tam,
+  gdzie używa ich istniejący harness).
+- Obraz po instalacji: 164 pliki, 848 zajętych klastrów w łańcuchach,
+  identyczne kopie FAT, zero crosslinków. Porównanie zawartości wszystkich
+  plików: zmieniono tylko BOOT.SYS, KERNEL.SYS, DESKTOP.APP i dwie kopie
+  BIOS.CFG. Pliki aplikacji/dane użytkownika pozostały takie jak przed pracą.
+
+Kopie i dowody:
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/boot-clean
+  before/atos-v2.img — pełna kopia obrazu sprzed instalacji
+  before/build/bios_mste.bin — poprzedni BIOS
+  before/ — migawki zmienionych źródeł i poprzednich artefaktów
+  boot-clean.patch — różnice źródeł
+  deployment.json — sumy SHA-256 i wynik audytu instalacji
+  run-final/ — sekwencja startu co 0,25 s
+  run-keys/setup.png, run-missing/result.png — testy F1 i błędu

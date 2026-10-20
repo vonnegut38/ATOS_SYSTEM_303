@@ -1,0 +1,203 @@
+--- VOFA/ET4000 extracted from the kernel into the optional VOFA.SYS module ---
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_video.c"	2026-09-20 19:23:57.000000000 +0200
++++ system/kernel_video.c	2026-09-24 21:31:03.735177156 +0200
+@@ -4,21 +4,21 @@
+  * scanline is bounded in word units; no scan happens on an idle frame. */
+ static const volatile uint8_t *front;
+ static volatile uint8_t *card;
+-/* Shadow copy of the card image. A STATIC buffer, not kmem_alloc: the
+-   allocation failed at boot, which left card==0 and made every flush a
+-   no-op (the screen never updated). 32000 bytes = 16000 words. */
+-static uint16_t shadow_buf[16000];
+-static uint16_t *shadow=shadow_buf;
++/* Shadow copy of the card image (16000 words = 32 KB). Allocated lazily from
++   the kernel heap only when a VOFA adapter is actually activated, so machines
++   without the card pay zero RAM for it. */
++static uint16_t *shadow;
+ static uint8_t left[400],right[400],full,pending;
+ uint32_t kvideo_dbg_active,kvideo_dbg_calls,kvideo_dbg_copies;
+ void kvideo_reset(const volatile uint8_t *screen)
+-{unsigned y;front=screen;card=0;shadow=shadow_buf;full=0;pending=0;for(y=0;y<400;y++){left[y]=40;right[y]=0;}}
++{unsigned y;front=screen;card=0;full=0;pending=0;for(y=0;y<400;y++){left[y]=40;right[y]=0;}}
+ int kvideo_is_vofa(void){return card!=0;}
+ const void *kvideo_front(void){return (const void *)front;}
+ int kvideo_activate_vofa(volatile uint8_t *vram)
+ {
+- /* static shadow buffer - kmem_alloc here failed at boot and left
+-    card==0, which made every flush a no-op (frozen screen). */
++ if(!shadow)shadow=(uint16_t *)kmem_alloc(16000u*2u,16u,KMEM_OWNER_KERNEL,
++                                          KMEM_READ|KMEM_WRITE,0);
++ if(!shadow)return 0; /* no shadow -> stay on Shifter */
+  card=vram;full=1;kvideo_dbg_active=1u;return 1;
+ }
+ void kvideo_select(const volatile uint8_t *screen)
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_video_boot.c"	2026-09-20 19:35:51.000000000 +0200
++++ system/kernel_video_boot.c	2026-09-24 21:31:03.710558185 +0200
+@@ -1,5 +1,7 @@
+ #include "kernel_video.h"
+ #include "vofa_et4000.h"
++#include "kernel_video_service.h"
++#include "kernel_module.h"
+ #include "kernel_fat.h"
+ #include "kernel_console.h"
+ static const kernel_timer_service_t *video_timer;
+@@ -24,7 +26,18 @@
+  if(mode!=2||ram>=VOFA_MEM||!timer||!timer->poll||timer->frequency_hz!=50){
+   kconsole_puts("UNSUPPORTED CONFIG - SHIFTER\n");return;
+  }
+- video_timer=timer;result=vofa_et4000_init(&io);
++ /* VOFA/ET4000 mode programming lives in the optional VOFA.SYS module. */
++ {
++  static const char module_name[11]={'V','O','F','A',' ',' ',' ',' ','S','Y','S'};
++  enum module_state state=kernel_load_system_module(module_name,0x0108u,0);
++  const kernel_video_service_t *service=(const kernel_video_service_t *)kernel_find_service(KERNEL_SERVICE_VIDEO,KERNEL_VIDEO_VERSION);
++  video_timer=timer;
++  if(state!=MODULE_READY||!service||service->magic!=KERNEL_VIDEO_MAGIC||
++     service->version<KERNEL_VIDEO_VERSION||service->size<sizeof(*service)||!service->init){
++   kconsole_puts("MODULE MISSING - SHIFTER\n");return;
++  }
++  result=service->init(&io);
++ }
+  if(result==VOFA_OK){
+   if(kvideo_activate_vofa((volatile uint8_t *)(uintptr_t)VOFA_MEM))
+    kconsole_puts("640x480 MONO / VIEW 640x400\n");
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/include/kernel_module.h"	2026-09-24 16:04:17.798730741 +0200
++++ include/kernel_module.h	2026-09-24 21:30:52.216592998 +0200
+@@ -13,6 +13,7 @@
+ #define KERNEL_SERVICE_EVENT 0x45564e54UL
+ #define KERNEL_SERVICE_INPUT 0x494e5054UL
+ #define KERNEL_SERVICE_SHELL 0x53484c4cUL
++#define KERNEL_SERVICE_VIDEO 0x56494445UL /* "VIDE", optional VOFA.SYS */
+ typedef struct {
+     uint8_t cpu_type,fpu_type,machine_type,address_bits;
+     uint8_t has_mmu,has_instruction_cache,has_data_cache,clock_known;
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/Makefile"	2026-09-24 14:25:27.538549226 +0200
++++ Makefile	2026-09-24 21:31:22.344636591 +0200
+@@ -27,7 +27,7 @@
+ 
+ DEP += build/system/sysinfo.d
+ DEP += build/system/kernel_console.d build/system/text_terminal.d build/system/kernel_sessions.d
+-DEP += build/system/kernel_video.d build/system/kernel_video_boot.d build/system/vofa_et4000.d
++DEP += build/system/kernel_video.d build/system/kernel_video_boot.d build/system/vofa_et4000.d build/system/vofa_module.d build/system/vofa_entry.d
+ -include $(DEP)
+ 
+ .PHONY: all clean check toolchain hatari hatari-st hatari-rgb hatari-mono hatari-medium
+@@ -39,6 +39,7 @@
+ all: build/system/INIT.APP
+ all: build/system/GFX.APP build/system/GFXTEST.APP build/system/SURFTEST.APP build/system/GUI.APP build/system/GUITEST.APP build/system/GUIKEY.APP build/system/GUISTRM.APP build/system/GUIMOD.APP build/system/GUIMOUSE.APP build/system/DESKTOP.APP
+ all: build/system/PATH.APP
++all: build/system/VOFA.SYS
+ 
+ build/boot/mmu030.o: boot/mmu030.S
+ 	@mkdir -p $(@D)
+@@ -97,8 +98,8 @@
+ 	@mkdir -p $(@D)
+ 	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
+ 
+-build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
+-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
++build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
++	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+ 	$(OBJCOPY) -O binary build/system/kernel.elf $@
+ 	python3 tools/patch_boot_checksum.py $@
+ 
+@@ -1169,7 +1170,15 @@
+ build/system/kernel_video_boot.o: system/kernel_video_boot.c
+ 	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
+ build/system/vofa_et4000.o: system/vofa_et4000.c
+-	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++	$(CC) $(CFLAGS) -mpcrel -fno-tree-loop-distribute-patterns -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++build/system/vofa_entry.o: system/vofa_entry.S
++	$(CC) $(ASFLAGS) -c $< -o $@
++build/system/vofa_module.o: system/vofa_module.c include/kernel_video_service.h include/kernel_module.h
++	$(CC) $(CFLAGS) -mpcrel -fno-tree-loop-distribute-patterns -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++build/system/VOFA.SYS: build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o linker/vofa-module-sys.ld tools/patch_boot_checksum.py
++	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/vofa-module-sys.ld -Wl,--gc-sections -o build/system/vofa_module.elf build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o
++	$(OBJCOPY) -O binary build/system/vofa_module.elf $@
++	python3 tools/patch_boot_checksum.py $@
+ build/system/video_bus.o: system/video_bus.S
+ 	$(CC) $(ASFLAGS) -c $< -o $@
+ 
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/tools/build_atos2.py"	2026-09-24 14:30:51.319028244 +0200
++++ tools/build_atos2.py	2026-09-24 21:31:29.477883616 +0200
+@@ -21,7 +21,7 @@
+ run('gmake','check','check-terminal','check-console','check-sessions','check-commander','check-sysinfo','check-languages')
+ if a.install:
+     run('python3','tools/make_bios_cfg.py','work/BIOS.CFG','--auto-tos','0','--boot-delay','1')
+-    for name in ['BOOT.SYS','KERNEL.SYS','ACSI.SYS','CORE.SYS','VFS.SYS','PROC.SYS','TIMER.SYS','EVENT.SYS','INPUT.SYS','SHELL.SYS','INIT.APP','GFX.APP','GUI.APP','COMMAND.APP','SYSINFO.APP']:
++    for name in ['BOOT.SYS','KERNEL.SYS','ACSI.SYS','CORE.SYS','VFS.SYS','PROC.SYS','TIMER.SYS','EVENT.SYS','INPUT.SYS','SHELL.SYS','VOFA.SYS','INIT.APP','GFX.APP','GUI.APP','COMMAND.APP','SYSINFO.APP']:
+         run('python3','tools/install_boot_sys.py','work/atos-v2.img','build/system/'+name)
+     for name in ['COMMAND.APP','SYSINFO.APP','SETUP.APP']:
+         run('python3','tools/install_boot_sys.py','work/atos-v2.img','build/system/'+name,'--directory','SYSTEM/APP')
+--- /dev/null	2026-09-24 21:33:26.951000000 +0200
++++ include/kernel_video_service.h	2026-09-24 21:30:41.862278056 +0200
+@@ -0,0 +1,13 @@
++#ifndef ASF_KERNEL_VIDEO_SERVICE_H
++#define ASF_KERNEL_VIDEO_SERVICE_H
++#include <stdint.h>
++#include "vofa_et4000.h"
++/* Optional video adapter service, published by VOFA.SYS when loaded. */
++#define KERNEL_VIDEO_MAGIC 0x5649444fUL /* "VIDO" */
++#define KERNEL_VIDEO_VERSION 1u
++typedef struct {
++    uint32_t magic;
++    uint16_t version,size;
++    int (*init)(const vofa_io_t *io); /* probe + program card; <0 = failure */
++} kernel_video_service_t;
++#endif
+--- /dev/null	2026-09-24 21:33:26.951000000 +0200
++++ system/vofa_entry.S	2026-09-24 21:31:22.277461506 +0200
+@@ -0,0 +1,16 @@
++    .section .module_header,"a"
++    .ascii "ASYSMOD0"
++    .word 3
++    .word 32
++    .long __image_file_end
++    .long 0
++    .long vofa_module_entry
++    .long __image_memory_end
++    .long 0
++
++    .section .text.startup,"ax"
++    .globl vofa_module_entry
++vofa_module_entry:
++    /* Tail-call the C part with the module API pointer still in 4(%sp). */
++    lea vofa_module_main(%pc),%a0
++    jmp (%a0)
+--- /dev/null	2026-09-24 21:33:26.951000000 +0200
++++ system/vofa_module.c	2026-09-24 21:30:41.884387623 +0200
+@@ -0,0 +1,18 @@
++#include "kernel_module.h"
++#include "kernel_video_service.h"
++
++/* The module is loaded at an arbitrary base and the loader does not relocate,
++   so the service vtable must be filled with runtime (PC-relative) addresses at
++   entry time, exactly like the assembly modules do with lea sym(%pc). */
++static kernel_video_service_t vofa_service;
++
++int vofa_module_main(const kernel_module_api_t *api)
++{
++    if(!api||api->magic!=KERNEL_MODULE_API_MAGIC)return 0;
++    if(!api->register_service)return 0;
++    vofa_service.magic=KERNEL_VIDEO_MAGIC;
++    vofa_service.version=KERNEL_VIDEO_VERSION;
++    vofa_service.size=(uint16_t)sizeof(vofa_service);
++    vofa_service.init=vofa_et4000_init;
++    return api->register_service(KERNEL_SERVICE_VIDEO,KERNEL_VIDEO_VERSION,&vofa_service);
++}
+--- /dev/null	2026-09-24 21:33:26.951000000 +0200
++++ linker/vofa-module-sys.ld	2026-09-24 21:30:41.893020291 +0200
+@@ -0,0 +1,13 @@
++OUTPUT_FORMAT("elf32-m68k")
++OUTPUT_ARCH(m68k)
++ENTRY(vofa_module_entry)
++SECTIONS {
++    . = 0;
++    .module_header : { KEEP(*(.module_header)) }
++    .text : { *(.text.startup) *(.text*) *(.rodata*) }
++    .data : { *(.data*) }
++    __image_file_end = .;
++    .bss (NOLOAD) : { *(.bss*) *(COMMON) }
++    __image_memory_end = .;
++    /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
++}

@@ -1,0 +1,4 @@
+PASS: every phase, every pixel, colour and mono
+batches per frame: 9
+idle animation: batches=91 sleeps=50 blocking input waits=0
+PASS: advances without mouse/keyboard and closes on WCLS

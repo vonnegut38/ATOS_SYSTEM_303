@@ -1,0 +1,9 @@
+{
+  "build/bios_mste.bin": "798d254bf37f5b44752579dc6779a548f55a48c47f1c8fdf9899e5563f6af100",
+  "build/system/KERNEL.SYS": "b6d69617248ce606b3e2fba1a46989c5a0625b9062b6ad1ef590913c46865825",
+  "build/system/INPUT.SYS": "771e9ef39335f573e205dc7af29f165ff8b9b2988e3c3c71c54f81f632a2419b",
+  "build/system/ACSI.SYS": "8adf896a19c296682ccf9525a538fab9e2db5019ea1fbd1ff039138661a4fb9b",
+  "build/system/SHELL.SYS": "244d112d59576ffb6b0df456ca8bd5d96607cc3a99c87cb3373c9c0f84a42ec4",
+  "work/atos-v2.img": "7424bb59909836dcda84a3d27c613862d9d712618df41b4e0647ffafbba1c4d7",
+  "ATOS_2_0_checkpoint_wejscie.tar.gz": "dc2c84278e2e52ebcc044495c281ebb966f3095e39013eed4ef56d375eb2fcc9"
+}

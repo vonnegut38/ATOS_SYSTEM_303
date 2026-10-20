@@ -1,0 +1,13 @@
+--- a/src/conv_st.c
++++ b/src/conv_st.c
+@@ -425,6 +425,10 @@
+ 
+ 		if (cvram != NULL && cw > 0 && ch > 0 && (cbpp == 1 || cbpp == 8))
+ 		{
++			/* Reset can recreate the SDL surface at Shifter size while the
++			 * card keeps the same mode. Validate the actual host surface on
++			 * every frame; SetSize(false) does not recreate a matching one. */
++			ConvGen_SetSize(cw, ch, false);
+ 			if (!last_card_active || cw != last_card_w || ch != last_card_h ||
+ 			    cbpp != last_card_bpp)
+ 			{

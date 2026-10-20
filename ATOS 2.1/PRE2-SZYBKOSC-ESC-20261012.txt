@@ -1,0 +1,68 @@
+PRE2 — PRZEWIJANIE I POTWIERDZENIE ESC, 2026-10-12
+
+WYNIK
+Na tej samej konfiguracji Hatari (68030 32 MHz, 8 MB ST + 64 MB TT,
+ET4000, bez fast-forward), przy tym samym skrypcie biegu/skokow/ataku:
+14,0 -> 18,2 kl./s srednio (+30%). 200 klatek rozgrzewki + 400 mierzonych.
+To pomiar diagnostyczny, zawiera koszt wywolan profilujacych; nie jest
+obietnica stalego 25–30 FPS. Docelowe tempo symulacji pozostaje 70/3 Hz.
+Nie zmieniono czestotliwosci CPU, rozmiaru obrazu ani tempa fizyki gry.
+
+Czas na klatke, przed -> po (ms):
+  konwersja planar + paleta   30,53 -> 16,25
+  prezentacja / IPC          11,56 -> 11,54
+  silnik + renderer          28,75 -> 20,03
+  oczekiwanie                 0,34 ->  6,71
+  wejscie                     0,46 ->  0,42
+  razem                      71,64 -> 54,96
+
+ZMIANY
+1. -m68030 -mno-strict-align: stary kompilator zachowywal rygor wyrównania
+   nawet dla 68030. Male memcpy w rendererze skladal z bajtow i przesuniec.
+   Teraz kopiuje slowa/dlugie slowa RAM instrukcjami CPU. Port wymaga 68030;
+   rejestry sprzetowe nadal sa obslugiwane przez ABI systemu.
+2. Cache fizycznych kafli pierscienia tla. Ruch kamery nie przebudowuje
+   automatycznie calego pierscienia. Klucz obejmuje kafel, typ i zrodlo
+   parallaxu; zmiana zasobow invaliduje cache. Specjalny poziom bossa
+   zachowuje pelne odswiezanie; nietypowe adresowanie ma stara sciezke.
+3. Porownywanie planow dlugimi slowami; deplanaryzowane sa tylko zmienione
+   grupy osmiu pikseli. Zachowane przesuniecia, zawijanie i ucinanie obrazu.
+4. ESC zatrzymuje gre i pokazuje ZAKONCZYC GRE? Domyslnie NIE.
+   Lewo = TAK, prawo = NIE, Enter zatwierdza. ESC lub N wraca do gry;
+   T/Y potwierdza zakonczenie. Trzymany ESC nie zamyka gry.
+   Anulowanie przywraca obraz, palete i zegar klatek bez nadrabiania pauzy.
+   Alt+X / Alt+Q pozostaja bezposrednimi skrotami wyjscia.
+
+WERYFIKACJA
+- 28 800 klatek (16 poziomow x 1800) starego i nowego renderera: zgodne
+  hashe widocznego obrazu i palety; ASan/UBSan. To nie przejscie calej gry.
+- 2112 wariantow konwersji i niezmienione powtorzenia: zgodne z referencja.
+- Test dialogu: powtorzenie ESC, domyslne NIE, ESC/N, TAK/Enter/T,
+  przywrocenie kazdego bajtu ramki/palety, reset klawiszy i taktowania.
+- Produkcyjny PRE2.APP uruchomiony w Hatari: intro, menu, rozgrywka,
+  przewijanie, pauza (obraz i licznik klatek niezmienne przez 3 s),
+  wznowienie, potwierdzone wyjscie, ponowny start i anulowanie dialogu.
+  Zero wyjatkow CPU/uzytkownika. Kolor pulpitu przed/po zachowany.
+- Produkcyjna binarka bez automatycznego sterowania, profilowania i autorun.
+  Rozmiar 256884 B, SHA256:
+  3becbef464c9dbcdfe14a406b553ab9dae758979e503db870d9b46912e1d6724
+- Jadro pozostaje identyczne: 463486 B, SHA256:
+  30bcd805065c4244f31acd24df2e7609d01d1edb5ee208e1de09e504ed38df18
+
+WDROZENIE
+Zmieniany w obrazie wylacznie SYSTEM/APP/PRE2.APP. Manifest porownuje
+zawartosc kazdego pliku FAT, weryfikuje kopie FAT i brak crosslinkow.
+Obraz: /Users/xxx/Documents/Deepseek_test/ATOS_AKTUALNY/ATOS.img
+Zrodla: /Users/xxx/Documents/Deepseek_test/PRE2
+Dowody, skrypty, pomiary, testy i kopia przed zmiana:
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/pre2-speed
+Kopia dysku: release-before.img. Kopia zmienianych zrodel: source-before/.
+Wynik wdrozenia: deployment.json. Wynik runtime: accept/PASS.json.
+
+CO JESZCZE OGRANICZA PLYNNOSC
+Koszt silnika i konwersji nadal dominuje; przewijanie zmienia duza czesc
+obrazu. Pelny transfer 640x400 przez magistrale ma koszt niezalezny od cache
+kafli. Kolejny etap wymaga pomiaru poszczegolnych funkcji silnika albo zmiany
+modelu renderowania (np. mniej kopiowania planar/chunky). Skokowy ruch
+kamery w samym silniku jest osobnym zagadnieniem od liczby FPS.
+PRE2 nadal nie ma integracji dzwieku. Nie zmieniano audio systemu.

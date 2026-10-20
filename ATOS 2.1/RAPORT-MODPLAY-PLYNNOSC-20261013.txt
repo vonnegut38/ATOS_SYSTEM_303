@@ -1,0 +1,73 @@
+MODPLAY — ładowanie i płynność GUI, 2026-10-13
+
+Zmiany w źródłach Deepseek_test/ATOS 2.1:
+1. Wyświetlanie różnicowe. Słupki rysują tylko przyrost/spadek wysokości;
+   zmiana koloru przemalowuje tylko aktywną część. Stałe poziomy = zero rysowania.
+2. Tekst zapamiętuje poprzednią treść; niezmienione nuty i opisy nie są rysowane.
+   Historia nut próbkowana 4 Hz, wskaźniki celują w 25 Hz bez nadrabiania zaległości.
+3. Grupowane regiony uszkodzeń i ATOS_CALL_GUI_FRAME, jedno zgłoszenie klatki
+   zamiast kilku synchronizacji przez SYSTEM.GFX. Rozruch powierzchni zachowuje
+   starą ścieżkę. Bufor komend alokowany, aby nie przekroczyć relokacji PC16.
+4. Pełny repaint tylko dla geometrii, nie przy pauzie lub zakończeniu uploadu.
+   Zmiana utworu aktualizuje bibliotekę, historię i opisy, bez całego tła okna.
+5. Czytanie i wysyłanie przeplatane: maksymalnie jeden blok 4084 B na obrót pętli.
+   Między blokami wejście i yield. Krótkie odczyty, anulowanie i błędy obsłużone.
+   Yamaha nadal ma dotychczasowy dekoder/cache; nie odtwarza niepełnego pliku.
+6. CRC klienta: bez testu pozycji nagłówka dla każdego bajtu payloadu;
+   cztery kroki tablicowe w pętli z wymuszonym inline na GCC/Clang.
+   Format pakietów, CRC, sesje i kontrola błędów pozostają te same.
+
+POMIARY PORÓWNAWCZE (Hatari, 68030 32 MHz, 800x600, bez fast-forward)
+12-sekundowe okno odtwarzania Sirene Song, ten sam emulator i kernel.
+                    przed              po
+Wywołania paint     20                 195
+Średni czas paint   246.6 ms           26.1 ms
+Aktualizacje / s    1.67               16.25
+Komendy rysowania   1703               1004
+MOD start           1.93 s             0.99 s
+XM 1.33 MB start    11.30 s            7.34 s
+REFLECTR.XM                              4.46 s
+ADVENT.S3M                              5.09 s
+
+paint obejmuje czas API i renderowania według zegara gościa, nie jest pomiarem
+procentowego CPU hosta. Wywołania paint bez zmian mogą nie wysłać klatki;
+w przebiegu końcowym było 176 zgłoszeń rysowania na 195 odpytań.
+Globalny max paint obejmuje rozruch/przerysowanie: 447 ms. Średnia 26 ms nie
+jest obietnicą maksymalnego opóźnienia myszy. Zmniejszono regularne blokowanie;
+subiektywna ocena kursora należy jeszcze do użytkownika.
+Maks. zmierzony pump (odczyt/upload) około 21.7 ms.
+
+TESTY
+ASan/UBSan: Yamaha, tracker upload, CRC, pause/resume, busy, utrata odpowiedzi.
+Nowe: pikselowe porównanie 90 sekwencji meter-delta z pełnym odrysowaniem,
+bezczynna klatka bez rysowania, limity grup GUI_FRAME, krótki odczyt 17 B,
+przeplatany transfer pliku 8193 B, anulowanie i błąd odczytu.
+Emulator: cztery moduły, pauza/wznów, zmiana utworu, wyjście podczas ładowania
+oraz cyfrowa cisza po wyjściu. kernel_fault_vector=0, kdbg_uf_count=0.
+Build PIC/checksum/APW2 i porównanie binariów z zawartością FAT: PASS.
+Dodatkowa końcowa poprawka dotyczy tylko odzyskania po błędzie uploadu i
+przełączenia backendu po niepełnym odczycie; nie zmienia ścieżki pomiarowej.
+
+CZY STARTOWAĆ PRZED WCZYTANIEM CAŁOŚCI?
+W tej wersji jeszcze nie. libxmp_load_module_from_memory dostaje kompletny
+MOD/XM/S3M dopiero po COMMIT/CRC. Moduł może od razu użyć sampla z końca pliku,
+a efekty mogą skakać po patternach. Podanie niepełnego pliku nie jest streamingiem.
+Wdrożony pipeline pozwala UI działać podczas czytania i wysyłania, ale PLAY
+nadal czeka na kompletny zweryfikowany moduł.
+
+Najlepszy kolejny krok: przygotowanie następnego utworu podczas odtwarzania
+bieżącego + cache dekodera po stronie akceleratora, z limitem pamięci i
+atomowym przełączeniem uchwytów. Start kolejnego wtedy nie czeka na upload.
+Wymaga rozszerzenia cyklu życia trackera (obecnie jeden dekoder); na fizycznym
+ESP32 najpierw budżet PSRAM/heap. Nie dodawać cache poza kontrolą właściciela.
+Prawdziwy start częściowego pliku wymaga loadera instrumentów/sampli na żądanie,
+mapy dostępności, wyprzedzającego buforowania i zachowania przy brakujących
+samplach. To osobny etap, nie ma go w tym wdrożeniu.
+
+PLIKI
+Uruchomienie: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-opt/ATOS Tracker.app
+Obraz demonstracyjny: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-opt/live/test.img
+Po starcie pulpitu RUN -> M albo MODPLAY. Otwarta demonstracja gra XM.
+Raport, manifest, logi i patch: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-opt
+Oryginalne pliki przed zmianami: before/.
+Główny ATOS_AKTUALNY i silnik/firmware nie były zmieniane. Brak testów sprzętowych.

@@ -1,0 +1,73 @@
+PREHISTORIK 2 — optymalizacja przewijania, 2026-10-12
+
+Zmiany:
+1. PRE2/atos/plat_atos.c: fine pan deplanaryzuje grupy 8 pikseli przez tablice,
+   zamiast liczyc bity dla kazdego piksela. Porownanie na plaszczyznach, zapis
+   prosto do poprzedniej klatki i oznaczanie blokow zmienionych; usuniety
+   posredni bufor i jego dodatkowe porownanie/kopia dla tej sciezki.
+   Zachowane zawijanie 64 KB/8 KB, szerokosc 312 i czarny prawy brzeg,
+   maskowanie czesciowych bajtow, fallback bez duzej tablicy alokowanej.
+2. ATOS 2.1/system/kernel_game.c: card2x poza duza funkcja clippingu,
+   512-bajtowa tablica powielonych indeksow i petla 68000-compatible z
+   wskaznikami w rejestrach. Nadal bezposredni zapis ET4000, dwa wiersze,
+   slowowe wyrownanie celu, poprawny nieparzysty adres zrodla i szerokosc.
+   ABI, tryb obrazu, taktowanie emulatora, tempo symulacji pozostaly takie same.
+   Przyrost KERNEL.SYS: 560 B, 462926 -> 463486 B.
+
+Pomiar: identyczne 24 klatki na scenariusz, wlasny zegar HIRES goscia,
+normalne wywolania GAME przez IPC, 800x600/8 bpp, obraz 320x200 powiekszony 2x,
+MegaST/TF536 68030 32 MHz, ET4000, bez fast-forward. Test syntetyczny
+pelnego/zblizonego do pelnego odrysowania; NIE jest pomiarem FPS rozgrywki.
+                              przed ms/kl.  po ms/kl.   redukcja czasu
+pelna klatka chunky              218.6        175.3        19.8%
+planar, przesuw calych bajtow     211.3        165.1        21.8%
+planar, fine pan 320 px           339.0        159.0        53.1%
+mapa 312 px, fine pan, wrap 8KB   360.1        161.1        55.3%
+Dane: baseline/result.json, combined-asm/result.json.
+Dwa posrednie warianty skalowania w C byly wolniejsze i NIE sa wdrazane.
+
+Weryfikacja:
+- ASan/UBSan: 2112 klatek porownanych bajt w bajt ze stara konwersja,
+  kazda dodatkowo powtorzona bez zmian: zero oznaczonych brudnych blokow.
+  Wszystkie pel 0..7, szerokosci 0,1,7,8,9,311,312,313,319,320,321,
+  poczatki przy koncach bufora, wrap 0x1fff/0xffff, zmiana coarse/fine,
+  wymuszona pelna klatka, tablica duza oraz fallback malej tablicy.
+- Dokladna funkcja card2x z testowanego jadra wywolana przez diagnostyczna
+  aplikacje m68k do prywatnego bufora RAM: 88/88 PASS. Porownanie calego
+  bufora wraz z bajtami ochronnymi, szerokosci 1..17,31,32,33,255,256,
+  przesuniecie zrodla 0/1, celu 0/2, nieparzysty pitch zrodla 263.
+  Wszystkie indeksy 0..255; rzeczywista wersja asemblerowa, nie hostowy zamiennik.
+- check-game (ASan/UBSan), check-psg, check-audio, check-irq, check-app-abi PASS.
+- Build jadra i PRE2, naglowek/checksum/relokacje aplikacji PASS.
+- Runtime i zachowane zrzuty/czytelniki wyjatkow: runtime/ oraz PASS.json.
+
+Uwagi i dalsza praca:
+- Rozgrywka show_game() uzywa pel=0. Najwiekszy zysk fine pan dotyczy mapy;
+  nie nalezy reklamowac calej gry jako 2.2x szybszej.
+- camera.c: apply_camera_pan() zmienia kolumne o 1, czyli 16 pikseli zrodla
+  (32 na ekranie 2x). show_game() nie interpoluje poziomego pel. Pozostaje
+  skok kamery nawet przy szybszej prezentacji. Wizualna interpolacja wymaga
+  osobnego rozwiazania: marginesu swiata poza viewportem, nieruchomego HUD,
+  rozdzielenia kamery logicznej/rysowanej i testow granic/jaskin/teleportow.
+- flow.c: GAME=3, czyli zamierzone 70/3 ~23.3 tick/s; nie zmieniono fizyki.
+- render.c: zmiana kamery/fine uniewaznia cache i odbudowuje caly ring tla.
+  Kolejny kandydat to odswiezanie tylko nowych wierszy/kolumn, z zachowaniem
+  przezroczystych i animowanych kafli, parallaxu i bossa poziomu 9.
+- Pelne odrysowanie wciaz przenosi 256 KB na karte. Nie gwarantujemy stalych
+  25/30 FPS ani wyniku na rzeczywistym sprzecie; testowano emulator.
+- Dzwiek PRE2 nadal niewdrożony. Inne pliki gier/PCM/MODPLAY niezmienione.
+
+Runtime wykonany: intro, BEGINNER, mapa, poziom 1, chodzenie w obie strony,
+skok/przewijanie, atak, pulpit i ponowne uruchomienie PRE2 — bez wyjatkow.
+Flashback: uruchomienie z czystego startu ATOS, poprawne menu i kolory,
+bez wyjatkow. Nie byl to pelny test rozgrywki Flashbacka. Proba klikniecia
+Flashbacka po PRE2 trafila w TOS STARTED; automatyzacja pozycjonowania/wyboru
+ikon po wyjsciu z gry wymaga oddzielnego sprawdzenia. Nie traktowano jej jako
+udanego testu Flashbacka ani jako dowodu poprawnosci sciezki TOS.
+
+Odtwarzanie buildu wdrozonego jadra: katalog work/pre2-opt/system-src
+w katalogu tej rozmowy Codex (baza dzialajacego HYDRA+PCM). Do drzewa
+Deepseek skopiowano tylko kernel_game.c; inne roznice jego rozwojowego
+jadra nie zostaly przeniesione do obrazu produkcyjnego. Gra: work/pre2-opt,
+standardowy main_atos.c, build/PRE2.APP. Katalogi build-bench*, build-scaler-test
+zawieraja SONDE, nie gre — nie instalowac ich do obrazu gotowego.

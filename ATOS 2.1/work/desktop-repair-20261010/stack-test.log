@@ -1,0 +1,8 @@
+installed 455276 bytes as SYSTEM/KERNEL.SYS on BGM partition at sector 1
+installed 29732 bytes as SYSTEM/APP/DESKTOP.APP on BGM partition at sector 1
+installed 1760 bytes as SYSTEM/APP/PLASMA.APP on BGM partition at sector 1
+installed 72 bytes as SYSTEM/TEST/SYSINFO.PRG on BGM partition at sector 1
+stack-probe-0 {'kernel_fault_vector': 0, 'kernel_fault_pc': 0, 'kdbg_end_status': 0, 'kdbg_end_name': 0, 'kdbg_end_pc': 0, 'kernel_tos_async_result': 0, 'tos_aes_log_n': 0, 'kdbg_loop_calls': 11341, 'kernel_timer_ticks': 1814, 'gui_focus_pids': 0, 'async_state': [0], 'in_guest': [0]}
+stack-probe-1 {'kernel_fault_vector': 0, 'kernel_fault_pc': 0, 'kdbg_end_status': 0, 'kdbg_end_name': 0, 'kdbg_end_pc': 0, 'kernel_tos_async_result': 0, 'tos_aes_log_n': 0, 'kdbg_loop_calls': 15620, 'kernel_timer_ticks': 2240, 'gui_focus_pids': 0, 'async_state': [0], 'in_guest': [0]}
+stack-probe-2 {'kernel_fault_vector': 0, 'kernel_fault_pc': 0, 'kdbg_end_status': 0, 'kdbg_end_name': 0, 'kdbg_end_pc': 0, 'kernel_tos_async_result': 0, 'tos_aes_log_n': 0, 'kdbg_loop_calls': 19888, 'kernel_timer_ticks': 2666, 'gui_focus_pids': 0, 'async_state': [0], 'in_guest': [0]}
+stack-probe-3 {'kernel_fault_vector': 0, 'kernel_fault_pc': 0, 'kdbg_end_status': 0, 'kdbg_end_name': 0, 'kdbg_end_pc': 0, 'kernel_tos_async_result': 0, 'tos_aes_log_n': 0, 'kdbg_loop_calls': 24166, 'kernel_timer_ticks': 3091, 'gui_focus_pids': 0, 'async_state': [0], 'in_guest': [0]}

@@ -1,0 +1,21 @@
+{
+  "image": "/Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-v2.img",
+  "changed": [
+    "SYSTEM/APP/DESKTOP.APP",
+    "SYSTEM/APP/PLASMA.APP",
+    "SYSTEM/KERNEL.SYS"
+  ],
+  "fat": {
+    "files": 396,
+    "referenced_clusters": 2634,
+    "fat_copies_equal": true,
+    "crosslinks": 0
+  },
+  "hashes": {
+    "SYSTEM/KERNEL.SYS": "fdc8ad8733bd5c5866e9f98d0d79bd8ddcb5bac6dfc751b7fbb2c810cf883e22",
+    "SYSTEM/APP/DESKTOP.APP": "463ae13ecf66e9674d3c90c0548785b85a29b38112f2fac6402245c6c17d15b2",
+    "SYSTEM/APP/PLASMA.APP": "6cb217988e5b49ab11a74999a94f48e0870afccb821ec22b3c151e5faec93223"
+  },
+  "hatari": "723b3f3f914fe186218fff5a83bbc886e82b5b5c6a9176f1359974ab367d9ffe",
+  "backup": "/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/desktop-repair-20261010/deploy-before.img"
+}

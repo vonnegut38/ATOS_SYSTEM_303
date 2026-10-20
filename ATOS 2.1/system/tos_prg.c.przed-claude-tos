@@ -1,0 +1,3946 @@
+/* TOS personality (T1): load a 0x601A .PRG, build its basepage, relocate it
+ * and run it in USER mode (SR=0x0700, IPL 7 masked) with the TOS trap vectors
+ * installed.
+ *
+ * LEGACY / EXPERIMENTAL (ATOS v10, Phase 15): the whole TOS persona is frozen
+ * while the EmuTOS compatibility route is analysed.  The AES below
+ * (tos_aes_dispatch) is a minimal experimental stub and MUST NOT grow new
+ * AES opcodes, menus, dialogs or fonts in v10.  Only fixes needed to run the
+ * compatibility test suite are allowed.
+ *
+ * Trap ABI: GEMDOS reads the function word from the user stack; BIOS/XBIOS in
+ * classic TOS use D0.W (flagged in the v10 audit, see docs/V10-STATUS.md). */
+#include <stdint.h>
+#include "tos_damage.h"
+#include "kernel_memory.h"
+#include "tos_async.h"
+#include "kernel_game.h"
+#include "kernel_fat.h"
+#include "kernel_block.h"
+#include "kernel_graphics.h"
+#include "kernel_input.h"
+#include "font.h"
+#include "kernel_wm.h"
+#include "kernel_audio.h"
+#include "psg.h"
+#include "tos_prg.h"
+#include "st_raster.h"
+#include "tos_vdi.h"
+#include "rtc.h"
+
+/* Console shadow kept by kernel_module.c (G0-2). */
+extern int32_t kernel_console_log_count(void);
+extern const char *kernel_console_log_line(int32_t index);
+extern int32_t kernel_ikbd_raw_last(uint32_t back);
+extern int32_t kernel_ikbd_drop_count(void);
+extern int32_t kernel_ikbd_raw_total(void);
+
+extern void asf_tos_enter(void *basepage,void *entry,void *stack_top);
+extern void asf_tos_exit(void);
+extern void asf_tos_trap1(void);
+extern void asf_tos_trap2(void);
+extern void asf_tos_trap13(void);
+extern void asf_tos_trap14(void);
+extern void kernel_wm_damage_all(void);
+extern void kernel_wm_frame_tick(uint32_t now);
+extern uint8_t *kgfx_planar_surface_override;
+extern uint16_t kgfx_planar_surface_pitch;
+extern uint8_t *kernel_wm_app_surface(uint32_t pid,uint16_t handle);
+extern void kernel_wm_set_window(uint32_t pid,uint16_t handle,int16_t x,int16_t y,uint16_t w,uint16_t h);
+extern void kernel_wm_set_title(uint32_t pid,uint16_t handle,const char *title);
+extern void kernel_wm_release_surface(uint32_t pid,uint16_t handle);
+extern void kernel_wm_compose_now(void);
+extern void kernel_wm_resize_window(uint32_t pid,uint16_t handle,int16_t x,int16_t y,uint16_t w,uint16_t h);
+extern int32_t kernel_tos_compat_ensure(int prefer_tt);
+extern int kernel_tos_compat_loaded(void);
+extern const void *kernel_tos_compat_service(void);
+extern uint8_t *kernel_tos_compat_screen(void);
+extern int kgfx_desktop_active(void);
+extern int kgfx_theme_apply(unsigned i);
+extern unsigned kgfx_theme_current(void);
+extern uint32_t kdbg_tos_screen_fallbacks;
+extern uint32_t kdbg_tos_adopted_module;
+extern uint8_t kernel_tos_cfg_prefer_tt;
+extern uint32_t kernel_user_current_pid(void);
+extern uint16_t kvideo_mode_width(void);
+extern void kvideo_flush(void);
+extern uint16_t kvideo_mode_height(void);
+extern void kernel_wm_app_dirty(uint8_t *surface,int32_t l,int32_t t,int32_t r,int32_t b);
+extern uint32_t asf_tos_supexec(void *fn,uint32_t arg3);
+extern void asf_tos_linea(void);
+extern void asf_tos_fault2(void);
+extern void asf_tos_fault3(void);
+extern void asf_tos_fault4(void);
+extern void asf_tos_fault5(void);
+extern void asf_tos_fault6(void);
+extern void asf_tos_fault7(void);
+extern void asf_tos_fault8(void);
+extern void asf_tos_fault11(void);
+extern void kernel_image_cache_sync(uint32_t cpu_type);
+extern volatile uint32_t kernel_wall_ticks;
+extern const char *kernel_user_get_arguments(void);
+extern void kernel_user_set_arguments(const char *arguments);
+
+static void (*tos_puts)(const char *);
+static uint8_t tos_cpu_type;
+/* Forward declarations: the fault handler below prints through these. */
+static void tos_print(const char *s);
+static void tos_dec(uint32_t v);
+static uint32_t tos_last_fn;
+volatile uint32_t tos_dbg_exit_fn,tos_dbg_exit_pc;
+volatile uint32_t kernel_fault_regs[16];
+/* TOS system variables block that _sysbase (0x4F2) points to. Programs read
+   it via the low-memory pointers; addresses come from MagiC's own
+   KAOS/UTILS/OSBIND.INC, not guesswork. */
+uint8_t tos_syshdr[512];
+
+
+/* Standard TOS cookie jar: pairs of 32-bit tag/value, terminated by a
+   zero tag whose value is the slot capacity. No private magic/count prefix. */
+static uint32_t tos_cookie_jar[]={
+    0x5f435055u,0u, /* _CPU, filled from the detected CPU */
+    0x5f465055u,0u, /* _FPU: the current persona does not expose an FPU */
+    0x5f56444fu,0u, /* _VDO: private ST raster */
+    0x5f4d4348u,0u, /* _MCH: ST-compatible persona */
+    0x5f414b50u,0u, /* _AKP: US keyboard */
+    0u,6u
+};
+
+/* Survives a CPU halt: read it back with the Hatari debugger ("m <addr> 64").
+   Each entry = (fn << 16) | (result & 0xffff); index 0 holds the count. */
+uint32_t tos_call_log[257];
+
+/* Opt in through the debugger. Logging both sides of every polling trap
+   formats text and can scroll/flush the native console in the hot path. */
+static volatile uint8_t tos_trace_gemdos=0u;
+
+/* Separate trace channel: the BIOS console works from the very first boot line,
+   unlike the personality console which needs the desktop up. */
+static void (*tos_trace_puts)(const char *);
+void kernel_tos_set_trace(void (*p)(const char *)){tos_trace_puts=p;}
+static void tos_trace(const char *s){if(tos_trace_puts&&s)tos_trace_puts(s);}
+static int32_t tos_exit_code;
+static uint32_t tos_saved_vec[13];
+/* Full user-vector snapshot for the run.  A program that installs a handler
+   via Setexc (or a direct write) must not leave it pointing into memory that
+   is freed when the program exits - that was the "JSR under 0" class of
+   failure.  Range: vectors 2..47 (0x08..0xBC) and 0x60..0x7F (0x180..0x1FC). */
+#define TOS_VEC_LO  2u
+#define TOS_VEC_HI  47u
+#define TOS_VEC2_LO 0x60u
+#define TOS_VEC2_HI 0x7Fu
+#define TOS_VEC_SNAP ((TOS_VEC_HI-TOS_VEC_LO+1u)+(TOS_VEC2_HI-TOS_VEC2_LO+1u))
+static uint32_t tos_vec_snap[TOS_VEC_SNAP];
+/* A valid default: the CPU takes these vectors, so a plain RTE returns safely
+   if the program chains to what Setexc reported as "the old handler". */
+extern void asf_tos_just_rte(void);
+static uint32_t *tos_vec_slot(uint32_t v)
+{
+    if(v>=TOS_VEC_LO&&v<=TOS_VEC_HI)return &((uint32_t *)(uintptr_t)0)[v];
+    if(v>=TOS_VEC2_LO&&v<=TOS_VEC2_HI)return &((uint32_t *)(uintptr_t)0)[v];
+    if(v>=0x100u&&v<0x140u)return &((uint32_t *)(uintptr_t)0)[v];  /* etv_* vars */
+    return 0;
+}
+static void tos_vec_snapshot_save(void)
+{
+    uint32_t i,v;
+    for(i=0u,v=TOS_VEC_LO;v<=TOS_VEC_HI;++v,++i)tos_vec_snap[i]=*(uint32_t *)(uintptr_t)(4u*v);
+    for(v=TOS_VEC2_LO;v<=TOS_VEC2_HI;++v,++i)tos_vec_snap[i]=*(uint32_t *)(uintptr_t)(4u*v);
+}
+static void tos_vec_snapshot_restore(void)
+{
+    uint32_t i,v;
+    for(i=0u,v=TOS_VEC_LO;v<=TOS_VEC_HI;++v,++i)*(uint32_t *)(uintptr_t)(4u*v)=tos_vec_snap[i];
+    for(v=TOS_VEC2_LO;v<=TOS_VEC2_HI;++v,++i)*(uint32_t *)(uintptr_t)(4u*v)=tos_vec_snap[i];
+}
+static uint8_t *tos_screen;          /* TOS screen: private buffer or the real one */
+static uint8_t tos_screen_owned;     /* 1 = tos_screen was kmem_alloc'd */
+static uint16_t tos_date=0x5d2bu,tos_time=0x6000u;   /* software GEMDOS clock */
+/* Timer C already has a kernel ISR at approximately 50 Hz.  Count its
+   interrupts, not sampled rises of TCDR: sampling once per period can keep
+   seeing the same counter value and lose every wrap during Supexec. */
+extern volatile uint32_t kernel_timer_ticks;
+static uint32_t tos_clock_last;
+static uint8_t tos_clock_ready;
+static uint32_t tos_mfp_ticks=12u*720000u; /* 200 Hz, starts at noon */
+static void tos_clock_tick(void)
+{
+    uint16_t saved_sr;uint32_t now;
+    /* Called from traps and Timer C. Keep accounting + publication atomic. */
+    __asm__ volatile("move.w %%sr,%0; ori.w #0x0700,%%sr":"=d"(saved_sr)::"memory");
+    now=kernel_timer_ticks;
+    if(tos_clock_ready)tos_mfp_ticks+=(now-tos_clock_last)*4u;
+    else tos_clock_ready=1u;
+    tos_clock_last=now;
+    {void *p=(void *)(uintptr_t)0x4BAu;uint32_t v=tos_mfp_ticks;
+     __asm__ volatile("move.l %1,%0@"::"a"(p),"d"(v):"memory");}
+    __asm__ volatile("move.w %0,%%sr"::"d"(saved_sr):"memory");
+}
+/* T2 window mode.  A program's window is opened LAZILY, when the run is
+   started from the desktop (double-click on a .PRG/.TOS) or when the T2 opcode
+   asks for it - not by a global switch at boot.  kernel_tos_run_program()
+   turns this on for the duration of one program. */
+static uint8_t tos_window_enabled;
+static uint8_t tos_desktop_active;      /* the graphics desktop is on screen */
+static void tos_desktop_leave(void);
+static void tos_composite_now(void);
+void tos_composite_work(void);
+void tos_mark_present(void);
+/* Deferred-composite state (defined further down): XBIOS Vsync needs it. */
+static uint8_t tos_force_present;
+static volatile uint8_t tos_wm_input_pending;
+void tos_note_dirty_rect(int x0,int y0,int x1,int y1);
+static volatile uint8_t tos_composite_pending;
+static uint8_t  tos_mode=2u;         /* 0 low, 1 medium, 2 high */
+/* RAMDAC range for a TOS program's window.  The desktop theme uses 0..19, the
+   colour icons 20..235 and the theme ramp (desktop bar gradient) starts exactly
+   at 236 - the block is SHARED with the ramp, it is not free.  Only 252..255
+   are unused, so a colour program does recolour four entries of the desktop bar
+   while its window is open; the theme palette is reapplied when the window
+   closes (see tos_close_window) instead of leaving the desktop recoloured. */
+#define TOS_CLIENT_PALETTE_BASE 236u
+static uint16_t tos_palette[16];
+
+static int32_t (*tos_input_pop)(void);
+
+void kernel_tos_set_console(void (*puts)(const char *)){tos_puts=puts;}
+void kernel_tos_set_cpu(uint8_t cpu_type){tos_cpu_type=cpu_type;}
+void kernel_tos_set_input(int32_t (*pop)(void)){tos_input_pop=pop;}
+
+/* Task 4: let the compositor own the TOS screen.  The window manager supplies
+   a surface; the personality draws into it and Physbase() returns it, so the
+   program runs in a window instead of the shared framebuffer. */
+extern volatile uint8_t kernel_tos_desktop_visible;
+void tos_linea_init(void);
+extern void tos_vdi_set_dirty_hook(uint8_t on);
+static void tos_lm_wr32(void *address,uint32_t value)
+{
+    __asm__ volatile("move.l %1,%0@" : : "a"(address),"d"(value) : "memory");
+}
+static void tos_lm_wr8(void *address,uint8_t value)
+{
+    __asm__ volatile("move.b %1,%0@" : : "a"(address),"d"((uint32_t)value) : "memory");
+}
+void kernel_tos_use_surface(uint8_t *surface,uint16_t pitch)
+{
+    if(!surface)return;
+    kernel_tos_desktop_visible=1u;
+    tos_window_enabled=1u;
+    tos_screen=surface;
+    tos_screen_owned=0u;
+    tos_vdi_set_surface(surface,pitch);
+    /* Keep the TOS low-memory screen model consistent: a real TOS keeps
+       _v_bas_ad (0x44E) == Physbase() == Logbase() and _screensize (0x44C) in
+       bytes.  Programs that read these directly instead of calling XBIOS would
+       otherwise draw into the kernel framebuffer and get erased by the
+       compositor.  (Constant address casts trip -Werror=array-bounds, so the
+       stores go through inline asm, same as the kernel's own sysvar writes.) */
+    tos_lm_wr32((void *)(uintptr_t)0x44Eu,(uint32_t)(uintptr_t)surface);
+    /* 0x44C is NOT _screensize in TOS/MagiC: it is sshiftmd, the current
+       shifter mode byte (0=low,1=medium,2=high).  Writing a byte count there
+       corrupts it, so only mirror the resolution byte. */
+    tos_lm_wr8((void *)(uintptr_t)0x44Cu,(uint8_t)tos_mode);
+    /* Give the program a live Line-A page: base, pitch, system font, tables. */
+    tos_linea_init();
+}
+
+/* A fault inside the TOS program ends it and returns to the shell. */
+uint32_t kernel_linef_pc,kernel_linef_op,kernel_linef_frame[6];
+extern uint32_t kernel_fault_d0;
+/* Counted so a masked divide-by-zero is never invisible again. */
+uint32_t kdbg_tos_divzero;
+uint32_t kdbg_tos_faults;
+volatile uint32_t kernel_tos_dbg_basepage,kernel_tos_dbg_entry,kernel_tos_dbg_total;
+extern volatile uint32_t kernel_fault_pc;
+void asf_tos_fault(uint32_t vector)
+{
+    uint32_t pc;
+    ++kdbg_tos_faults;                 /* direct evidence for the harness */
+    tos_print("TOS FAULT vec=");tos_dec(vector&0xffffu);
+    /* The stub records the PC from hardware-frame offset +2. */
+    pc=kernel_fault_pc;
+    kernel_linef_pc=pc;
+    kernel_linef_op=(pc>=0x00040000u&&pc<0x00c00000u)?
+        (uint32_t)*(const uint16_t *)(uintptr_t)pc:0u;
+    /* Keep arithmetic faults fatal; a visible window is not proof of success. */
+    if((vector&0xffffu)==5u){
+        /* A divide-by-zero is an ERROR, not something to paper over: resuming
+           with the stale destination register made "rc = 0" look like success.
+           It is counted, reported, and the run ends with a distinct code; a
+           program that wants to survive installs its own vector 5 handler
+           (honouring guest vectors is a separate, documented gap). */
+        ++kdbg_tos_divzero;
+        tos_print("TOS DIV BY ZERO pc=");tos_dec(pc&0xffffffffu);
+        tos_print(" d0=");tos_dec(kernel_fault_d0);
+        tos_print("\n");
+        tos_exit_code=-5;
+        asf_tos_exit();
+        for(;;){}
+    }
+    tos_exit_code=-(int32_t)(vector&0xffffu);
+    asf_tos_exit();
+    for(;;){}
+}
+
+static uint8_t tos_shift,tos_caps,tos_kbshift;
+static void tos_key_update(uint8_t sc)
+{
+    uint8_t base=(uint8_t)(sc&0x7fu);
+    int up=(sc&0x80u)!=0;
+    uint8_t bit=base==0x36u?1u:base==0x2au?2u:base==0x1du?4u:base==0x38u?8u:0u;
+    if(bit){if(up)tos_kbshift&=(uint8_t)~bit;else tos_kbshift|=bit;}
+    if(base==0x3au&&!up)tos_kbshift^=16u;
+    tos_shift=(tos_kbshift&3u)!=0u;tos_caps=(tos_kbshift&16u)!=0u;
+}
+static int tos_key_ascii(uint8_t sc,uint8_t shift,uint8_t caps)
+{
+    static const char map[128]={
+        0,0x1b,'1','2','3','4','5','6','7','8','9','0','-','=',0x08,0x09,
+        'q','w','e','r','t','y','u','i','o','p','[',']',0x0d,0,
+        'a','s','d','f','g','h','j','k','l',';',0x27,0x60,0,
+        0x5c,'z','x','c','v','b','n','m',',','.','/',0,0,0,' ',0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    static const char shft[128]={
+        0,0,'!','@','#','$','%','^','&','*','(',')','_','+',0,0,
+        0,0,0,0,0,0,0,0,0,0,'{','}',0,0,
+        0,0,0,0,0,0,0,0,0,':','"','~',0,
+        '|',0,0,0,0,0,0,0,'<','>','?',0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+    int c;
+    if(sc>=128u)return 0;
+    c=map[sc];
+    if(!c)return 0;
+    if(c>='a'&&c<='z'){if(shift^caps)c-=32;return c;}
+    if(shift){int s=shft[sc];if(s)return s;}
+    return c;
+}
+static int32_t tos_key_pending=-2;   /* -2 none buffered, >=0 key */
+static uint8_t tos_last_scancode;    /* diagnostic: byte that produced a key */
+static int32_t tos_next_scancode(void);
+
+/* The raw IKBD stream also carries mouse packets (0xF8-0xFB header plus two
+ * coordinate bytes) and status/reset bytes (>=0xF0).  A coordinate byte must
+ * never be delivered as a keypress, otherwise moving the mouse would end a
+ * program waiting in Cconin. */
+static uint8_t tos_rawlog[16];
+static uint8_t tos_rawlog_n,tos_rawlog_i;
+static uint8_t tos_resync;           /* an overrun lost a byte: reframe */
+static uint8_t tos_mouse_skip;       /* mouse bytes still expected in the frame */
+/* Diagnostics: what the TOS framing actually sees.  kdbg_real_mouse counts the
+   packets that reached the DESKTOP pump; these count the packets captured by
+   the TOS framing, which is the only path that runs while a program owns the
+   screen.  kdbg_real_dxdy-style packed last deltas make a framing mistake
+   visible instead of guessable. */
+uint32_t kdbg_tos_mouse_packets,kdbg_tos_mouse_dxdy;
+uint32_t kdbg_evbtn_n,kdbg_evmouse_n;   /* evnt_button/evnt_mouse served */
+static void tos_rawlog_add(uint8_t b)
+{
+    tos_rawlog[tos_rawlog_i]=b;
+    tos_rawlog_i=(uint8_t)((tos_rawlog_i+1u)&15u);
+    if(tos_rawlog_n<16u)++tos_rawlog_n;
+}
+static int32_t tos_next_scancode(void)
+{
+    uint8_t *skip=&tos_mouse_skip;
+    if(!tos_input_pop)return -1;
+    for(;;){
+        int32_t v=tos_input_pop();
+        uint8_t sc;
+        if(v<0)return -1;
+        sc=(uint8_t)v;
+        tos_rawlog_add(sc);
+        /* NOTE: an OVRN-based resync ("discard until the next 0xF8-0xFF
+           header") was tried here and had to be removed: the emulated ACIA
+           keeps bit 5 set often, so it discarded ordinary key scancodes until
+           none were left (typing lost/merged commands). */
+        (void)tos_resync;
+        /* RAW IKBD PARSING BELONGS TO INPUT.SYS.  This branch used to look for
+           a mouse header and treat the next two bytes as deltas, but the hook
+           behind it (kernel_user_terminal_getchar) only ever returns keyboard
+           characters - INPUT.SYS delivers mouse packets to its own queue - so
+           it could never see a real mouse.  The bytes are consumed here only
+           because this fallback path shares the stream. */
+        if(*skip){--*skip;continue;}
+        /* A relative mouse packet is header + X + Y.  Hatari (and real
+           IKBDs in "both mouse and joystick" mode) emit headers across the
+           whole 0xF8-0xFF range - 0xFE in particular.  Treating 0xFE as a
+           lone status byte shifted the frame by one and leaked a coordinate
+           (raw: F8 D0 F8 FE FB F8 F8 00 1C). */
+        if(sc>=0xf8u){*skip=2u;continue;}
+        if(sc>=0xf0u)continue;
+        return (int32_t)sc;
+    }
+}
+
+/* Diagnostic: the last raw IKBD bytes the TOS path saw, so a leaked mouse
+ * coordinate can be traced (was the 0xF8-0xFB header there at all?). */
+/* TOS key queue.  A raw ring overflow used to drop a mouse packet header and
+ * leak a coordinate byte as a keypress (0x1C closed the program waiting in
+ * Cconin).  The timer drains the ring with full framing, so nothing overflows
+ * while the program is busy drawing; Cconin reads from this queue. */
+#define TOS_KEYQ 16
+static int32_t tos_keyq[TOS_KEYQ];
+static uint8_t tos_keyq_mods[TOS_KEYQ],tos_key_lastmods;
+static uint8_t tos_keyq_head,tos_keyq_tail;
+/* tos_poll_input() is not reentrant: it advances the mouse framing state and
+   the raw ring.  The TOS program runs at IPL 5 (system/tos_entry.S:42), so
+   Timer C (MFP level 6) CAN preempt a program-side poll - the old comment
+   claimed the opposite.  One of the two sides yields instead. */
+static volatile uint8_t tos_input_busy;
+static uint8_t tos_active;
+/* B4: native Timer-C only calls the TOS hooks while a TOS program runs. */
+volatile uint8_t kernel_tos_runtime_enabled;
+/* Kernel input queues.  INPUT.SYS is the only IKBD parser; these readers hand
+   over decoded keyboard and mouse events. */
+extern int kernel_raw_mouse_event(uint32_t *,int32_t *,int32_t *);
+extern void ksessions_pointer_track(int32_t,int32_t);
+extern void tos_vdi_get_surface(uint8_t **,uint16_t *);
+static int tos_mode_is_colour(void);
+static uint16_t tos_src_stride(void);
+extern void ksessions_pointer_button(uint32_t,int32_t,int32_t);
+extern int ksessions_mouse_x(void);
+extern int ksessions_mouse_y(void);
+#define TOS_WM_HANDLE_BASE 0x100u
+/* --- KBDVECS / IOREC exposed to TOS programs (XBIOS 34 / 14) --------------
+   LDW Power calls Kbdvbase() and then reads/writes the 5th pointer, mousevec
+   (offset $10).  Without a real, writable structure the call returned 0 and the
+   program read address $10 - which is what killed it before its first GEM call.
+   These live in the program's own TPA memory so the guest can read and write
+   them, exactly like the real system variables. */
+typedef struct {
+    void *midivec;                     /* +0x00 */
+    void *vkbderr;                     /* +0x04 */
+    void *vmousevec;                   /* +0x08 */
+    void *reserved0;                   /* +0x0C */
+    void *mousevec;                    /* +0x10  <- programs save/install this */
+} tos_kbdvecs_t;
+typedef struct {                       /* IOREC: a real ring queue */
+    uint8_t *buf;                      /* +0 */
+    int16_t  size;                     /* +4 */
+    int16_t  head;                     /* +6 */
+    int16_t  tail;                     /* +8 */
+} tos_iorec_t;
+#define TOS_IOREC_BYTES 256u
+static tos_kbdvecs_t *tos_kbdvecs;
+static tos_iorec_t   *tos_iorec[3];
+extern void asf_tos_call_mousevec(void *fn,uint8_t *packet);
+extern void asf_tos_default_mousevec(void);
+
+static uint32_t tos_mouse_buttons;
+static void tos_mouse_state(int16_t *out);
+/* Set when the window manager closes the TOS window while the program runs.
+   The guest cannot be preempted safely from an interrupt, but every program
+   that draws or waits calls the OS (the demos pump Vsync), so the next trap
+   unwinds exactly like the program's own Pterm0. */
+static volatile uint8_t tos_exit_request;
+/* Set when the window was closed from its chrome: the compositor already dropped
+   it, so the desktop has to be repainted or the old window pixels stay on screen. */
+static volatile uint8_t tos_desktop_repaint;
+int kernel_tos_window_is(uint32_t handle)
+{return handle>=TOS_WM_HANDLE_BASE&&handle<TOS_WM_HANDLE_BASE+64u;}
+static uint8_t tos_band_valid;
+/* Bounded presentation list: above this many separate rectangles the union is
+   cheaper than the extra blit setup (measured later, this is the first cut).
+   MERGE_SLACK is the extra area we accept before preferring one call. */
+#define TOS_PRESENT_RECTS 8
+#define TOS_PRESENT_MERGE_SLACK 4096L
+uint32_t kdbg_perf_present_split,kdbg_perf_present_union;
+/* 1 once the window surface really existed.  tos_active is set BEFORE
+   tos_open_window(), so "no surface" alone must not mean "surface lost". */
+static uint8_t tos_surface_installed;
+/* The VDI in this tree is the classic MONO/planar one: it cannot paint the 8bpp
+   client surface.  While a TOS window is open it therefore draws into the
+   program's OWN screen - the very buffer the window blits from - so VDI output
+   shows up inside the window instead of being painted over the desktop.
+   The previous target is saved because the text profile still needs it. */
+static uint8_t *tos_vdi_prev_target;
+static uint16_t tos_vdi_prev_pitch;
+static uint8_t tos_vdi_redirected;
+static void tos_vdi_follow_screen(void)
+{
+    if(tos_mode_is_colour()||!tos_screen)return;
+    if(!tos_vdi_redirected){
+        tos_vdi_get_surface(&tos_vdi_prev_target,&tos_vdi_prev_pitch);
+        tos_vdi_redirected=1u;
+    }
+    tos_vdi_set_surface(tos_screen,(uint16_t)tos_src_stride());
+    tos_vdi_set_dirty_hook(1u);      /* known writes join the damage queue */
+}
+static void tos_vdi_release_screen(void)
+{
+    if(!tos_vdi_redirected)return;
+    tos_vdi_set_surface(tos_vdi_prev_target,tos_vdi_prev_pitch);
+    tos_vdi_set_dirty_hook(0u);
+    tos_vdi_redirected=0u;
+}
+static int tos_exit_pending(void)
+{
+    if(!tos_exit_request)return 0;
+    tos_exit_request=0u;
+    return 1;
+}
+void tos_poll_mouse(void);
+static void tos_poll_mouse_owned(void);
+extern int kernel_user_keyboard_event(uint32_t *,uint32_t *,uint32_t *,uint32_t *);
+
+/* Kernel-side session hotkey state.  TOS keys arrive as raw scancodes on the
+   input service, not through kernel_user_keyboard_event(), so Shift+Alt+F10
+   has to be detected here; otherwise there is no way to switch sessions while
+   a TOS GUI owns the keyboard. */
+extern void ksessions_hotkey_cycle(void);
+static uint8_t tos_kb_shift,tos_kb_alt;
+uint32_t tos_window_mouse_buttons(void){return tos_mouse_buttons;}
+
+/* The desktop queues a cooperative TOS domain instead of waiting on trap 0.
+ * Only explicit OS-call boundaries yield; no native code executes with guest
+ * vectors, low memory, USP or the VDI blit target installed. */
+static uint8_t tos_async_state;
+static uint8_t tos_async_cancel;   /* zadanie zakonczenia programu TOS */
+volatile uint8_t tos_async_in_guest;
+static uint32_t tos_async_session,tos_async_slice;
+static uint32_t tos_async_native_cacr,tos_async_guest_cacr;
+static uint32_t tos_async_native_vbr,tos_async_guest_vbr;
+extern uint32_t tos_async_read_vbr(void);
+extern void asf_tos_set_vbr(uint32_t);
+extern uint32_t tos_async_read_cacr(void);
+extern void tos_async_write_cacr(uint32_t);
+static char tos_async_path[64];
+static uint8_t *tos_async_stack;
+static uint32_t tos_async_native_low[512],tos_async_guest_low[512];
+static void *tos_async_native_sp,*tos_async_guest_sp;
+static uint8_t *tos_async_target;
+static uint16_t tos_async_pitch;
+volatile int32_t kernel_tos_async_result;
+volatile uint32_t kernel_tos_async_yields,kernel_tos_async_first_sp;
+extern void tos_async_switch(void **save,void *restore);
+extern uint32_t kernel_user_hires_clock(void);
+extern uint32_t kernel_gui_focus_pid(void);
+extern void kernel_gui_focus_set(uint32_t);
+extern uint32_t ksessions_mouse_buttons(void);
+extern unsigned ksessions_current(void);
+static void tos_async_yield(void);
+#define TOS_ASYNC_EVENTS 32u
+static struct {uint32_t type,scan,mods,ch;} tos_async_keys[TOS_ASYNC_EVENTS];
+static unsigned tos_async_key_head,tos_async_key_tail;
+static struct {uint32_t buttons;int32_t x,y;} tos_async_mice[TOS_ASYNC_EVENTS];
+static unsigned tos_async_mouse_head,tos_async_mouse_tail;
+static int32_t tos_async_mouse_x,tos_async_mouse_y;
+int kernel_tos_async_owns(uint32_t pid)
+{return tos_async_state&&pid==TOS_ASYNC_PID;}
+unsigned kernel_tos_async_session(void){return tos_async_session;}
+int kernel_tos_async_keyboard(void)
+{
+    uint32_t t,s,m,c;unsigned i;
+    if(tos_async_key_tail-tos_async_key_head>=TOS_ASYNC_EVENTS)return 0;
+    if(!kernel_user_keyboard_event(&t,&s,&m,&c))return 0;
+    /* AWARYJNE ZAKONCZENIE PROGRAMU TOS: Ctrl+Alt+Esc.  Sprawdzane PRZED
+       zakolejkowaniem do goscia, wiec zadziala takze wtedy, gdy program TOS
+       jest niereagujacy i nie da sie go zamknac.  Bez tego jeden taki program
+       trzymal klawiature (kernel_tos_async_owns) i slot procesu, a jedynym
+       wyjsciem byl restart maszyny.  Klawisz jest konsumowany (nie idzie do
+       goscia). */
+    if(t==1u&&s==0x01u&&(m&4u)&&(m&8u)){tos_async_cancel=1u;return 1;}
+    i=tos_async_key_tail++%TOS_ASYNC_EVENTS;
+    tos_async_keys[i].type=t;tos_async_keys[i].scan=s;
+    tos_async_keys[i].mods=m;tos_async_keys[i].ch=c;
+    return 1;
+}
+int kernel_tos_async_mouse(uint32_t buttons,int32_t x,int32_t y)
+{
+    unsigned i;
+    if(tos_async_mouse_tail-tos_async_mouse_head>=TOS_ASYNC_EVENTS)return 0;
+    i=tos_async_mouse_tail++%TOS_ASYNC_EVENTS;
+    tos_async_mice[i].buttons=buttons&3u;tos_async_mice[i].x=x;tos_async_mice[i].y=y;
+    return 1;
+}
+static int tos_async_key_pop(uint32_t *t,uint32_t *s,uint32_t *m,uint32_t *c)
+{
+    unsigned i;
+    if(tos_async_key_head==tos_async_key_tail)return 0;
+    i=tos_async_key_head++%TOS_ASYNC_EVENTS;
+    *t=tos_async_keys[i].type;*s=tos_async_keys[i].scan;
+    *m=tos_async_keys[i].mods;*c=tos_async_keys[i].ch;return 1;
+}
+
+void tos_poll_input(void)
+{
+    int guard=64;
+    if(tos_input_busy)return;
+    tos_input_busy=1u;
+    tos_poll_mouse_owned(); /* one owner covers BOTH mouse and keyboard */
+    while(guard-->0){
+        uint32_t type=0u,scan=0u,mods=0u,ch=0u;
+        int32_t sc;
+        uint8_t s,next;
+        int a;
+        /* ONE parser owns the IKBD stream: INPUT.SYS.  This loop used to read
+           the terminal hook and guess whether a byte was a scancode or an
+           already-decoded ASCII character - two contracts in one stream, which
+           lost function keys and release events and could change characters.
+           kernel_user_keyboard_event() hands over type/scancode/modifiers/ASCII
+           already separated, from the same queue the old hook used. */
+        if(tos_async_state?tos_async_key_pop(&type,&scan,&mods,&ch):
+           kernel_user_keyboard_event(&type,&scan,&mods,&ch)){
+            (void)mods;
+            sc=(int32_t)(scan&0x7fu);
+            if(type==KERNEL_INPUT_KEY_UP){
+                s=(uint8_t)(sc|0x80u);
+                if(sc==0x2a||sc==0x36)tos_kb_shift=0u;
+                else if(sc==0x38)tos_kb_alt=0u;
+                tos_key_update(s);
+                continue;                 /* a release is never a character */
+            }
+            s=(uint8_t)sc;
+            if(s==0x2a||s==0x36)tos_kb_shift=1u;
+            else if(s==0x38)tos_kb_alt=1u;
+            else if(s==0x44&&tos_kb_shift&&tos_kb_alt){
+                tos_kb_shift=0u;tos_kb_alt=0u;ksessions_hotkey_cycle();}
+            tos_key_update(s);
+            a=(ch&&ch<0x80u)?(int)ch:0;
+            if(!a)a=tos_key_ascii(s,tos_shift,tos_caps);
+            if((tos_kbshift&4u)&&a>=0x40&&a<=0x7f)a&=0x1f;
+            if(!a&&(s==0x2a||s==0x36||s==0x1d||s==0x38||s==0x3a))continue;
+            /* Function/cursor keys have ASCII 0, but their scan code is input. */
+        }else{
+            /* Fallback for input that only the terminal hook can see (text
+               profile console).  The event queue is the same source, so this
+               normally finds nothing and the poll ends. */
+            if(tos_async_state)break; /* native input belongs to the focused window */
+            sc=tos_next_scancode();
+            if(sc<0)break;
+            if(sc==0x2a||sc==0x36)tos_kb_shift=1u;
+            else if(sc==0xaa||sc==0xb6)tos_kb_shift=0u;
+            else if(sc==0x38)tos_kb_alt=1u;
+            else if(sc==0xb8)tos_kb_alt=0u;
+            else if(sc==0x44&&tos_kb_shift&&tos_kb_alt){
+                tos_kb_shift=0u;tos_kb_alt=0u;ksessions_hotkey_cycle();}
+            tos_key_update((uint8_t)sc);
+            a=tos_key_ascii((uint8_t)sc,tos_shift,tos_caps);
+            if(!a){
+                uint8_t c=(uint8_t)sc;
+                if(c>=0x20u||c==0x0du||c==0x08u||c==0x1bu||c==0x09u){a=(int)c;sc=0;}
+            }
+            if(!a)continue;
+            s=(uint8_t)sc;
+        }
+        next=(uint8_t)((tos_keyq_head+1u)%TOS_KEYQ);
+        if(next==tos_keyq_tail)break;                 /* queue full: drop */
+        tos_keyq[tos_keyq_head]=(sc<<16)|a;
+        tos_keyq_mods[tos_keyq_head]=tos_kbshift;
+        tos_keyq_head=next;
+    }
+    tos_input_busy=0u;
+}
+static int32_t tos_keyq_pop(void)
+{
+    int32_t k;
+    if(tos_keyq_tail==tos_keyq_head)return -1;
+    k=tos_keyq[tos_keyq_tail];
+    tos_key_lastmods=tos_keyq_mods[tos_keyq_tail];
+    tos_keyq_tail=(uint8_t)((tos_keyq_tail+1u)%TOS_KEYQ);
+    tos_last_scancode=(uint8_t)(k>>16);
+    return k;
+}
+/* GEMDOS Cconin blocks until a key arrives.  A bounded loop used to return a
+ * fake Enter after a couple of seconds, which silently ended programs that
+ * were waiting for input (and closed their desktop window).  Timer C keeps
+ * running while we wait, so the compositor and the clock stay alive. */
+static int32_t tos_getkey(void)
+{
+    if(tos_key_pending>=0){int32_t k=tos_key_pending;tos_key_pending=-2;return k;}
+    if(!tos_input_pop)return 0x0d;
+    for(;;){
+        int32_t k=tos_keyq_pop();
+        if(k>=0)return k;
+        tos_poll_input();
+        /* A blocking key read must service the same deferred presentation as
+           evnt_multi. Timer C only wakes this worker; it never renders. */
+        tos_mark_present();
+        tos_composite_work();
+        if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+    }
+}
+static int32_t tos_key_ready(void)
+{
+    if(tos_key_pending>=0)return 1;
+    if(tos_keyq_head!=tos_keyq_tail){tos_key_pending=tos_keyq_pop();return 1;}
+    return 0;
+}
+
+static void tos_print(const char *s){if(tos_puts&&s)tos_puts(s);}
+static void tos_dec(uint32_t v){char b[12];int i=0,n=0;char t[12];
+    if(!v){tos_print("0");return;}
+    while(v){t[n++]=(char)('0'+v%10u);v/=10u;}
+    while(n)b[i++]=t[--n];
+    b[i]=0;tos_print(b);}
+static void tos_putc(char c){char b[2];b[0]=c;b[1]='\0';tos_print(b);}
+static uint32_t rd32(const uint8_t *p){return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|(uint32_t)p[3];}
+static uint16_t rd16(const uint8_t *p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
+static void wr32(uint8_t *p,uint32_t v){p[0]=(uint8_t)(v>>24);p[1]=(uint8_t)(v>>16);p[2]=(uint8_t)(v>>8);p[3]=(uint8_t)v;}
+
+/* TOS traps are stack based.  From supervisor mode the arguments sit above
+ * the 8-byte exception frame; from user mode the CPU pushed that frame on the
+ * supervisor stack and the arguments are still on the user stack. */
+static uint16_t *tos_args(uint32_t *frame,uint32_t usp)
+{
+    (void)frame;
+    /* The trap stub supplies the caller's actual argument stack, whether
+       the caller was in user or supervisor mode. Skip the function WORD. */
+    return (uint16_t *)(uintptr_t)(usp+2u);
+}
+
+/* --- program screen access (mono 2 / medium 1 / low 0) --------------------- */
+/* Line-A opcode histogram + how many pixels Line-A actually painted: shows
+   whether SysInfo blits/plots through Line-A or writes memory directly. */
+uint32_t tos_linea_opcount[256];
+uint32_t kdbg_tos_divzero;
+uint32_t tos_linea_pixels;
+static uint16_t tos_src_stride(void);
+static uint8_t tos_src_bpp(void);
+static uint16_t tos_src_width(void);
+static uint16_t tos_src_height(void);
+static void tos_putpixel(int x,int y,uint8_t color)
+{
+    if(!tos_screen||x<0||y<0)return;
+    if(tos_mode==2u){if(x>=640||y>=400)return;}
+    else if(tos_mode==1u){if(x>=640||y>=200)return;}
+    else {if(x>=320||y>=200)return;}
+    ++tos_linea_pixels;
+    /* Standard ST interleaved-word layout - the SAME contract kgfx_blit_planar
+       reads.  The old code wrote each plane as a separate 32000-byte block,
+       which no converter (and no real ST screen) uses. */
+    st_raster_set_pixel(tos_screen,tos_src_stride(),tos_src_bpp(),(uint16_t)x,(uint16_t)y,color);
+    tos_note_dirty_rect(x,y,x,y);
+}
+static uint8_t tos_getpixel(int x,int y)
+{
+    if(!tos_screen||x<0||y<0)return 0u;
+    if(tos_mode==2u){if(x>=640||y>=400)return 0u;}
+    else if(tos_mode==1u){if(x>=640||y>=200)return 0u;}
+    else {if(x>=320||y>=200)return 0u;}
+    return st_raster_pixel(tos_screen,tos_src_stride(),tos_src_bpp(),(uint16_t)x,(uint16_t)y);
+}
+/* Guest console bytes share the private screen with VDI. Kernel diagnostics
+   keep using tos_print(), otherwise a trace would overwrite the application. */
+static int tos_con_x,tos_con_y,tos_con_saved_x,tos_con_saved_y;
+static uint8_t tos_con_escape,tos_con_reverse,tos_con_wrap=1u;
+static uint8_t tos_con_fg=1u,tos_con_bg;
+static void tos_con_publish(void);
+static int tos_con_height(void){return tos_mode==2u?16:8;}
+static int tos_con_cols(void){return tos_mode==0u?40:80;}
+static uint8_t tos_con_background(void){return tos_con_reverse?tos_con_fg:tos_con_bg;}
+static void tos_con_clear(int first,int last)
+{
+    int cols=tos_con_cols(),h=tos_con_height(),cell,x,y;
+    uint8_t bg=tos_con_background();
+    if(first<0)first=0;
+    if(last>cols*25)last=cols*25;
+    for(cell=first;cell<last;cell++)tos_note_dirty_rect((cell%cols)*8,(cell/cols)*h,(cell%cols)*8+7,(cell/cols+1)*h-1);
+    for(cell=first;cell<last;cell++)for(y=0;y<h;y++){
+        if(tos_mode==2u)tos_screen[((cell/cols)*h+y)*80+cell%cols]=bg?0xffu:0u;
+        else for(x=0;x<8;x++)tos_putpixel((cell%cols)*8+x,(cell/cols)*h+y,bg);
+    }
+}
+static void tos_con_scroll(int up)
+{
+    uint32_t pitch=tos_src_stride(),row=pitch*(uint32_t)tos_con_height();
+    uint32_t size=row*25u,i;
+    tos_note_dirty_rect(0,0,tos_src_width()-1,tos_src_height()-1);
+    if(up){for(i=0;i<size-row;i++)tos_screen[i]=tos_screen[i+row];
+        tos_con_clear(tos_con_cols()*24,tos_con_cols()*25);
+    }else{for(i=size;i>row;i--)tos_screen[i-1]=tos_screen[i-row-1];
+        tos_con_clear(0,tos_con_cols());}
+}
+static void tos_con_reset(void)
+{
+    tos_con_x=tos_con_y=tos_con_saved_x=tos_con_saved_y=0;
+    tos_con_escape=tos_con_reverse=tos_con_bg=0u;tos_con_fg=tos_con_wrap=1u;
+}
+static void tos_console_byte(uint8_t c)
+{
+    int cols=tos_con_cols(),h=tos_con_height();
+    /* No private screen, or a program that never entered window mode: its
+       console output belongs on the KERNEL console, where the user can see it.
+       Writing to the private TOS screen while no window shows it is exactly how
+       a failing test program (TOSLOW, LDW) became invisible. */
+    if(!tos_screen||!tos_window_enabled){tos_putc((char)c);return;}
+    if(tos_con_escape==2u){tos_con_y=c<32?0:c-32;tos_con_escape=3u;}
+    else if(tos_con_escape==3u){tos_con_x=c<32?0:c-32;tos_con_escape=0u;}
+    else if(tos_con_escape==4u){tos_con_fg=c&((1u<<tos_src_bpp())-1u);tos_con_escape=0u;}
+    else if(tos_con_escape==5u){tos_con_bg=c&((1u<<tos_src_bpp())-1u);tos_con_escape=0u;}
+    else if(tos_con_escape==1u){
+        tos_con_escape=0u;
+        switch(c){
+        case 'A':if(tos_con_y>0)--tos_con_y;break;
+        case 'B':if(tos_con_y<24)++tos_con_y;break;
+        case 'C':if(tos_con_x<cols-1)++tos_con_x;break;
+        case 'D':if(tos_con_x>0)--tos_con_x;break;
+        case 'E':tos_con_x=tos_con_y=0;tos_con_clear(0,cols*25);break;
+        case 'H':tos_con_x=tos_con_y=0;break;
+        case 'I':if(tos_con_y>0)--tos_con_y;else tos_con_scroll(0);break;
+        case 'J':tos_con_clear(tos_con_y*cols+tos_con_x,cols*25);break;
+        case 'K':tos_con_clear(tos_con_y*cols+tos_con_x,(tos_con_y+1)*cols);break;
+        case 'Y':tos_con_escape=2u;break;
+        case 'b':tos_con_escape=4u;break;
+        case 'c':tos_con_escape=5u;break;
+        case 'd':tos_con_clear(0,tos_con_y*cols+tos_con_x+1);break;
+        case 'l':tos_con_clear(tos_con_y*cols,(tos_con_y+1)*cols);tos_con_x=0;break;
+        case 'o':tos_con_clear(tos_con_y*cols,tos_con_y*cols+tos_con_x+1);break;
+        case 'p':tos_con_reverse=1u;break;
+        case 'q':tos_con_reverse=0u;break;
+        case 'j':tos_con_saved_x=tos_con_x;tos_con_saved_y=tos_con_y;break;
+        case 'k':tos_con_x=tos_con_saved_x;tos_con_y=tos_con_saved_y;break;
+        case 'v':tos_con_wrap=1u;break;
+        case 'w':tos_con_wrap=0u;break;
+        default:break; /* e/f cursor visibility: the WM owns the pointer */
+        }
+    }else if(c==27u)tos_con_escape=1u;
+    else if(c=='\r')tos_con_x=0;
+    else if(c=='\n'){if(tos_con_y<24)++tos_con_y;else tos_con_scroll(1);}
+    else if(c=='\b'){if(tos_con_x>0)--tos_con_x;}
+    else if(c=='\t')tos_con_x=(tos_con_x+8)&~7;
+    else if(c>=32u){
+        const uint8_t *glyph=font_glyph((char)c,(uint8_t)(h==16));int x,y;
+        uint8_t fg=tos_con_reverse?tos_con_bg:tos_con_fg,bg=tos_con_background();
+        for(y=0;y<h;y++){
+            /* An 8-pixel mono cell is byte aligned: one store per font row. */
+            if(tos_mode==2u)tos_screen[(tos_con_y*h+y)*80+tos_con_x]=
+                (uint8_t)((fg?glyph[y]:0u)|(bg?(uint8_t)~glyph[y]:0u));
+            else for(x=0;x<8;x++)
+                tos_putpixel(tos_con_x*8+x,tos_con_y*h+y,(glyph[y]&(0x80u>>x))?fg:bg);
+        }
+        tos_note_dirty_rect(tos_con_x*8,tos_con_y*h,tos_con_x*8+7,(tos_con_y+1)*h-1);
+        if(++tos_con_x==cols){if(tos_con_wrap){tos_con_x=0;
+            if(tos_con_y<24)++tos_con_y;else tos_con_scroll(1);
+        }else --tos_con_x;}
+    }
+    if(tos_con_x>=cols)tos_con_x=cols-1;
+    if(tos_con_y>24)tos_con_y=24;
+    tos_con_publish(); /* Timer C schedules presentation; never blit per byte. */
+}
+static void tos_console_string(const char *s){if(s)while(*s)tos_console_byte((uint8_t)*s++);}
+
+static void tos_line(int x0,int y0,int x1,int y1,uint8_t c)
+{
+    int dx=(x1>x0)?(x1-x0):(x0-x1),sx=(x0<x1)?1:-1;
+    int dy=(y1>y0)?(y1-y0):(y0-y1),sy=(y0<y1)?1:-1;
+    int err=dx-dy;
+    for(;;){tos_putpixel(x0,y0,c);if(x0==x1&&y0==y1)break;
+        {int e2=2*err;if(e2>-dy){err-=dy;x0+=sx;}if(e2<dx){err+=dx;y0+=sy;}}}
+}
+static void tos_rect(int x0,int y0,int x1,int y1,uint8_t c)
+{
+    int x,y;
+    if(x1<x0){int t=x0;x0=x1;x1=t;}
+    if(y1<y0){int t=y0;y0=y1;y1=t;}
+    for(y=y0;y<=y1;y++)for(x=x0;x<=x1;x++)tos_putpixel(x,y,c);
+}
+
+static void tos_polygon(int n,const uint16_t *pts,uint8_t c)
+{
+    int i,j,ymin,ymax;
+    if(n<3)return;
+    ymin=ymax=(int16_t)pts[1];
+    for(i=1;i<n;i++){int y=(int16_t)pts[i*2+1];if(y<ymin)ymin=y;if(y>ymax)ymax=y;}
+    for(j=ymin;j<=ymax;j++){
+        int xints[32],nx=0;
+        for(i=0;i<n&&nx<31;i++){
+            int x1=(int16_t)pts[i*2],y1=(int16_t)pts[i*2+1];
+            int k=(i+1)%n,x2=(int16_t)pts[k*2],y2=(int16_t)pts[k*2+1];
+            if((y1<=j&&y2>j)||(y2<=j&&y1>j)){
+                int x=x1+(int)(((long)(j-y1)*(x2-x1))/(y2-y1));
+                xints[nx++]=x;
+            }
+        }
+        {int a,b;for(a=0;a<nx;a++)for(b=a+1;b<nx;b++)if(xints[b]<xints[a]){int t=xints[a];xints[a]=xints[b];xints[b]=t;}}
+        for(i=0;i+1<nx;i+=2){int x;for(x=xints[i];x<=xints[i+1];x++)tos_putpixel(x,j,c);}
+    }
+}
+static void tos_floodfill(int x,int y,uint8_t c)
+{
+    static int stack_x[256],stack_y[256];
+    int sp=0,limitx=639,limity=399;
+    uint8_t target;
+    if(!tos_screen)return;
+    if(tos_mode==1u){limitx=639;limity=199;}
+    else if(tos_mode==0u){limitx=319;limity=199;}
+    if(x<0||y<0||x>limitx||y>limity)return;
+    target=tos_getpixel(x,y);
+    if(target==c)return;
+    stack_x[0]=x;stack_y[0]=y;sp=1;
+    while(sp>0){
+        int px,py,lx,rx,nx;
+        --sp;px=stack_x[sp];py=stack_y[sp];
+        if(tos_getpixel(px,py)!=target)continue;
+        lx=px;while(lx>0&&tos_getpixel(lx-1,py)==target)lx--;
+        rx=px;while(rx<limitx&&tos_getpixel(rx+1,py)==target)rx++;
+        for(nx=lx;nx<=rx;nx++)tos_putpixel(nx,py,c);
+        for(nx=lx;nx<=rx;nx++){
+            if(py>0&&tos_getpixel(nx,py-1)==target&&sp<254){stack_x[sp]=nx;stack_y[sp]=py-1;sp++;}
+            if(py<limity&&tos_getpixel(nx,py+1)==target&&sp<254){stack_x[sp]=nx;stack_y[sp]=py+1;sp++;}
+        }
+    }
+}
+static void tos_raster_copy(void *form,int to_form)
+{
+    if(!tos_screen||!form)return;
+    if(to_form){uint32_t i;uint8_t *d=(uint8_t *)form;for(i=0u;i<32000u;i++)d[i]=tos_screen[i];}
+    else{uint32_t i;const uint8_t *s=(const uint8_t *)form;for(i=0u;i<32000u;i++)tos_screen[i]=s[i];}
+}
+
+/* --- TOS Line-A (0xA000-0xA00F) -------------------------------------------
+   The Line-A variable page.  A program that paints the screen itself (SysInfo
+   does) reads this page for the screen pitch/base, the system font and the VDI
+   tables; A_INIT returns its address.  Offsets follow the TOS/MagiC layout
+   (MagiC VDI INCLUDE/LINEA.I).  The page lives inside a larger buffer with the
+   base 0x400 bytes in, so the negative offsets (V_FNT_AD, DEV_TAB, SIZ_TAB,
+   INQ_TAB, mouse/VT52 data) are all addressable. */
+#define LA_BASE_OFF 0x400
+static uint8_t tos_linea_page[0x800];
+#define LA (tos_linea_page+LA_BASE_OFF)
+static int16_t tos_linea_contrl[16],tos_linea_intin[32],tos_linea_ptsin[32];
+static int16_t tos_linea_intout[32],tos_linea_ptsout[32];
+static uint32_t tos_linea_font_tab[2];
+uint32_t kernel_linea_base,kernel_linea_font,kernel_linea_tab,kernel_linea_ainit;
+static void la_w8(int off,int v){LA[off]=(uint8_t)v;}
+static void la_w16(int off,int v){LA[off]=(uint8_t)(v>>8);LA[off+1]=(uint8_t)v;}
+static void la_w32(int off,uint32_t v)
+{LA[off]=(uint8_t)(v>>24);LA[off+1]=(uint8_t)(v>>16);LA[off+2]=(uint8_t)(v>>8);LA[off+3]=(uint8_t)v;}
+static void tos_con_publish(void)
+{
+    la_w16(-0x1c,tos_con_x);la_w16(-0x1a,tos_con_y);
+    la_w32(-0x22,(uint32_t)(uintptr_t)tos_screen+tos_con_y*tos_con_height()*tos_src_stride()+tos_con_x);
+}
+void tos_linea_init(void)
+{
+    uint32_t font=(uint32_t)(uintptr_t)font_system_8x8();
+    unsigned i;
+    for(i=0;i<sizeof tos_linea_page;i++)tos_linea_page[i]=0u;
+    /* positive offsets */
+    la_w16(0x00,1);                 /* PLANES        */
+    la_w16(0x02,80);                /* WIDTH (bytes/line) */
+    la_w32(0x04,(uint32_t)(uintptr_t)tos_linea_contrl);
+    la_w32(0x08,(uint32_t)(uintptr_t)tos_linea_intin);
+    la_w32(0x0c,(uint32_t)(uintptr_t)tos_linea_ptsin);
+    la_w32(0x10,(uint32_t)(uintptr_t)tos_linea_intout);
+    la_w32(0x14,(uint32_t)(uintptr_t)tos_linea_ptsout);
+    la_w16(0x18,0);la_w16(0x1a,-1);la_w16(0x1c,-1);la_w16(0x1e,-1); /* COLBIT0..3 */
+    la_w16(0x20,-1);la_w16(0x22,-1);                                 /* LSTLIN/LNMASK */
+    la_w16(0x36,0);                                                  /* CLIP off */
+    la_w16(0x38,0);la_w16(0x3a,0);la_w16(0x3c,639);la_w16(0x3e,399); /* clip rect */
+    la_w32(0x54,font);la_w16(0x58,1);                                /* FBASE/FWIDTH */
+    /* negative offsets */
+    la_w16(-0x2e,tos_con_height());                /* V_CEL_HT  */
+    la_w16(-0x2c,79);               /* V_CEL_MX  */
+    la_w16(-0x2a,24);               /* V_CEL_MY  */
+    la_w16(-0x28,tos_src_stride()*tos_con_height());               /* V_CEL_WR  */
+    la_w16(-0x26,0);la_w16(-0x24,1);/* V_COL_BG/FG */
+    la_w32(-0x22,0);la_w32(-0x1e,0);la_w16(-0x1c,0);la_w16(-0x1a,0);
+    la_w16(-0x18,0);la_w8(-0x17,0);
+    la_w32(-0x16,font);             /* V_FNT_AD  */
+    la_w16(-0x12,32);               /* V_FNT_ND  */
+    la_w16(-0x10,126);              /* V_FNT_ST  */
+    la_w16(-0x0e,1);                /* V_FNT_WD  */
+    la_w16(-0x0c,640);              /* V_REZ_HZ  */
+    la_w32(-0x0a,0);                /* V_OFF_AD  */
+    la_w16(-0x04,400);              /* V_REZ_VT  */
+    la_w16(-0x02,80);               /* BYTES_LIN */
+    la_w16(-0x158,320);la_w16(-0x156,200);la_w16(-0x154,0);la_w8(-0x153,0);
+    la_w16(-0x256,1);               /* M_HID_CT  */
+    la_w32(-0x1d0,0);               /* CUR_WORK  */
+    la_w32(-0x1cc,0);               /* DEF_FONT  */
+    la_w32(-0x1c8,0);la_w32(-0x1c4,0);la_w32(-0x1c0,0);la_w32(-0x1bc,0); /* FONT_RING */
+    /* DEV_TAB (45 words): max x/y, pixel size, colours ... */
+    la_w16((-0x2b4)+0,639);la_w16((-0x2b4)+2,399);
+    la_w16((-0x2b4)+6,1);la_w16((-0x2b4)+8,1);
+    la_w16((-0x2b4)+26,2);la_w16((-0x2b4)+70,3);la_w16((-0x2b4)+78,2);
+    /* SIZ_TAB (15 words): max char width/height, marker ... */
+    la_w16((-0x1f2)+4,8);la_w16((-0x1f2)+6,8);
+    la_w16((-0x1f2)+20,8);la_w16((-0x1f2)+22,8);
+    /* INQ_TAB (45 words): device type, gradations, planes, CLUT ... */
+    la_w16((-0x30e)+0,4);la_w16((-0x30e)+2,2);la_w16((-0x30e)+8,1);
+    la_w16((-0x30e)+10,1);la_w16((-0x30e)+12,0);la_w16((-0x30e)+38,1);
+    tos_linea_font_tab[0]=font;tos_linea_font_tab[1]=0;
+    kernel_linea_base=(uint32_t)(uintptr_t)LA;
+    kernel_linea_font=(uint32_t)(uintptr_t)font;
+    kernel_linea_tab=(uint32_t)(uintptr_t)tos_linea_font_tab;
+}
+
+int32_t asf_tos_linea_op(uint32_t op,uint32_t *block)
+{
+    const uint8_t *b=(const uint8_t *)block;
+    ++tos_linea_opcount[op&0xffu];
+    int x1,y1,x2,y2;uint8_t color;
+    /* A_INIT (op 0) takes NO input block and MUST be answered before a single
+       field of one is read: programs call it with A0 = 0 (or anything) and then
+       use the returned base - SysInfo reads HIDE_CNT as TST.W -598(A2).  While
+       the guard below ran first, A_INIT returned 0 and that read went through a
+       NULL base: the reported Bus Error.  The page is built once and only
+       rebuilt when it does not exist yet, so a program cannot lose its state by
+       calling A_INIT again. */
+    if((op&0xffu)==0u){
+        if(!kernel_linea_base)tos_linea_init();
+        kernel_linea_ainit=1u;
+        return (int32_t)kernel_linea_base;
+    }
+    if(!b)return 0;
+    x1=(int16_t)rd16(b+38u);y1=(int16_t)rd16(b+40u);
+    x2=(int16_t)rd16(b+42u);y2=(int16_t)rd16(b+44u);
+    color=(uint8_t)((rd16(b+24u)?1u:0u)|(rd16(b+26u)?2u:0u)|(rd16(b+28u)?4u:0u)|(rd16(b+30u)?8u:0u));
+    switch(op){
+    case 1u: tos_putpixel(x1,y1,color?color:1u);return 0;      /* put pixel */
+    case 2u: return (int32_t)tos_getpixel(x1,y1);              /* get pixel */
+    case 3u: tos_line(x1,y1,x2,y2,color?color:1u);return 0;    /* line */
+    case 4u: {int x;if(x2<x1){int t=x1;x1=x2;x2=t;}
+              for(x=x1;x<=x2;x++)tos_putpixel(x,y1,color?color:1u);
+              return 0;}  /* hline */
+    case 5u: tos_rect(x1,y1,x2,y2,color?color:1u);return 0;    /* filled rect */
+    case 6u: {uint32_t pp=rd32(b+8u);int n=(int)(int16_t)rd16(b+6u);
+              if(pp)tos_polygon(n,(const uint16_t *)(uintptr_t)pp,color?color:1u);
+              return 0;}                                          /* filled polygon */
+    case 0x0eu: {uint32_t fp=rd32(b+8u);if(fp)tos_raster_copy((void *)(uintptr_t)fp,1);return 0;} /* raster -> form */
+    case 0x0fu: tos_floodfill(x1,y1,color?color:1u);return 0;  /* flood fill */
+    default: return 0;
+    }
+}
+
+static void tos_diskpd(void);
+
+/* --- GEMDOS file handles, heap and directory cache ------------------------ */
+#define TOS_MAX_HANDLES 8
+#define TOS_HEAP_SIZE   4194304u   /* 4 MB from TT-RAM: real TOS programs
+                                      allocate far more than 64 KB */
+#define TOS_DIR_MAX     384   /* a file manager lists real directories */
+
+typedef struct {uint8_t used;uint32_t size,pos;char path[96];} tos_file_t;
+typedef struct {char name[13];uint32_t size;uint8_t attr;} tos_dirent_t;
+
+static tos_file_t tos_files[TOS_MAX_HANDLES];
+static uint8_t *tos_current_basepage;
+static uint32_t tos_process_limit;
+static uint8_t *tos_heap;
+static uint32_t tos_heap_used;
+/* Diagnostic: bytes requested by every GEMDOS Malloc (including the -1 free
+   query).  Used to see how the TOS persona runs out of heap. */
+uint32_t tos_memlog[128];
+uint32_t tos_memlog_n;
+static uint8_t tos_dta_default[64];
+static uint8_t *tos_dta;
+static tos_dirent_t tos_dir[TOS_DIR_MAX];
+static int tos_dir_count,tos_dir_index;
+/* Current directory of the running program (Dsetpath/Dgetpath) and the
+   attribute filter of the active Fsfirst search. */
+static char tos_cur_path[96]="\\";
+static uint16_t tos_dir_attr=0xffffu;
+static int tos_attr_ok(uint8_t a)
+{
+    if(a&0x08u)return 0;                              /* volume label: never listed */
+    if((a&0x10u)&&!(tos_dir_attr&0x10u))return 0;     /* directory not asked for */
+    if((a&0x02u)&&!(tos_dir_attr&0x02u))return 0;     /* hidden not asked for */
+    if((a&0x04u)&&!(tos_dir_attr&0x04u))return 0;     /* system not asked for */
+    return 1;
+}
+
+/* Saved parent state around a nested Pexec run. */
+typedef struct {
+    uint8_t *screen;
+    uint8_t mode;
+    uint16_t palette[16];
+    uint8_t *heap;
+    uint32_t heap_used;
+    tos_file_t files[TOS_MAX_HANDLES];
+    uint8_t *dta;
+    int32_t key_pending;
+    /* G1: everything a TOS process needs to resume on another time slice. */
+    uint8_t *basepage;
+    uint32_t process_limit;
+    uint8_t kbshift;
+    int32_t exit_code;
+    uint16_t date,time;
+    int dir_count,dir_index;
+    uint8_t shift,caps;
+} tos_state_t;
+static tos_state_t tos_states[4];
+static int tos_state_depth;
+
+/* G1.2: per-process park slots.  The scheduler calls tos_proc_switch() with
+ * the outgoing and incoming process ids; the globals above always describe
+ * the process that is currently running. */
+#define TOS_MAX_PROCS 4
+static tos_state_t tos_proc[TOS_MAX_PROCS];
+static uint8_t tos_proc_used[TOS_MAX_PROCS];
+static uint8_t *tos_basepage;
+
+static void tos_state_save(tos_state_t *s);
+static void tos_state_restore(const tos_state_t *s);
+
+/* G1.3a: a runnable TOS task.  The loader fills basepage/entry/state; once
+ * the scheduler enters the task it owns the saved SP (the task's stack at the
+ * moment the Timer C frame was pushed) for preemptive switches. */
+typedef struct {
+    uint8_t     used;
+    uint32_t    sp;
+    /* The state lives in kmem, not in the table: a full tos_state_t per slot
+     * grew the kernel BSS by ~850 bytes and broke nested Pexec. */
+    tos_state_t *state;
+    uint8_t    *basepage;
+    uint8_t    *entry;
+    uint8_t    *mem;         /* loaded image, freed on task exit */
+    uint8_t    *stack;       /* task stack top */
+    uint32_t    total;
+    uint32_t    pid;
+} tos_task_t;
+static tos_task_t tos_task[TOS_MAX_PROCS];
+
+static uint32_t tos_task_prepare_entry(uint8_t *stack_top,const void *entry,
+                                       const uint8_t *basepage);
+static int tos_task_alloc(void)
+{
+    int i;
+    for(i=0;i<TOS_MAX_PROCS;i++)if(!tos_task[i].used)return i;
+    return -1;
+}
+static void tos_task_free(int slot)
+{
+    if(slot>=0&&slot<TOS_MAX_PROCS)tos_task[slot].used=0;
+}
+static int tos_task_count(void)
+{
+    int i,n=0;
+    for(i=0;i<TOS_MAX_PROCS;i++)if(tos_task[i].used)++n;
+    return n;
+}
+
+#define TOS_KERNEL_SLOT TOS_MAX_PROCS    /* the shell/kernel context slot */
+static uint8_t tos_task_current=TOS_KERNEL_SLOT;  /* running context */
+
+/* G1.3b-2b-i: build the first-entry frame for a task.
+ *
+ * The layout is exactly what the kernel's own interrupt path uses
+ * (kernel_entry.S: movem.l d0-d7/a0-a6 = 60 bytes, then SR at +60 and PC at
+ * +62), so the Timer C epilogue (movem.l (sp)+,d0-d7/a0-a6 / rte) resumes the
+ * task at its entry with A0 = basepage.  All registers are zero except A0.
+ * Must only be called with an even stack_top. */
+static uint32_t tos_task_prepare_entry(uint8_t *stack_top,const void *entry,
+                                       const uint8_t *basepage)
+    __attribute__((unused));   /* wired up by the next half-step (2b-ii) */
+static uint32_t tos_task_prepare_entry(uint8_t *stack_top,const void *entry,
+                                       const uint8_t *basepage)
+{
+    uint8_t *sp=stack_top-66u;
+    uint32_t i;
+    for(i=0u;i<60u;i++)sp[i]=0u;
+    sp[32]=(uint8_t)((uintptr_t)basepage>>24);
+    sp[33]=(uint8_t)((uintptr_t)basepage>>16);
+    sp[34]=(uint8_t)((uintptr_t)basepage>>8);
+    sp[35]=(uint8_t)(uintptr_t)basepage;              /* A0 */
+    sp[60]=0x20u;sp[61]=0x00u;                        /* SR: supervisor, IRQs on */
+    sp[62]=(uint8_t)((uintptr_t)entry>>24);
+    sp[63]=(uint8_t)((uintptr_t)entry>>16);
+    sp[64]=(uint8_t)((uintptr_t)entry>>8);
+    sp[65]=(uint8_t)(uintptr_t)entry;                 /* PC */
+    return (uint32_t)(uintptr_t)sp;
+}
+
+/* G1.3b: preemptive switch, called from the Timer C handler with the SP of the
+ * interrupted context (its saved registers plus the exception frame).  Returns
+ * 0 to keep the current task, or the SP of the next one.  Dormant while a
+ * single task exists, so enabling the scheduler is a separate, testable step. */
+/* SP of each context: the shell (index TOS_MAX_PROCS) plus the TOS slots.
+ * Kept as a tiny separate array - storing a full tos_state_t in every slot
+ * grew the kernel BSS enough to break nested Pexec. */
+static uint32_t tos_task_sp[TOS_MAX_PROCS+1];
+
+uint32_t tos_task_tick(uint32_t sp)
+{
+    int i,count=0,next=-1;
+    for(i=0;i<TOS_MAX_PROCS;i++)if(tos_task[i].used)++count;
+    if(count<2)return 0u;                      /* dormant until two tasks */
+    tos_task_sp[tos_task_current]=sp;
+    for(i=1;i<=TOS_MAX_PROCS+1;i++){
+        int t=(tos_task_current+i)%(TOS_MAX_PROCS+1);
+        if(t>=TOS_MAX_PROCS){next=t;break;}    /* the shell is always ready */
+        if(tos_task[t].used){next=t;break;}
+    }
+    if(next<0)return 0u;
+    if(tos_task_current<TOS_MAX_PROCS&&tos_task[tos_task_current].state)
+        tos_state_save(tos_task[tos_task_current].state);
+    tos_task_current=(uint8_t)next;
+    if(next<TOS_MAX_PROCS&&tos_task[next].state)
+        tos_state_restore(tos_task[next].state);
+    return tos_task_sp[next];
+}
+
+void tos_proc_alloc(uint32_t pid)
+{if(pid<TOS_MAX_PROCS)tos_proc_used[pid]=1u;}
+void tos_proc_free(uint32_t pid)
+{if(pid<TOS_MAX_PROCS)tos_proc_used[pid]=0u;}
+void tos_proc_switch(uint32_t from,uint32_t to)
+{
+    if(from<TOS_MAX_PROCS&&tos_proc_used[from])tos_state_save(&tos_proc[from]);
+    if(to<TOS_MAX_PROCS&&tos_proc_used[to])tos_state_restore(&tos_proc[to]);
+}
+
+static void tos_state_save(tos_state_t *s)
+{
+    int i;
+    s->screen=tos_screen;s->mode=tos_mode;s->heap=tos_heap;s->heap_used=tos_heap_used;
+    s->dta=tos_dta;s->key_pending=tos_key_pending;
+    s->basepage=tos_current_basepage;s->process_limit=tos_process_limit;s->kbshift=tos_kbshift;s->exit_code=tos_exit_code;
+    s->date=tos_date;s->time=tos_time;
+    s->dir_count=tos_dir_count;s->dir_index=tos_dir_index;
+    s->shift=tos_shift;s->caps=tos_caps;
+    for(i=0;i<16;i++)s->palette[i]=tos_palette[i];
+    for(i=0;i<TOS_MAX_HANDLES;i++){
+        int j;
+        s->files[i].used=tos_files[i].used;
+        s->files[i].size=tos_files[i].size;
+        s->files[i].pos=tos_files[i].pos;
+        for(j=0;j<96;j++)s->files[i].path[j]=tos_files[i].path[j];
+    }
+}
+static void tos_state_restore(const tos_state_t *s)
+{
+    int i;
+    tos_screen=s->screen;tos_mode=s->mode;tos_heap=s->heap;tos_heap_used=s->heap_used;
+    tos_dta=s->dta;tos_key_pending=s->key_pending;
+    tos_basepage=s->basepage;tos_current_basepage=s->basepage;
+    tos_process_limit=s->process_limit;tos_kbshift=s->kbshift;tos_exit_code=s->exit_code;
+    tos_date=s->date;tos_time=s->time;
+    tos_dir_count=s->dir_count;tos_dir_index=s->dir_index;
+    tos_shift=s->shift;tos_caps=s->caps;
+    for(i=0;i<16;i++)tos_palette[i]=s->palette[i];
+    for(i=0;i<TOS_MAX_HANDLES;i++){
+        int j;
+        tos_files[i].used=s->files[i].used;
+        tos_files[i].size=s->files[i].size;
+        tos_files[i].pos=s->files[i].pos;
+        for(j=0;j<96;j++)tos_files[i].path[j]=s->files[i].path[j];
+    }
+}
+
+static int tos_pat_match(const char *pat,const char *name)
+{
+    while(*pat){
+        char pc=*pat;
+        if(pc=='*'){
+            ++pat;
+            if(!*pat)return 1;
+            while(*name){if(tos_pat_match(pat,name))return 1;++name;}
+            return 0;
+        }
+        {char nc=*name;
+         if(pc>='a'&&pc<='z')pc=(char)(pc-32);
+         if(nc>='a'&&nc<='z')nc=(char)(nc-32);
+         if(pc!='?'&&pc!=nc)return 0;}
+        ++pat;
+        if(!*name)return 0;
+        ++name;
+    }
+    return *name==0;
+}
+
+static int tos_dir_collect(const char *name,uint32_t size,uint32_t attributes,uint32_t datetime,void *ctx)
+{
+    (void)ctx;(void)datetime;
+    /* The listing callback continues while it returns non-zero; 0 stops the
+       scan.  This used to return 0 for every entry, so Fsfirst reported a
+       single file per directory. */
+    if(tos_dir_count>=TOS_DIR_MAX)return 0;
+    if(!tos_attr_ok((uint8_t)attributes))return 1;   /* attribute filter (Fsfirst attr) */
+    if(!tos_pat_match((const char *)ctx,name))return 1;
+    {int i;for(i=0;i<12&&name[i];i++)tos_dir[tos_dir_count].name[i]=name[i];
+     tos_dir[tos_dir_count].name[i]=0;}
+    tos_dir[tos_dir_count].size=size;
+    tos_dir[tos_dir_count].attr=(uint8_t)attributes;
+    tos_dir_count++;
+    return 1;
+}
+
+static void tos_dta_write(const tos_dirent_t *e)
+{
+    uint8_t *d=tos_dta?tos_dta:tos_dta_default;
+    int i;
+    for(i=0;i<21;i++)d[i]=0;
+    d[21]=e->attr;d[22]=0;d[23]=0;d[24]=0;d[25]=0;
+    wr32(d+26,e->size);
+    for(i=0;i<12&&e->name[i];i++)d[30+i]=(uint8_t)e->name[i];
+    d[30+i]=0;
+}
+
+static int32_t tos_fopen(const char *name,uint16_t mode)
+{
+    int i;uint32_t size=0;uint8_t attr=0;
+    (void)mode;
+    if(!name||!*name)return -33;
+    for(i=0;i<TOS_MAX_HANDLES;i++)if(!tos_files[i].used)break;
+    if(i>=TOS_MAX_HANDLES)return -35;
+    if(kfat_stat_path(name,&size,&attr)!=FAT_FILE_FOUND)return -33;
+    if(attr&0x10u)return -33;
+    tos_files[i].used=1;tos_files[i].size=size;tos_files[i].pos=0;
+    {uint32_t k=0;while(name[k]&&k<95u){tos_files[i].path[k]=name[k];++k;}tos_files[i].path[k]=0;}
+    return (int32_t)i;
+}
+static int32_t tos_fread(uint16_t handle,uint32_t count,void *buf)
+{
+    uint32_t got=0u;
+    if(handle>=TOS_MAX_HANDLES||!tos_files[handle].used)return -37;
+    if(count>tos_files[handle].size-tos_files[handle].pos)count=tos_files[handle].size-tos_files[handle].pos;
+    if(count==0u)return 0;
+    if(kfat_read_path_at(tos_files[handle].path,tos_files[handle].pos,buf,count,&got)!=FAT_FILE_FOUND)return -37;
+    tos_files[handle].pos+=got;
+    return (int32_t)got;
+}
+static int32_t tos_fwrite(uint16_t handle,uint32_t count,const void *buf)
+{
+    uint32_t written=0u;
+    if(handle>=TOS_MAX_HANDLES||!tos_files[handle].used)return -37;
+    if(count==0u)return 0;
+    if(kfat_write_path_at(tos_files[handle].path,tos_files[handle].pos,buf,count,&written)!=FAT_FILE_FOUND)return -37;
+    tos_files[handle].pos+=written;
+    if(tos_files[handle].pos>tos_files[handle].size)tos_files[handle].size=tos_files[handle].pos;
+    return (int32_t)written;
+}
+static int32_t tos_fclose(uint16_t handle)
+{
+    if(handle>=TOS_MAX_HANDLES||!tos_files[handle].used)return -37;
+    tos_files[handle].used=0;
+    return 0;
+}
+static int32_t tos_fseek(int32_t off,uint16_t handle,uint16_t mode)
+{
+    int32_t np;
+    if(handle>=TOS_MAX_HANDLES||!tos_files[handle].used)return -37;
+    if(mode==0u)np=off;else if(mode==1u)np=(int32_t)tos_files[handle].pos+off;else np=(int32_t)tos_files[handle].size+off;
+    if(np<0)np=0;
+    if((uint32_t)np>tos_files[handle].size)np=(int32_t)tos_files[handle].size;
+    tos_files[handle].pos=(uint32_t)np;
+    return np;
+}
+static int tos_fsfirst(const char *pattern,uint16_t attr)
+{
+    char dir[96],pat[16];
+    const char *slash=0,*p;
+    int k=0;
+    for(p=pattern;*p;++p)if(*p=='\\'||*p==':')slash=p;
+    if(slash){uint32_t n=(uint32_t)(slash-pattern)+1u,kk;if(n>95u)n=95u;
+        for(kk=0u;kk<n;++kk)dir[kk]=pattern[kk];
+        dir[kk]=0;}
+    else{
+        /* relative pattern: start from the program's current directory */
+        unsigned n=0;while(tos_cur_path[n]&&n<90u){dir[n]=tos_cur_path[n];++n;}
+        if(n&&dir[n-1]!='\\')dir[n++]='\\';
+        dir[n]=0;
+    }
+    {const char *q=slash?slash+1:pattern;k=0;while(*q&&k<15)pat[k++]=*q++;pat[k]=0;}
+    /* DOS/NC semantics: *.* matches names without an extension too. */
+    if(pat[0]=='*'&&pat[1]=='.'&&pat[2]=='*'&&pat[3]==0)pat[1]=0;
+    tos_dir_count=0;tos_dir_index=0;tos_dir_attr=attr;
+    kfat_list_path(dir,(kfat_list_callback_t)tos_dir_collect,pat);
+    if(tos_dir_count==0)return -33;
+    tos_dta_write(&tos_dir[0]);
+    tos_dir_index=1;
+    return 0;
+}
+static int tos_fsnext(void)
+{
+    if(tos_dir_index>=tos_dir_count)return -33;
+    tos_dta_write(&tos_dir[tos_dir_index]);
+    tos_dir_index++;
+    return 0;
+}
+static uint8_t tos_env_ready;
+/* TOS-compatible environment bootstrap. A TOS program ASSUMES the system is
+   already up: it READS the cookie jar, the system variables and the VDI/AES
+   state. Bring them up in order (XBIOS, GEMDOS, VDI, AES) BEFORE the first
+   TOS program runs - exactly what MagiC/EmuTOS do at boot. */
+int kernel_tos_bootstrap(void)
+{
+    /* This used to call tos_vdi_call(0x73u, ...) - VDI 115 (vqin_mode), which
+       is NOT implemented - and then print "VDI AES READY" anyway.  Pretending
+       the environment is up is worse than not claiming it: a TOS program (and
+       an EmuTOS-as-PRG run) then behaves unpredictably.  Open the physical
+       workstation with the call that really exists (v_opnwk) and report only
+       what actually succeeded. */
+    static int16_t contrl[16],intin[128],ptsin[8],intout[128],ptsout[8];
+    unsigned i;
+    int ok;
+    if(tos_env_ready)return 1;
+    for(i=0u;i<16u;++i)contrl[i]=0;
+    for(i=0u;i<128u;++i){intin[i]=0;intout[i]=0;}
+    for(i=0u;i<8u;++i){ptsin[i]=0;ptsout[i]=0;}
+    contrl[0]=1;                 /* v_opnwk: open physical workstation */
+    contrl[1]=0;                 /* 0 points in */
+    contrl[2]=0;                 /* 0 points out */
+    contrl[3]=0;
+    contrl[5]=1;                 /* one output value: the handle */
+    ok=(tos_vdi_call(1u,contrl,intin,ptsin,intout,ptsout,0,0)!=0);
+    if(ok&&contrl[6]!=0){
+        tos_print("TOS ENV: VDI workstation opened\n");
+        tos_env_ready=1u;
+        return 1;
+    }
+    /* Be explicit instead of cheerful: GEMDOS/BIOS traps work, the graphics
+       environment is what is missing. */
+    tos_print("TOS ENV: VDI workstation FAILED\n");
+    tos_env_ready=1u;
+    return 0;
+}
+/* Track ownership separately from kmem: a guest must never be able to free
+   a kernel allocation just by supplying its address. */
+#define TOS_ALLOC_SLOTS 128u
+typedef struct {void *ptr;uint8_t *process;uint32_t size;} tos_alloc_t;
+static tos_alloc_t tos_allocs[TOS_ALLOC_SLOTS];
+static uint32_t tos_largest_mode(uint16_t mode)
+{
+    uint32_t st,tt;unsigned i;
+    for(i=0;i<TOS_ALLOC_SLOTS&&tos_allocs[i].ptr;i++){}
+    if(i==TOS_ALLOC_SLOTS)return 0;
+    mode&=3u;st=kmem_user_largest(0);tt=kmem_user_largest(1);
+    return mode==0u?st:mode==1u?tt:(st>tt?st:tt);
+}
+static void *tos_mxalloc(uint32_t bytes,uint16_t mode)
+{
+    unsigned i;void *ptr;int tt;
+    if(!bytes||bytes>0x7fffffffu)return 0;
+    for(i=0;i<TOS_ALLOC_SLOTS&&tos_allocs[i].ptr;i++){}
+    if(i==TOS_ALLOC_SLOTS)return 0;
+    mode&=3u;tt=mode==1u||mode==3u;
+    ptr=kmem_alloc_user_pool(bytes,KMEM_OWNER_KERNEL,tt);
+    if(!ptr&&mode>=2u)ptr=kmem_alloc_user_pool(bytes,KMEM_OWNER_KERNEL,!tt);
+    if(ptr){tos_allocs[i].ptr=ptr;tos_allocs[i].process=tos_current_basepage;tos_allocs[i].size=bytes;}
+    return ptr;
+}
+static uint32_t tos_largest_free(void){return tos_largest_mode(0u);}
+static void *tos_malloc(uint32_t bytes){return tos_mxalloc(bytes,0u);}
+static int tos_mshrink(void *p,uint32_t bytes)
+{
+    unsigned i;
+    if(p==tos_current_basepage&&p){
+        uint32_t base=(uint32_t)(uintptr_t)p;
+        if(bytes<256u||bytes>tos_process_limit-base)return -39;
+        /* The base TPA is being shrunk: only a table inside the OLD TPA range
+           may be touched (it may live in TT-RAM above, which stays valid). */
+        kaudio_dosound_revalidate((const uint8_t *)base,
+                                  (const uint8_t *)(uintptr_t)tos_process_limit,
+                                  (const uint8_t *)(base+bytes));
+        tos_process_limit=base+bytes;return 0;
+    }
+    for(i=0;i<TOS_ALLOC_SLOTS;i++)if(tos_allocs[i].ptr==p&&tos_allocs[i].process==tos_current_basepage){
+        if(bytes>tos_allocs[i].size)return -39;
+        /* Full bounds of the block being shrunk; a table above it is untouched. */
+        kaudio_dosound_revalidate((const uint8_t *)p,
+                                  (const uint8_t *)p+tos_allocs[i].size,
+                                  (const uint8_t *)p+bytes);
+        if(!kmem_shrink(p,bytes,KMEM_OWNER_KERNEL))return -40;
+        tos_allocs[i].size=bytes;return 0;
+    }
+    return -40;
+}
+static int tos_mfree(void *p)
+{
+    unsigned i;
+    if(!p)return -40;
+    for(i=0;i<TOS_ALLOC_SLOTS;i++)if(tos_allocs[i].ptr==p&&tos_allocs[i].process==tos_current_basepage){
+        /* Stop the interpreter only if it reads inside THIS block. */
+        kaudio_dosound_revalidate((const uint8_t *)p,
+                                  (const uint8_t *)p+tos_allocs[i].size,
+                                  (const uint8_t *)p);
+        if(!kmem_free(p,KMEM_OWNER_KERNEL))return -40;
+        tos_allocs[i].ptr=0;return 0;
+    }
+    return -40;
+}
+static void tos_alloc_cleanup(uint8_t *process)
+{
+    unsigned i;
+    for(i=0;i<TOS_ALLOC_SLOTS;i++)if(tos_allocs[i].ptr&&tos_allocs[i].process==process){
+        (void)kmem_free(tos_allocs[i].ptr,KMEM_OWNER_KERNEL);tos_allocs[i].ptr=0;
+    }
+}
+
+static uint16_t tos_bpb[9];
+static uint32_t tos_drivemap(void){return kfat_tos_bpb(tos_bpb)?4u:0u;}
+
+
+/* --- TOS GEMDOS (trap #1) -------------------------------------------------- */
+static int32_t tos_gemdos_impl(uint32_t fn,uint32_t *frame,uint32_t usp);
+/* Capture the user stack when a TOS program terminates, so the call chain
+   that decided to exit can be disassembled afterwards. */
+volatile uint32_t tos_exit_usp,tos_exit_stack[16];
+/* A diagnostic read must never be able to kill the program.  The Pterm paths
+   dereference a frame/stack pointer just to LOG the exit; when that pointer was
+   not plausible the read itself raised a bus error, the persona caught it and a
+   clean Pterm() came back as "TOS FAULT vec=2" with exit code -2 (invisible
+   until the console stopped hiding diagnostics). */
+static int tos_ptr_plausible(uint32_t p)
+{return p>=0x800u&&p<0x00C00000u&&(p&1u)==0u;}
+static void tos_exit_capture(uint32_t usp)
+{
+    uint8_t *p=(uint8_t *)(uintptr_t)usp;uint32_t k;
+    tos_exit_usp=usp;
+    if(!tos_ptr_plausible(usp))return;
+    for(k=0;k<16u;k++)tos_exit_stack[k]=p?rd32(p+4u*k):0u;
+}
+/* Public entry: log function number AND result so a call returning 0 that the
+   program then dereferences is visible on the console. */
+/* Forward declarations: the dispatchers below record the first unsupported
+   call and the caller's PC, so these must be visible before them. */
+static uint32_t tos_last_caller_pc;
+void tos_note_unsupported(int layer,uint32_t fn);
+static void tos_note_unsupported_at(int layer,uint32_t fn,int32_t result,const int16_t *args,int nargs);
+
+int32_t asf_tos_gemdos(uint32_t fn,uint32_t *frame,uint32_t usp)
+{
+    if(frame)tos_last_caller_pc=rd32((const uint8_t *)frame+2u);   /* after the TRAP */
+    tos_mark_present();
+    /* Window closed from its chrome while the program runs: unwind like
+       Pterm0 at the next OS call. */
+    if(tos_exit_pending()){tos_exit_capture(usp);tos_exit_code=0;asf_tos_exit();return 0;}
+    int32_t r;
+    tos_clock_tick();
+    r=tos_gemdos_impl(fn,frame,usp);
+    if(tos_trace_gemdos){tos_print("#");tos_dec(fn&0xffffu);tos_print("=");tos_dec((uint32_t)r);tos_print(" ");}
+    {uint32_t n=tos_call_log[0];
+     if(n<256u){tos_call_log[1u+n]=((fn&0xffffu)<<16)|((uint32_t)r&0xffffu);tos_call_log[0]=n+1u;}}
+    return r;
+}
+static int32_t tos_gemdos_impl(uint32_t fn,uint32_t *frame,uint32_t usp)
+{
+    uint16_t *a=tos_args(frame,usp);
+    fn&=0xffffu;                       /* only the low word is the function */
+    tos_last_fn=fn;                    /* remember, for fault diagnostics */
+    if(tos_trace_gemdos){tos_print("#");tos_dec(fn);tos_print(" ");}
+    switch(fn){
+    case 0x00u: tos_dbg_exit_fn=0x00u;
+               tos_dbg_exit_pc=tos_ptr_plausible((uint32_t)(uintptr_t)frame)?rd32((const uint8_t *)frame+2u):0u;
+               tos_exit_capture(usp);tos_exit_code=0;asf_tos_exit();return 0; /* Pterm0 */
+    case 0x01u: case 0x08u: return tos_getkey();                        /* Cconin/Cnecin */
+    case 0x02u: tos_console_byte((uint8_t)a[0]);return 0;                /* Cconout */
+    case 0x06u: case 0x07u: return tos_getkey();                        /* Crawio/Crawcin */
+    case 0x09u: {uint32_t p=((uint32_t)a[0]<<16)|a[1];if(p)tos_console_string((const char *)(uintptr_t)p);return 0;} /* Cconws */
+    case 0x0bu: return tos_key_ready();                                  /* Cconis */
+    case 0x0eu: return (int32_t)tos_drivemap();                                                /* Dsetdrv */
+    case 0x19u: return 2;                                                /* Dgetdrv */
+    case 0x30u: return 0x00000602;                                       /* Sversion: minor<<8 | major (2.06) */
+    case 0x2au: return (int32_t)tos_date;                                /* Tgetdate */
+    case 0x2bu: tos_date=rd16((const uint8_t *)a);return 0;              /* Tsetdate */
+    /* GEMDOS Super(exec).  The guest already runs in supervisor mode on its
+       own stack (see asf_tos_enter), so the mode does not have to be switched:
+         exec == 1        -> inquiry: -1 (supervisor), which is the truth here;
+         exec == 0 or n   -> the caller's own stack pointer.
+       Returning the kernel's internal SP - what this used to do - was simply
+       wrong, and rebuilding the return frame on a new stack stopped the caller
+       dead in testing.  Argument layout: WORD function, then a LONG argument,
+       so the long lives in the two words a[0] (high) and a[1] (low). */
+    case 0x20u: {
+        uint32_t sr=((const uint16_t *)frame)[0];
+        int supervisor=(sr&0x2000u)!=0u;
+        int32_t arg=(int32_t)(((uint32_t)(uint16_t)a[0]<<16)|(uint16_t)a[1]);
+        if(arg==1)return supervisor?-1:0;
+        return (int32_t)usp;
+    }
+    case 0x2cu: {                                                        /* Tgettime */
+        uint32_t t;
+        tos_clock_tick();
+        t=(tos_mfp_ticks/400u)%30u;
+        t|=((tos_mfp_ticks/12000u)%60u)<<5;
+        t|=((tos_mfp_ticks/720000u)%24u)<<11;
+        tos_time=(uint16_t)t;
+        return (int32_t)tos_time;}
+    case 0x2du: tos_time=rd16((const uint8_t *)a);return 0;              /* Tsettime */
+    case 0x36u: { /* Dfree: drive 0 means current, C is 3 (one-based). */
+        uint32_t ptr=rd32((const uint8_t *)a),free_clusters;
+        uint16_t drive=a[2];uint8_t *out=(uint8_t *)(uintptr_t)ptr;
+        if(drive!=0u&&drive!=3u)return -46;
+        if(!ptr||!kfat_tos_bpb(tos_bpb)||!kfat_free_clusters(&free_clusters))return -1;
+        wr32(out,free_clusters);wr32(out+4,tos_bpb[7]);
+        wr32(out+8,tos_bpb[0]);wr32(out+12,tos_bpb[1]);return 0;}
+    case 0x47u: {                                                        /* Dgetpath(path,drive) */
+        uint32_t ptr=rd32((const uint8_t *)a);uint16_t drive=a[2];
+        char *dst=(char *)(uintptr_t)ptr;
+        if(drive!=0u&&drive!=2u&&drive!=3u)return -46;
+        if(!dst)return -34;
+        {unsigned n=0;while(tos_cur_path[n]&&n<95u){dst[n]=tos_cur_path[n];++n;}dst[n]=0;}
+        return 0;
+    }
+    case 0x3bu: {                                                        /* Dsetpath(path) */
+        uint32_t dp=((uint32_t)a[0]<<16)|a[1];
+        const char *src=(const char *)(uintptr_t)dp;
+        uint32_t sz=0;uint8_t at=0;unsigned n=0;
+        if(!src)return -1;
+        /* The directory must exist; the FAT layer reports directories with the
+           0x10 attribute bit. */
+        if(kfat_stat_path(src,&sz,&at)!=FAT_FILE_FOUND)return -1;
+        if(!(at&0x10u))return -1;
+        while(src[n]&&n<95u){tos_cur_path[n]=src[n];++n;}
+        tos_cur_path[n]=0;
+        return 0;
+    }
+    case 0x39u: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                   /* Dcreate */
+        if(!p)return -33;
+        return kfat_create_dir((const char *)(uintptr_t)p)==FAT_FILE_FOUND?0:-33;}
+    case 0x3au: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                   /* Ddelete */
+        if(!p)return -33;
+        return kfat_delete_path((const char *)(uintptr_t)p)==FAT_FILE_FOUND?0:-33;} 
+    case 0x1au: {uint32_t p=((uint32_t)a[0]<<16)|a[1];if(p)tos_dta=(uint8_t *)(uintptr_t)p;return 0;} /* Fsetdta */
+    case 0x2fu: return (int32_t)(uintptr_t)(tos_dta?tos_dta:tos_dta_default);  /* Fgetdta */
+    case 0x3cu: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                    /* Fcreate */
+        if(!p)return -33;
+        if(kfat_create_path((const char *)(uintptr_t)p)!=FAT_FILE_FOUND)return -33;
+        return tos_fopen((const char *)(uintptr_t)p,0u);}
+    case 0x3du: {uint32_t p=((uint32_t)a[0]<<16)|a[1];return tos_fopen((const char *)(uintptr_t)p,rd16((const uint8_t *)a+4u));} /* Fopen */
+    case 0x3eu: return tos_fclose(rd16((const uint8_t *)a));             /* Fclose */
+    case 0x3fu: return tos_fread(rd16((const uint8_t *)a),rd32((const uint8_t *)a+2u),(void *)(uintptr_t)rd32((const uint8_t *)a+6u)); /* Fread */
+    case 0x40u: return tos_fwrite(rd16((const uint8_t *)a),rd32((const uint8_t *)a+2u),(const void *)(uintptr_t)rd32((const uint8_t *)a+6u)); /* Fwrite */
+    case 0x41u: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                    /* Fdelete */
+        if(!p)return -33;
+        return kfat_delete_path((const char *)(uintptr_t)p)==FAT_FILE_FOUND?0:-33;}
+    case 0x42u: return tos_fseek((int32_t)rd32((const uint8_t *)a),rd16((const uint8_t *)a+4u),rd16((const uint8_t *)a+6u)); /* Fseek */
+    case 0x43u: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                   /* Fattrib */
+        uint8_t old=0;
+        if(!p)return -33;
+        if(kfat_attrib_path((const char *)(uintptr_t)p,rd16((const uint8_t *)a+4u),
+                            (uint8_t)rd16((const uint8_t *)a+6u),&old)!=FAT_FILE_FOUND)return -33;
+        return (int32_t)old;}
+    case 0x14u: { /* Existing ATOS Getcookie extension (not a TOS GEMDOS API). */
+        uint32_t tag=rd32((const uint8_t *)a),out=rd32((const uint8_t *)a+4u);
+        unsigned e;
+        for(e=0;tos_cookie_jar[e];e+=2u)if(tos_cookie_jar[e]==tag){
+            if(out)wr32((uint8_t *)(uintptr_t)out,tos_cookie_jar[e+1u]);
+            return 1;
+        }
+        return 0;
+    }
+    case 0x44u: { /* Mxalloc: distinguish ST, TT and the two preference modes. */
+        uint32_t bytes=rd32((const uint8_t *)a);uint16_t mode=a[2];
+        if(bytes==0xffffffffu)return (int32_t)tos_largest_mode(mode);
+        return (int32_t)(uintptr_t)tos_mxalloc(bytes,mode);}
+    case 0x48u: {                                                        /* Malloc */
+        /* GEMDOS: Malloc(-1) does NOT allocate; it returns the size of the
+           largest free block so packers can size their buffer.  Treating it as
+           a 4 GB request made SysInfo think there was no memory and exit. */
+        uint32_t bytes=rd32((const uint8_t *)a);
+        if(tos_memlog_n<128u)tos_memlog[tos_memlog_n++]=bytes;
+        if(bytes==0xffffffffu)return (int32_t)tos_largest_free();
+        return (int32_t)(uintptr_t)tos_malloc(bytes);}
+    case 0x49u: return tos_mfree((void *)(uintptr_t)rd32((const uint8_t *)a));   /* Mfree */
+    case 0x4au: return tos_mshrink((void *)(uintptr_t)rd32((const uint8_t *)a+2u),rd32((const uint8_t *)a+6u)); /* Mshrink(0,block,size) */
+    case 0x4bu: {                                                        /* Pexec */
+        uint16_t mode=rd16((const uint8_t *)a);
+        uint32_t prog=rd32((const uint8_t *)a+2u);
+        uint32_t cmdline=rd32((const uint8_t *)a+6u);
+        int32_t r;
+        if(!prog)return -1;
+        if(mode==0u){                                                   /* load + execute */
+            if(tos_state_depth>=4)return -1;
+            if(cmdline)kernel_user_set_arguments((const char *)(uintptr_t)cmdline);
+            tos_state_save(&tos_states[tos_state_depth]);
+            tos_state_depth++;
+            r=kernel_tos_run_program((const char *)(uintptr_t)prog);
+            tos_state_depth--;
+            tos_state_restore(&tos_states[tos_state_depth]);
+            return r;
+        }
+        /* mode 3 (load only -> basepage), 4/5 (basepage create), 6/7 (env):
+           not implemented yet. */
+        return -32;                                                     /* EINVFN */
+    }
+    case 0x4cu: tos_dbg_exit_fn=0x4cu;
+               tos_dbg_exit_pc=tos_ptr_plausible((uint32_t)(uintptr_t)frame)?rd32((const uint8_t *)frame+2u):0u;
+               /* Pterm takes its code from the stack word, not from a[]: read it
+                  only when the stack pointer is usable. */
+               /* the stack holds the FUNCTION word first, then the code
+                  (tos_args() == usp+2), so reading usp reported 76 = 0x4C:
+                  Pterm(5) returned "76". */
+               tos_exit_code=tos_ptr_plausible(usp)?(int32_t)rd16((const uint8_t *)usp+2u):0;
+               asf_tos_exit();return 0; /* Pterm */
+    case 0x4eu: {uint32_t p=((uint32_t)a[0]<<16)|a[1];                      /* Fsfirst(path,attr) */
+                 return tos_fsfirst((const char *)(uintptr_t)p,(uint16_t)a[2]);}
+    case 0x4fu: return tos_fsnext();                                     /* Fsnext */
+    case 0x56u: {uint32_t f=rd32((const uint8_t *)a+2u);               /* Frename: reserved WORD first */
+        uint32_t t=rd32((const uint8_t *)a+6u);
+        if(!f||!t)return -33;
+        return kfat_rename_path((const char *)(uintptr_t)f,(const char *)(uintptr_t)t)==FAT_FILE_FOUND?0:-33;}
+    default: tos_note_unsupported_at(1u,fn,-32,(const int16_t *)a,4);
+             return -32;                                                /* EINVFN: unsupported */
+    }
+}
+
+/* --- TOS BIOS (trap #13) --------------------------------------------------- */
+uint32_t tos_bios_opcount[256];
+int32_t asf_tos_bios(uint32_t fn,uint32_t *frame,uint32_t usp)
+{
+    tos_mark_present();
+    /* Window closed from its chrome while the program runs: unwind like
+       Pterm0 at the next OS call. */
+    if(tos_exit_pending()){tos_exit_capture(usp);tos_exit_code=0;asf_tos_exit();return 0;}
+    uint16_t *a=tos_args(frame,usp);
+    fn&=0xffffu;
+    if(frame)tos_last_caller_pc=rd32((const uint8_t *)frame+2u);
+    ++tos_bios_opcount[fn&255u];
+    if(fn==1u)return tos_key_ready();         /* Bconstat */
+    if(fn==2u)return tos_getkey();            /* Bconin */
+    if(fn==3u){if(a[0]==2u||a[0]==5u)tos_console_byte((uint8_t)a[1]);return 0;}  /* Bconout(dev,c) */
+    if(fn==7u)return a[0]==2u&&kfat_tos_bpb(tos_bpb)?(int32_t)(uintptr_t)tos_bpb:0;
+    if(fn==5u){                                                       /* Setexc(vec,handler) */
+        /* TOS contract: return the OLD vector and install the new one when the
+           handler is not -1.  Returning 0 for everything made programs store a
+           NULL "previous handler" and later jump to address 0.  For vectors the
+           kernel does not provide itself we report a real RTE stub instead. */
+        uint32_t v=((uint32_t)(uint16_t)a[0]);
+        int32_t newh=((int32_t)(uint16_t)a[1]<<16)|(uint16_t)a[2];
+        uint32_t *slot=tos_vec_slot(v);
+        uint32_t old=(uint32_t)(uintptr_t)asf_tos_just_rte;
+        if(!slot)return -1;                       /* unknown vector: report failure */
+        old=*slot;
+        if(newh!=-1){                             /* -1 = query only */
+            if(!old)old=(uint32_t)(uintptr_t)asf_tos_just_rte;
+            *slot=(uint32_t)newh;
+        }
+        return (int32_t)old;
+    }
+    if(fn==10u)return (int32_t)tos_drivemap();
+    if(fn==8u)return (a[0]==2u||a[0]==5u)?-1:0;                       /* Bcostat */
+    if(fn==11u){uint8_t old=tos_kbshift;if((int16_t)a[0]>=0)tos_kbshift=(uint8_t)a[0];return old;}                      /* Kbshift */
+    tos_note_unsupported_at(2u,fn,0,(const int16_t *)a,4);   /* BIOS: not implemented */
+    return 0;
+}
+
+/* --- TOS XBIOS (trap #14) -------------------------------------------------- */
+/* XBIOS opcode histogram: shows how SysInfo asks about the screen. */
+uint32_t tos_xbios_opcount[256];
+uint32_t kdbg_tos_xbios34,kdbg_tos_xbios14;   /* XBIOS 34/14 call counters */
+/* Audio XBIOS (28 Giaccess, 29 Offgibit, 30 Ongibit, 31 Xbtimer, 32 Dosound).
+   These were "return 0", i.e. a fake success; the plan for the audio subsystem
+   requires real contracts, so they are counted and reported separately. */
+uint32_t kdbg_tos_xbios28r,kdbg_tos_xbios28w,kdbg_tos_xbios29,kdbg_tos_xbios30,
+         kdbg_tos_xbios31,kdbg_tos_xbios32;
+/* Virtual PSG ports for TOS windows.  Port A carries the floppy drive/side
+   select, the printer strobe and the RS232 control lines: those belong to their
+   drivers, not to a guest running in supervisor mode, so a window sees its own
+   port state.  Writes are counted (kdbg_tos_vport_w) because the legacy XBIOS
+   return value has no room for "virtualised". */
+uint8_t tos_vport_a=0x07u;      /* both drives deselected, side 0 - the ST default */
+uint8_t tos_vport_b=0xffu;      /* port B is an input on an ST */
+uint32_t kdbg_tos_vport_w,kdbg_tos_audio_refused;
+
+static uint8_t tos_vport_read(uint32_t idx){return idx==14u?tos_vport_a:tos_vport_b;}
+
+/* Owner rule from the audio plan: a TOS window may write sound registers only
+   while no native application owns the chip.  A refusal is reported through the
+   counters, never by inventing a different meaning for the legacy result. */
+/* The Dosound interpreter writes registers from the interrupt.  Ports 14/15
+   must land in the same virtual state Giaccess uses, never on the real chip
+   (audit P1.2): the core calls this for every register >= 14. */
+static int tos_port_sink(uint8_t reg,uint8_t value)
+{
+    if(reg==14u)tos_vport_a=value;else tos_vport_b=value;
+    ++kdbg_tos_vport_w;
+    return 1;                                  /* handled virtually */
+}
+
+/* Where does a sound table live?  TOS accepts a table in the base TPA or in a
+   block allocated with Malloc, so both are allowed - and the interpreter is
+   given the END of that region, because a valid first byte says nothing about
+   the bytes the interrupt will read next (audit P1.3).  Returns 0 when the
+   pointer is not in a buffer we know about. */
+static const uint8_t *tos_table_end(const uint8_t *table)
+{
+    uintptr_t p=(uintptr_t)table;
+    uintptr_t base=(uintptr_t)tos_current_basepage;
+    uintptr_t end=(uintptr_t)tos_process_limit;    /* this is an ADDRESS, not a size */
+    unsigned i;
+    if(base&&end>base&&p>=base&&p<end)return (const uint8_t *)end;
+    /* Every slot, holes included: freeing the first allocation used to leave a
+       hole that stopped this search, so a valid table in a later block was
+       rejected (audit point 2). */
+    for(i=0u;i<TOS_ALLOC_SLOTS;++i){
+        uintptr_t a,size;
+        if(!tos_allocs[i].ptr)continue;                     /* hole: skip it */
+        if(tos_allocs[i].process!=tos_current_basepage)continue;
+        a=(uintptr_t)tos_allocs[i].ptr;
+        size=(uintptr_t)tos_allocs[i].size;
+        if(!size||a+size<a)continue;                        /* overflow guard */
+        if(p>=a&&p<a+size)return (const uint8_t *)(a+size);
+    }
+    return 0;
+}
+
+static void tos_apply_palette(void);          /* defined with the T2 window */
+/* Set by Setscreen/Setrez when a running window has to adopt a new mode. */
+static uint8_t tos_desktop_pending;
+int32_t asf_tos_xbios(uint32_t fn,uint32_t *frame,uint32_t usp)
+{
+    tos_mark_present();
+    /* Window closed from its chrome while the program runs: unwind like
+       Pterm0 at the next OS call. */
+    if(tos_exit_pending()){tos_exit_capture(usp);tos_exit_code=0;asf_tos_exit();return 0;}
+    uint16_t *a=tos_args(frame,usp);
+    fn&=0xffffu;
+    if(frame)tos_last_caller_pc=rd32((const uint8_t *)frame+2u);
+    ++tos_xbios_opcount[fn&0xffu];
+    switch(fn){
+    /* XBIOS 14 Iorec(dev): a real ring queue for keyboard/mouse/MIDI - LDW uses
+       it as its input queue right before Kbdvbase. */
+    case 14u: {int dev=(int)(int16_t)a[0];
+               ++kdbg_tos_xbios14;
+               if(dev<0||dev>2)return 0;
+               return (int32_t)(uintptr_t)tos_iorec[dev];}
+    /* XBIOS 34 Kbdvbase(): the KBDVECS whose 5th pointer ($10) is mousevec.
+       Returning 0 made LDW read NULL+16, i.e. address $10. */
+    case 34u: ++kdbg_tos_xbios34;
+              return (int32_t)(uintptr_t)tos_kbdvecs;
+    /* ---- audio (XBIOS 28..32).  Real contracts, not "return 0" ----------
+       28 Giaccess(data,reg): bit 7 of reg set means WRITE, otherwise READ the
+          selected register (EmuTOS bios/sound.c).  Registers 0..13 are
+          write-only on the chip, so a read returns the driver's record of what
+          was written.
+       29 Offgibit(mask) / 30 Ongibit(mask): PSG port A, AND / OR the mask, with
+          the direction bits untouched (they go through the atomic helper).
+       31 Xbtimer: still unimplemented, and it says so (-32 EINVFN) instead of
+          pretending success.
+       32 Dosound(table): returns the previous table pointer; a negative pointer
+          stops playback; the sequence is stepped by the Timer C interrupt, so it
+          keeps playing while the program computes. */
+    case 28u: {uint32_t reg=(uint32_t)(a[1]&0xffu),val=(uint32_t)(a[0]&0xffu);
+               uint32_t idx=reg&0x0fu;
+               if(reg&0x80u){
+                   if(idx>=14u){
+                       /* Ports 14/15 are virtualised (see tos_vport_a above). */
+                       if(idx==14u)tos_vport_a=(uint8_t)val;else tos_vport_b=(uint8_t)val;
+                       ++kdbg_tos_vport_w;
+                       return (int32_t)tos_vport_read(idx);
+                   }
+                   /* One atomic operation: the owner rule and the write cannot be
+                      separated, or a native application could claim the chip in
+                      between (audit P1.4). */
+                   if(kaudio_tos_reg_write((uint8_t)idx,(uint8_t)val)<0){
+                       ++kdbg_tos_audio_refused;return 0;
+                   }
+                   ++kdbg_tos_xbios28w;
+                   return (int32_t)psg_shadow((uint8_t)idx);   /* TOS returns the read too */
+               }
+               ++kdbg_tos_xbios28r;
+               if(idx>=14u)return (int32_t)tos_vport_read(idx);
+               return (int32_t)psg_shadow((uint8_t)idx);}
+    case 29u: ++kdbg_tos_xbios29;
+              tos_vport_a=(uint8_t)(tos_vport_a&(uint8_t)(a[0]&0xffu));  /* AND, jak TOS */
+              ++kdbg_tos_vport_w;return 0;
+    case 30u: ++kdbg_tos_xbios30;
+              tos_vport_a=(uint8_t)(tos_vport_a|(uint8_t)(a[0]&0xffu));  /* OR, jak TOS */
+              ++kdbg_tos_vport_w;return 0;
+    case 31u: ++kdbg_tos_xbios31;return -32;              /* EINVFN: Xbtimer */
+    case 32u: {uint32_t table=((uint32_t)a[0]<<16)|(uint32_t)a[1];
+               const uint8_t *end=0;
+               ++kdbg_tos_xbios32;
+               if(table&&(int32_t)table>=0){
+                   end=tos_table_end((const uint8_t *)(uintptr_t)table);
+                   if(!end){
+                       /* Not a buffer we know: refuse instead of letting the Timer C
+                          interpreter walk memory the program may not own. */
+                       ++kdbg_tos_audio_refused;
+                       return (int32_t)(intptr_t)kaudio_dosound(0);   /* stop, politely */
+                   }
+               }
+               return (int32_t)(intptr_t)kaudio_dosound_span((const uint8_t *)(uintptr_t)table,end);}
+    case 2u: case 3u: return (int32_t)(uintptr_t)(tos_screen?tos_screen:(uint8_t *)(uintptr_t)0x00C00000UL); /* Physbase/Logbase (never 0) */
+    case 4u: return (int32_t)tos_mode;                                    /* Getrez */
+    case 5u: {uint32_t log=((uint32_t)a[0]<<16)|a[1];                     /* Setscreen(log,phys,rez) */
+              int16_t rez=(int16_t)a[4];                   /* rez is a WORD, not a long */
+              /* -1 (0xFFFFFFFF) and 0 both mean "keep the current screen".
+                 The old `if(log)` treated -1 as a real address and clobbered
+                 the private buffer with 0xFFFFFFFF. */
+              if(log&&log!=0xffffffffUL)tos_screen=(uint8_t *)(uintptr_t)log;
+              if(rez>=0&&rez<=2)tos_mode=(uint8_t)rez;
+              /* A running window must follow the program's new resolution. */
+              tos_window_geometry_changed();
+              tos_desktop_pending=1u;
+              return 0;}
+    case 6u: {uint32_t p=((uint32_t)a[0]<<16)|a[1];int k;                 /* Setpalette */
+              if(p){const uint16_t *s=(const uint16_t *)(uintptr_t)p;for(k=0;k<16;k++)tos_palette[k]=s[k];}
+              if(tos_desktop_active)tos_apply_palette();
+              return 0;}
+    case 7u: { /* Setcolor(index,-1) queries without changing the palette. */
+        uint16_t idx=a[0],col=a[1],old;
+        if(idx>=16u)return -1;
+        old=tos_palette[idx];
+        if((int16_t)col>=0){tos_palette[idx]=col&0x777u;
+            if(tos_desktop_active)tos_apply_palette();}
+        return old;}
+    case 37u: /* Vsync: mark that a frame is ready.  It must NOT bypass the
+                 presentation deadline: GEM programs call Vsync constantly (the
+                 AES event loop does it internally), and every forced present
+                 costs a full damage scan + convert + compose + flush.  That is
+                 what made a drawn menu take seconds - ~1.3 ms per rectangle,
+                 thousands of rectangles per page.  The regular content deadline
+                 (25 Hz) now coalesces them; a frame is never lost, only merged. */
+              tos_composite_pending=1u;return 0;
+    case 38u: {                                                           /* Supexec */
+        /* Run a user callback in supervisor mode.  TOS leaves the callback
+           argument in d3; the trap stub saved the user's d3 at frame-48, so
+           pass it back.  SysInfo reads AES global[0] this way when deciding
+           whether it is allowed to run. */
+        uint32_t fnptr=((uint32_t)a[0]<<16)|a[1];
+        uint32_t arg3=frame?rd32((const uint8_t *)frame-48u):0u;
+        if(!fnptr)return 0;
+        return (int32_t)asf_tos_supexec((void *)(uintptr_t)fnptr,arg3);
+    }
+    case 0x00feu: {                                                       /* ASF control */
+        uint16_t cmd=a[0];
+        switch(cmd){
+        case 0u: kblock_cache_enable(0u);tos_print("SMARTDRV: CACHE OFF\n");return 0;
+        case 1u: kblock_cache_enable(1u);tos_print("SMARTDRV: CACHE ON, ");
+                 tos_dec(kblock_cache_slots());tos_print(" sectors\n");return 0;
+        case 2u: return (int32_t)kernel_wall_ticks;
+        case 3u: return (int32_t)kblock_cache_hits();
+        case 4u: return (int32_t)kblock_cache_misses();
+        case 5u: tos_diskpd();return 0;
+        case 6u: kblock_cache_release();tos_print("SMARTDRV: CACHE OFF + CLEARED\n");return 0;
+        case 7u: tos_window_enabled=1u;tos_print("T2: WINDOW MODE ON\n");return 0;
+        case 10u: {                                           /* raw IKBD ring dump */
+            int32_t i;
+            const char *hx="0123456789ABCDEF";
+            tos_print("IKBD TOTAL: ");tos_dec((uint32_t)kernel_ikbd_raw_total());
+            tos_print("  DROPPED: ");tos_dec((uint32_t)kernel_ikbd_drop_count());tos_print("\n");
+            tos_print("RAW (data:status), newest last:\n");
+            for(i=23;i>=0;i--){
+                int32_t v=kernel_ikbd_raw_last((uint32_t)i);
+                uint8_t d,st;
+                if(v<0)continue;
+                d=(uint8_t)v;st=(uint8_t)((uint32_t)v>>8);
+                tos_putc(hx[(d>>4)&15u]);tos_putc(hx[d&15u]);tos_putc(':');
+                tos_putc(hx[(st>>4)&15u]);tos_putc(hx[st&15u]);tos_putc(' ');
+            }
+            tos_print("\n");
+            return 0;
+        }
+        case 9u: {                                                       /* log hex dump */
+            int32_t n=kernel_console_log_count(),k;
+            tos_print("LOG LINES: ");tos_dec((uint32_t)n);tos_print("\n");
+            for(k=(n>3?n-3:0);k<n;k++){
+                const char *s=kernel_console_log_line(k);
+                int j;
+                tos_print("L");tos_dec((uint32_t)k);tos_print(": ");
+                for(j=0;s[j]&&j<40;j++){
+                    const char *hx="0123456789ABCDEF";
+                    tos_putc(hx[((uint8_t)s[j]>>4)&15u]);
+                    tos_putc(hx[(uint8_t)s[j]&15u]);
+                    tos_putc(' ');
+                }
+                tos_print("\n");
+            }
+            return 0;
+        }
+        case 8u: tos_window_enabled=0u;
+                 if(tos_desktop_active)tos_desktop_leave();   /* back to text */
+                 tos_print("T2: WINDOW MODE OFF\n");return 0;
+        default: return 0;
+        }
+    }
+    default: return 0;
+    }
+}
+
+static void tos_diskpd(void);
+
+/* --- DISKPD: short disk benchmark (write/read/seek) ----------------------- */
+static void tos_diskpd(void)
+{
+    static const char path[]="\\DISKPD.TMP";
+    uint32_t chunk=8192u,total=64u*1024u,i,t0,t1,wt,rt,st,kbs,guard;
+    uint8_t *buf=0;
+    if(kfat_create_path(path)!=FAT_FILE_FOUND){tos_print("DISKPD: cannot create temp file\n");return;}
+    buf=(uint8_t *)kmem_alloc(chunk,512u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+    if(!buf){tos_print("DISKPD: no memory\n");return;}
+    for(i=0u;i<chunk;i++)buf[i]=(uint8_t)(i*7u);
+    tos_print("DISKPD 1.0 - 64 KB write/read + 12 random reads\n");
+    tos_print("  cache: ");tos_print(kblock_cache_sectors()?"ON":"OFF");tos_print("\n");
+    t0=(uint32_t)kernel_wall_ticks;
+    guard=0u;{uint32_t off=0u,w=0u;while(off<total&&guard++<200u){if(kfat_write_path_at(path,off,buf,chunk,&w)!=FAT_FILE_FOUND)break;if(!w)break;off+=w;}}
+    t1=(uint32_t)kernel_wall_ticks;wt=t1-t0;
+    t0=(uint32_t)kernel_wall_ticks;
+    guard=0u;{uint32_t off=0u,g=0u;while(off<total&&guard++<200u){if(kfat_read_path_at(path,off,buf,chunk,&g)!=FAT_FILE_FOUND)break;if(!g)break;off+=g;}}
+    t1=(uint32_t)kernel_wall_ticks;rt=t1-t0;
+    t0=(uint32_t)kernel_wall_ticks;
+    {uint32_t seed=12345u,k;for(k=0u;k<12u;k++){uint32_t o,g;
+        seed=seed*1103515245u+12345u;o=((seed>>9)%(total/512u))*512u;
+        if(kfat_read_path_at(path,o,buf,512u,&g)!=FAT_FILE_FOUND)break;}}
+    t1=(uint32_t)kernel_wall_ticks;st=t1-t0;
+    tos_print("  write: ");tos_dec(wt);tos_print(" ticks (");tos_dec(wt*20u);tos_print(" ms) ");
+    kbs=wt?((total/1024u)*50u/wt):0u;tos_dec(kbs);tos_print(" KB/s\n");
+    tos_print("  read : ");tos_dec(rt);tos_print(" ticks (");tos_dec(rt*20u);tos_print(" ms) ");
+    kbs=rt?((total/1024u)*50u/rt):0u;tos_dec(kbs);tos_print(" KB/s\n");
+    tos_print("  seek : ");tos_dec(st);tos_print(" ticks/12 reads, avg ");
+    tos_dec(st*20u/12u);tos_print(" ms\n");
+    kfat_delete_path(path);
+    kmem_free(buf,KMEM_OWNER_KERNEL);
+}
+
+/* --- AES/VDI (trap #2): LEGACY / EXPERIMENTAL stub ------------------------- */
+static uint8_t aes_windows;
+static int16_t aes_geom[8][4];
+uint16_t tos_aes_trace[64];      /* [0..31]=opcode, [32..63]=intin[0] */
+uint32_t tos_aes_trace_n;
+/* Full request/response log for the first 64 GEM calls: lets us see exactly
+   which AES/VDI operations SysInfo asks for and what we answered.
+   Layout per call: [0]=is_aes, [1..6]=contrl[0..5], [7..10]=intin[0..3],
+   [11..14]=intout[0..3], [15]=result. */
+uint16_t tos_aes_log[64*32];   /* 16 declared outputs per call */
+uint32_t tos_aes_log_n;
+/* AES version advertised through appl_init.  TOS v4.x reports 0x0340; we keep
+   the EmuTOS "modern but not 3D" value.  SysInfo only needs it to be non-zero,
+   but the number also tells applications which AES calls to expect. */
+#define TOS_AES_VERSION 0x0330u
+/* Command line passed to the running TOS program; shel_read() hands it back. */
+static char tos_cmdline[128];
+/* The TOS persona runs synchronously inside asf_tos_enter, so the kernel main
+   loop (and with it the compositor) is blocked for the whole program.  Pump
+   one composite from the app's event loop so its window actually reaches the
+   screen while it is alive. */
+
+/* Deliver a WM_REDRAW to the app's evnt_multi message buffer once, so it
+   paints its page instead of waiting forever for a window expose. */
+static uint8_t tos_redraw_sent;
+static char tos_win_name[64];   /* WF_NAME answer */
+/* AES message queue.  A GEM program blocks in evnt_mesag/evnt_multi until the
+   window manager hands it a message (WM_REDRAW being the one every program
+   waits for right after opening a window).  Answering "no message" immediately
+   made such programs spin forever - reported as "LDW hung the system". */
+#define TOS_MSG_MAX 8
+static int16_t tos_msgq[TOS_MSG_MAX][8];
+static uint8_t tos_msgq_head,tos_msgq_tail;
+static int16_t tos_redraw_msg[8];
+static void tos_msg_post(const int16_t *m)
+{
+    uint8_t next=(uint8_t)((tos_msgq_tail+1u)%TOS_MSG_MAX);
+    unsigned i;
+    if(next==tos_msgq_head)return;                 /* full: drop the oldest need */
+    for(i=0;i<8u;++i)tos_msgq[tos_msgq_tail][i]=m[i];
+    tos_msgq_tail=next;
+}
+static int tos_msg_take(int16_t *out)
+{
+    unsigned i;
+    if(tos_msgq_head==tos_msgq_tail)return 0;
+    for(i=0;i<8u;++i)out[i]=tos_msgq[tos_msgq_head][i];
+    tos_msgq_head=(uint8_t)((tos_msgq_head+1u)%TOS_MSG_MAX);
+    return 1;
+}
+static void tos_msg_redraw(void);   /* needs the window geometry, defined below */
+
+/* wind_get(WF_FIRSTXYWH/NEXTXYWH) cursor: one client rectangle then end. */
+static uint8_t aes_wg_first;
+/* Diagnostics: how many keys/messages evnt_multi actually handed to the app. */
+uint32_t tos_evkbd_n,tos_evmes_n,tos_evmulti_n;
+
+/* --- minimal AES resource/object support (rsrc_*, form_*, objc_draw) ------ */
+#define AES_OBJ_SIZE 24
+static int16_t aes_w(const uint8_t *p){return (int16_t)(((uint16_t)p[0]<<8)|p[1]);}
+static uint16_t aes_u(const uint8_t *p){return (uint16_t)(((uint16_t)p[0]<<8)|p[1]);}
+
+/* rsrc_obfix(): convert the packed character coordinates of one object
+   (ob_x,ob_y,ob_w,ob_h) to pixels, as the AES does after loading a resource. */
+static void aes_obfix(uint8_t *tree,int obj)
+{
+    uint8_t *o=tree+(uint32_t)(uint16_t)obj*AES_OBJ_SIZE;
+    int type=aes_w(o+6);
+    int is_text;
+    /* Real GEM converts CHARACTER coordinates to pixels only for the text-like
+       object types; G_BOX/G_IBOX/G_IMAGE already carry pixels and must be left
+       alone.  Multiplying everything by 8/16 corrupted pixel-sized objects
+       (a width of 300 became 300*8 = 2400 and wrapped), and a wrapped value of
+       0 is exactly the kind of divisor that killed the caller. */
+    switch(type){
+    case 11: case 12: case 21: case 22: case 23:      /* BOXTEXT/TITLE/TEXT/FTEXT/FBOXTEXT */
+    case 25: case 26: case 28: case 29: case 30:      /* BOXCHAR/BUTTON/STRING/ICON/CICON */
+        is_text=1;break;
+    default:
+        is_text=0;break;
+    }
+    if(!is_text)return;                     /* pixels: nothing to convert */
+    {uint8_t *g=o+16;
+     static const int mul[4]={8,16,8,16};
+     int i;
+     for(i=0;i<4;i++){
+         uint16_t w=(uint16_t)(((uint16_t)g[i*2]<<8)|g[i*2+1]);
+         int coff=(w>>8)&0xff,cpos=w&0xff,r;
+         if(i==2&&cpos==80)r=640;else r=cpos*mul[i];
+         r+=(coff>128)?(coff-256):coff;
+         if(r<0)r=0;
+         g[i*2]=(uint8_t)(r>>8);g[i*2+1]=(uint8_t)r;
+     }}
+}
+
+/* Trees must be walked defensively: a cyclic or malformed resource link would
+   otherwise recurse forever.  A fixed node budget bounds the work. */
+uint32_t aes_dbg_tree,aes_dbg_type;
+/* AES opcode histogram: which GEM functions SysInfo actually uses. */
+uint32_t tos_aes_opcount[256];
+/* --- Diagnostics the hardware audit asked for -----------------------------
+   Record the FIRST unsupported call per layer with the CALLER's PC, and count
+   faults and normal exits separately, so "why did it stop" is answerable
+   without guessing.  Return values are deliberately NOT changed here: the
+   contract of each function differs (pointer / status / void), so a blanket
+   -32 would be wrong. */
+uint32_t kdbg_unsup_layer,kdbg_unsup_fn,kdbg_unsup_pc,kdbg_unsup_count;
+/* Every unsupported call, in order (layer<<16|fn), so the trail can be listed
+   instead of guessing from one sample. */
+uint32_t kdbg_unsup_ring[32];
+static uint32_t tos_unsup_head;
+uint32_t kdbg_exit_normal,kdbg_exit_fault;
+static uint32_t tos_last_caller_pc;
+/* One record per unsupported call: layer, function, caller PC, the first four
+   arguments (as the program passed them) and the value we return.  A bare
+   "unsupported" says nothing about WHY the program ended, and the termination
+   is recorded separately (normal Pterm vs exception). */
+#define TOS_UNSUP_MAX 16
+uint32_t kdbg_unsup_rec[TOS_UNSUP_MAX][8];
+static void tos_note_unsupported_at(int layer,uint32_t fn,int32_t result,
+                                    const int16_t *args,int nargs)
+{
+    uint32_t *e;
+    ++kdbg_unsup_count;
+    e=kdbg_unsup_rec[tos_unsup_head%TOS_UNSUP_MAX];
+    e[0]=((uint32_t)layer<<16)|(fn&0xffffu);
+    e[1]=tos_last_caller_pc;
+    e[2]=(uint32_t)result;
+    e[3]=nargs>0&&args?(uint32_t)(uint16_t)args[0]:0u;
+    e[4]=nargs>1&&args?(uint32_t)(uint16_t)args[1]:0u;
+    e[5]=nargs>2&&args?(uint32_t)(uint16_t)args[2]:0u;
+    e[6]=nargs>3&&args?(uint32_t)(uint16_t)args[3]:0u;
+    e[7]=tos_unsup_head;                       /* sequence number */
+    ++tos_unsup_head;
+    if(kdbg_unsup_count==1u){                 /* first one only: the trail head */
+        kdbg_unsup_layer=(uint32_t)layer;
+        kdbg_unsup_fn=fn;
+        kdbg_unsup_pc=tos_last_caller_pc;
+    }
+}
+void tos_note_unsupported(int layer,uint32_t fn)
+{
+    tos_note_unsupported_at(layer,fn,0,0,0);
+}
+/* Termination record: normal exit and exception are counted separately. */
+uint32_t kdbg_term_normal,kdbg_term_code,kdbg_term_fault,kdbg_term_vector,kdbg_term_pc;
+/* Bounding box of a dialog tree: walk the child chain (bounded) and take the
+   union of every object's absolute rectangle. */
+static void aes_tree_bbox_rec(const uint8_t *tree,int obj,int xo,int yo,
+                              int16_t *bx,int16_t *by,int16_t *bw,int16_t *bh,int *budget)
+{
+    const uint8_t *o;int c,x,y,w,h;
+    if(obj<0||obj>1024||*budget<=0)return;
+    --*budget;
+    o=tree+(uint32_t)obj*AES_OBJ_SIZE;
+    x=xo+aes_w(o+16);y=yo+aes_w(o+18);w=aes_w(o+20);h=aes_w(o+22);
+    if(w>0&&h>0){
+        if(*bw==0&&*bh==0){*bx=(int16_t)x;*by=(int16_t)y;*bw=(int16_t)w;*bh=(int16_t)h;}
+        else{
+            int x2=x+w,y2=y+h,bx2=*bx+*bw,by2=*by+*bh;
+            if(x<*bx)*bx=(int16_t)x;
+            if(y<*by)*by=(int16_t)y;
+            if(x2>bx2)bx2=x2;
+            if(y2>by2)by2=y2;
+            *bw=(int16_t)(bx2-*bx);*bh=(int16_t)(by2-*by);
+        }
+    }
+    c=aes_w(o+2);
+    while(c>=0&&c<=1024&&c!=obj&&*budget>0){
+        aes_tree_bbox_rec(tree,c,x,y,bx,by,bw,bh,budget);
+        {const uint8_t *co=tree+(uint32_t)c*AES_OBJ_SIZE;c=aes_w(co+0);
+         if(c==0&&aes_w(co+2)==0)break;}
+    }
+}
+static void aes_tree_bbox(const uint8_t *tree,int16_t *bx,int16_t *by,int16_t *bw,int16_t *bh)
+{
+    int budget=512;
+    *bx=0;*by=0;*bw=0;*bh=0;
+    aes_tree_bbox_rec(tree,0,0,0,bx,by,bw,bh,&budget);
+}
+
+static int aes_obj_offset(const uint8_t *tree,int obj,int wanted,int xo,int yo,
+                          int *outx,int *outy,int *budget)
+{
+    const uint8_t *o;int c,x,y;
+    if(obj<0||obj>1024||*budget<=0)return 0;
+    --*budget;o=tree+(uint32_t)obj*AES_OBJ_SIZE;
+    x=xo+aes_w(o+16);y=yo+aes_w(o+18);
+    if(obj==wanted){*outx=x;*outy=y;return 1;}
+    c=aes_w(o+2);
+    while(c>=0&&c<=1024&&c!=obj&&*budget>0){
+        int next;
+        if(aes_obj_offset(tree,c,wanted,x,y,outx,outy,budget))return 1;
+        next=aes_w(tree+(uint32_t)c*AES_OBJ_SIZE);
+        if(next==c)break;
+        c=next;
+    }
+    return 0;
+}
+
+/* objc_find returns the deepest visible object under the pointer, or -1.
+   A successful hit is an object INDEX, never a generic success boolean. */
+static int aes_obj_find(const uint8_t *tree,int obj,int xo,int yo,int depth,
+                        int mx,int my,int *budget)
+{
+    const uint8_t *o;int x,y,c,found;
+    if(obj<0||obj>1024||*budget<=0)return -1;
+    --*budget;o=tree+(uint32_t)obj*AES_OBJ_SIZE;
+    if(aes_u(o+8)&0x0080u)return -1;
+    x=xo+aes_w(o+16);y=yo+aes_w(o+18);
+    if(mx<x||my<y||mx>=x+aes_w(o+20)||my>=y+aes_w(o+22))return -1;
+    found=obj;
+    if(depth==0)return found;
+    c=aes_w(o+2);
+    while(c>=0&&c<=1024&&c!=obj&&*budget>0){
+        int next,hit=aes_obj_find(tree,c,x,y,depth-1,mx,my,budget);
+        if(hit>=0)found=hit;
+        next=aes_w(tree+(uint32_t)c*AES_OBJ_SIZE);
+        if(next==c)break;
+        c=next;
+    }
+    return found;
+}
+
+/* ---- AES drawing clip ----------------------------------------------------
+   objc_draw/objc_change both carry a clipping rectangle (intin[2..5]) that the
+   renderer ignored completely: a request to repaint 8x16 pixels repainted a
+   whole 640x400 panel - 258080 requested pixels instead of 128 (2016x).  Every
+   primitive now intersects with this context, invisible work is skipped and the
+   damage reported is only what was actually painted. */
+static int aes_clip_on;
+static int aes_clip_x0,aes_clip_y0,aes_clip_x1,aes_clip_y1;
+static void aes_clip_set(int x,int y,int w,int h)
+{
+    aes_clip_x0=x;aes_clip_y0=y;aes_clip_x1=x+w;aes_clip_y1=y+h;
+    if(aes_clip_x0<0)aes_clip_x0=0;
+    if(aes_clip_y0<0)aes_clip_y0=0;
+    if(aes_clip_x1>640)aes_clip_x1=640;
+    if(aes_clip_y1>400)aes_clip_y1=400;
+    aes_clip_on=1;
+}
+static void aes_clip_clear(void){aes_clip_on=0;}
+static int aes_clip_visible(void){return !aes_clip_on||(aes_clip_x1>aes_clip_x0&&aes_clip_y1>aes_clip_y0);}
+/* Intersect a rectangle with the clip; 0 means "nothing visible". */
+static int aes_clip_rect(int *x,int *y,int *w,int *h)
+{
+    int x1,y1;
+    if(*w<=0||*h<=0)return 0;
+    if(!aes_clip_on)return 1;
+    x1=*x+*w;y1=*y+*h;
+    if(*x<aes_clip_x0)*x=aes_clip_x0;
+    if(*y<aes_clip_y0)*y=aes_clip_y0;
+    if(x1>aes_clip_x1)x1=aes_clip_x1;
+    if(y1>aes_clip_y1)y1=aes_clip_y1;
+    *w=x1-*x;*h=y1-*y;
+    return (*w>0&&*h>0);
+}
+#define AES_CLIP_FILL(rx,ry,rw,rh,ink) do{int _x=(rx),_y=(ry),_w=(rw),_h=(rh); \
+    if(aes_clip_rect(&_x,&_y,&_w,&_h))tos_vdi_fill_rect(_x,_y,_w,_h,(ink));}while(0)
+/* Text is clipped per character: a partially visible string must not paint
+   outside the caller's rectangle, which is how a partial redraw smeared over
+   neighbouring objects. */
+static void aes_obj_text(const char *s,int x,int y,int ink)
+{
+    int i=0,n=0;
+    if(!s)return;
+    if(!aes_clip_on){tos_vdi_text(x,y,s,ink,1);return;}
+    while(s[i]){++n;++i;}
+    /* Fully visible string: one call, no clipping work. */
+    {   int tx=x,ty=y-16,tw=n*8,th=16;
+        if(aes_clip_rect(&tx,&ty,&tw,&th)&&tx==x&&ty==y-16&&tw==n*8&&th==16){
+            tos_vdi_text(x,y,s,ink,1);
+            return;
+        }
+    }
+    /* Border case: checking the cell is NOT enough - the glyph writer must clip
+       the MASK, otherwise a solid 8x16 glyph with a 1x1 clip still asks for 128
+       pixels in 16 spans that leave the rectangle (the audit's measurement).
+       The AES rectangle is handed to the VDI as a glyph clip, so the
+       application's own vs_clip state is left alone. */
+    tos_vdi_text_clip(aes_clip_x0,aes_clip_y0,aes_clip_x1,aes_clip_y1);
+    for(i=0;s[i];++i){
+        int cx=x+i*8,cy=y-16,cw=8,ch=16;
+        if(aes_clip_rect(&cx,&cy,&cw,&ch)){char b[2];b[0]=s[i];b[1]=0;tos_vdi_text(x+i*8,y,b,ink,1);}
+    }
+    tos_vdi_text_clip_off();
+}
+static void aes_obj_draw(const uint8_t *tree,int obj,int xo,int yo,int depth,int *budget)
+{
+    const uint8_t *o;int type,x,y,w,h,c,selected;
+    if(obj<0||obj>1024||depth<0||*budget<=0)return;
+    (*budget)--;
+    o=tree+(uint32_t)(uint16_t)obj*AES_OBJ_SIZE;
+    if(aes_u(o+8)&0x0080u)return; /* OF_HIDETREE */
+    selected=(aes_u(o+10)&1u)!=0;
+    type=(int)(aes_u(o+6)&0xffu); /* high byte is application-defined */
+    x=xo+aes_w(o+16);y=yo+aes_w(o+18);w=aes_w(o+20);h=aes_w(o+22);
+    switch(type){
+    case 20: case 22: case 26: case 27: case 30: /* BOX/BOXTEXT/BUTTON/BOXCHAR/FBOXTEXT */
+        if(w>0&&h>0){
+            AES_CLIP_FILL(x,y,w,h,selected?1:0);
+            AES_CLIP_FILL(x,y,w,1,1);
+            AES_CLIP_FILL(x,y+h-1,w,1,1);
+            AES_CLIP_FILL(x,y,1,h,1);
+            AES_CLIP_FILL(x+w-1,y,1,h,1);
+        }
+        break;
+    default:
+        /* Unknown object type.  SysInfo's panel root reads as ob_type 0x7114
+           instead of G_BOX, and a strict switch silently dropped the panel /
+           button frames because of it.  Draw the frame anyway when the type is
+           outside the whole GEM range and the rectangle is panel-sized. */
+        if((type<20||type>32)&&w>=16&&h>=16){
+            AES_CLIP_FILL(x,y,w,1,1);
+            AES_CLIP_FILL(x,y+h-1,w,1,1);
+            AES_CLIP_FILL(x,y,1,h,1);
+            AES_CLIP_FILL(x+w-1,y,1,h,1);
+        }
+        break;
+    }
+    if(type==21||type==22||type==29||type==30){        /* text objects: TEDINFO */
+        const uint8_t *td=(const uint8_t *)(uintptr_t)rd32(o+12);
+        if(td){const char *s=(const char *)(uintptr_t)rd32(td);if(s)aes_obj_text(s,x,y+(h+16)/2,selected?0:1);}
+    }else if(type==26||type==28||type==32){  /* direct string */
+        const char *s=(const char *)(uintptr_t)rd32(o+12);
+        if(s){int n=0;while(s[n])++n;
+            aes_obj_text(s,type==26?x+(w-n*8)/2:x,y+(h+16)/2,selected?0:1);}
+    }
+    if(depth>0){
+        c=aes_w(o+2);
+        while(c>=0&&c<=1024&&c!=obj&&*budget>0){
+            aes_obj_draw(tree,c,x,y,depth-1,budget);
+            {const uint8_t *n=tree+(uint32_t)(uint16_t)c*AES_OBJ_SIZE;int nc=aes_w(n);
+             if(nc==c)break;
+         c=nc;}
+        }
+    }
+}
+static int32_t tos_aes_dispatch(const int16_t *contrl,const int16_t *intin,
+                                const int16_t *ptsin,int16_t *intout,int16_t *ptsout,
+                                const uint8_t *global,void **addrin,void **addrout)
+{
+    (void)ptsin;(void)ptsout;(void)addrout;
+    /* AES entry points (GEM passes the AES opcode in contrl[0]). */
+    switch(contrl[0]){
+    case 10:                                    /* appl_init */
+        /* GEM fills the AESGLOBAL block through the AESPB global pointer:
+           ap_version, ap_count, ap_id, ap_private, ap_ptree, ap_rscmem,
+           ap_rsclen, ap_planes, ap_3resv, ap_4resv (30 bytes).  SysInfo reads
+           global[0] (ap_version) at startup and, when the AES never set it,
+           refuses to run with DON'T PUT SYSINFO IN THE AUTO FOLDER. */
+        if(global){
+            uint8_t *g=(uint8_t *)(uintptr_t)global;
+            int k;
+            for(k=0;k<30;k++)g[k]=0u;
+            g[0]=(uint8_t)(TOS_AES_VERSION>>8);g[1]=(uint8_t)TOS_AES_VERSION;
+            g[3]=1u;                        /* ap_count  = 1 */
+            g[5]=1u;                        /* ap_id     = 1 */
+            g[21]=1u;                       /* ap_planes = 1 (mono) */
+        }
+        /* appl_init declares ONE output WORD (ap_id).  It used to write four
+           (id, version, 0x0300, 0x0100), which corrupts whatever follows an
+           exactly sized intout[] - the caller's own variables. */
+        if(intout)intout[0]=1;
+        return 1;
+    case 19:                                    /* appl_exit */
+        return 1;
+    case 77:                                    /* graf_handle */
+        /* graf_handle -> handle, char w/h, box w/h.  The box metrics (1 and 0
+           before) are what GEM uses to size button/border frames. */
+        if(intout){intout[0]=1;intout[1]=8;intout[2]=16;intout[3]=11;intout[4]=19;}
+        if(ptsout){ptsout[0]=640;ptsout[1]=400;}
+        return 1;
+    case 78:                                    /* graf_mouse */
+        return 1;
+    /* Menu: bar/title/item/icheck/tnormal/attach/text. No-op for now but a
+       defined answer, so the application does not follow a null pointer. */
+    case 30: case 31: case 32: case 33: case 34: case 35: case 36:
+        return 1;
+    /* Object tree: objc_add/delete/draw/find/offset/order/edit/change/sysvar.
+       draw needs the real tree walk; the rest are safe for now. */
+    case 44: { /* objc_offset: result, absolute x, absolute y */
+        int x=0,y=0,budget=2048,ok=0;
+        if(addrin&&addrin[0]&&intin)
+            ok=aes_obj_offset(addrin[0],0,intin[0],0,0,&x,&y,&budget);
+        if(intout){intout[1]=(int16_t)x;intout[2]=(int16_t)y;}
+        return ok;
+    }
+    case 43: { /* objc_find(tree,start,depth,mx,my) */
+        int x=0,y=0,budget=2048,obj;
+        const uint8_t *tree;
+        if(!addrin||!addrin[0]||!intin)return -1;
+        tree=addrin[0];obj=intin[0];
+        if(!aes_obj_offset(tree,0,obj,0,0,&x,&y,&budget))return -1;
+        x-=aes_w(tree+(uint32_t)obj*24u+16u);
+        y-=aes_w(tree+(uint32_t)obj*24u+18u);
+        budget=2048;
+        return aes_obj_find(tree,obj,x,y,intin[1],intin[2],intin[3],&budget);
+    }
+    case 40: case 41:
+    case 45: case 46: case 48:
+        return 1;
+    case 20: {                                  /* evnt_keybd -> scan<<8|ASCII */
+        /* Returning the ASCII alone made an arrow key look like "no key":
+           Up = scancode 0x48, ASCII 0 -> 0x0000 instead of 0x4800.  evnt_multi
+           already packed it as scan<<8|ASCII; the single-key call did not.
+           GEM's evnt_keybd waits for a key, so wait - bounded, pumping input. */
+        uint32_t key;unsigned guard=0;uint32_t start=tos_mfp_ticks;
+        for(;;){
+            if(tos_key_ready()){
+                key=(uint32_t)tos_getkey();
+                return (int32_t)(((key>>8)&0xff00u)|(key&0xffu));
+            }
+            if(++guard>20000u)break;
+            tos_poll_input();tos_clock_tick();tos_composite_work();
+            if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+            if((uint32_t)(tos_mfp_ticks-start)>=200u)break;   /* ~1 s per pass */
+        }
+        return 0;}
+    case 21:                                    /* evnt_button */
+    case 22: {                                  /* evnt_mouse  */
+        /* AES output arrays: intout[0] is the RETURN CODE (asf_tos_aesvdi
+           writes it after the dispatch), so mx,my,buttons,modifiers belong in
+           intout[1..4].  The previous version wrote them at [0..3] and the
+           return code overwrote mx - the audit's "[1,90,1,4,21845]" result.
+           evnt_mouse flags are 0 = wait for ENTER, 1 = wait for LEAVE (not a
+           bit mask), and evnt_button must count the requested clicks. */
+        int is_mouse=(contrl[0]==22);
+        uint16_t want_mask=(uint16_t)(intin?(uint16_t)intin[is_mouse?0:1]:0u);
+        uint16_t want_state=(uint16_t)(intin?(uint16_t)intin[is_mouse?0:2]:0u);
+        int want_clicks=(int)(intin?(uint16_t)intin[0]:1);
+        int32_t rx=0,ry=0,rw=0,rh=0;
+        int16_t m[5];unsigned guard=0;uint32_t start=tos_mfp_ticks;
+        int clicks=0,last_buttons=-1;
+        if(is_mouse&&intin){rx=(int16_t)intin[1];ry=(int16_t)intin[2];
+                            rw=(int16_t)intin[3];rh=(int16_t)intin[4];}
+        if(want_clicks<1)want_clicks=1;
+        for(;;){
+            int hit=0;
+            tos_poll_input();tos_mouse_state(m);
+            if(m[3]!=last_buttons){last_buttons=m[3];++clicks;}
+            if(is_mouse){
+                int inside=m[1]>=rx&&m[2]>=ry&&(int32_t)m[1]<rx+rw&&(int32_t)m[2]<ry+rh;
+                /* flags: 0 = entered the rectangle, 1 = left it */
+                hit=((want_mask!=0u)?(!inside):(inside))?1:0;
+            }else{
+                if((m[3]&want_mask)==(want_state&want_mask)&&clicks>=want_clicks)hit=1;
+            }
+            if(hit){
+                if(intout){intout[1]=m[1];intout[2]=m[2];intout[3]=m[3];intout[4]=m[4];}
+                if(is_mouse)++kdbg_evmouse_n;else ++kdbg_evbtn_n;
+                return 1;
+            }
+            if(++guard>20000u)break;                       /* hard cap */
+            tos_clock_tick();tos_composite_work();
+            if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+            if((uint32_t)(tos_mfp_ticks-start)>=200u)break;  /* ~1 s per pass */
+            if(!tos_window_enabled)break;                  /* no window: no mouse */
+        }
+        if(intout){intout[1]=m[1];intout[2]=m[2];intout[3]=m[3];intout[4]=m[4];}
+        return 0;}
+    case 23: {                                  /* evnt_mesag(msg) -> 0/1 */
+        /* Block (bounded) until the WM has a message.  GEM programs sit in this
+           call; returning 0 immediately made them spin with no way out.
+           Without a window there are no window messages at all, so a console
+           program is answered at once instead of waiting for nothing. */
+        if(!tos_window_enabled){if(intout)intout[0]=0;return 0;}
+        uint32_t start=tos_mfp_ticks;int32_t ms=intin?((int32_t)(uint16_t)intin[0]|((int32_t)(uint16_t)intin[1]<<16)):0;
+        /* Clamp: a program passing garbage milliseconds must not be able to
+           block the whole machine.  A bounded wait keeps the desktop alive. */
+        uint32_t wait=(uint32_t)(ms>0?ms/5+1:400);
+        if(wait>1000u)wait=1000u;                         /* <= ~5 s */
+        int16_t *m=(addrin&&addrin[0])?(int16_t *)addrin[0]:0;
+        {unsigned guard=0;
+        for(;;){
+            if(++guard>20000u){if(intout)intout[0]=0;return 0;}   /* hard cap */
+            if(m&&tos_msg_take(m)){if(intout)intout[0]=1;return 1;}
+            tos_poll_input();tos_clock_tick();tos_composite_work();
+            if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+            if((uint32_t)(tos_mfp_ticks-start)>=wait){
+                /* Nothing arrived: hand over a redraw, which is what a real WM
+                   posts for a window that may need repainting. */
+                tos_msg_redraw();
+                if(m&&tos_msg_take(m)){if(intout)intout[0]=1;return 1;}
+                if(intout)intout[0]=0;
+                return 0;
+            }
+        }}}
+
+    case 24: {                                  /* evnt_timer(ms) -> wait */
+        uint32_t start=tos_mfp_ticks;
+        if(!tos_window_enabled){if(intout)intout[0]=0;return 0;}
+        int32_t ms=intin?((int32_t)(uint16_t)intin[0]|((int32_t)(uint16_t)intin[1]<<16)):0;
+        uint32_t wait=(uint32_t)(ms>0?ms/5+1:1);
+        if(wait>1000u)wait=1000u;                         /* <= ~5 s */
+        if(intout)intout[0]=0;
+        {unsigned guard=0;
+        while((uint32_t)(tos_mfp_ticks-start)<wait){
+            if(++guard>20000u)break;                   /* hard cap */
+            tos_poll_input();tos_clock_tick();tos_composite_work();
+            if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+        }}
+        return 0;}
+    case 26: return 0; /* evnt_dclick: one result, never overwrite eight words. */
+    case 25: { /* evnt_multi: return only requested events, with AES output ABI */
+        uint16_t mask;uint32_t start,wait_ticks;int16_t mouse[5];
+        if(!intin||!intout)return 0;
+        mask=(uint16_t)intin[0];
+        /* AES timer is a 32-bit millisecond value, low WORD first. */
+        wait_ticks=((uint32_t)(uint16_t)intin[15]<<16)|(uint16_t)intin[14];
+        wait_ticks=wait_ticks/5u+(wait_ticks%5u!=0u);
+        tos_clock_tick();start=tos_mfp_ticks;++tos_evmulti_n;
+        for(;;){
+            uint16_t events=0;unsigned k;
+            for(k=0;k<7u;k++)intout[k]=0;
+            tos_poll_input();tos_mouse_state(mouse);
+            for(k=1;k<=4u;k++)intout[k]=mouse[k];
+            if((mask&1u)&&tos_key_ready()){
+                uint32_t key=(uint32_t)tos_getkey();
+                intout[5]=(int16_t)(((key>>8)&0xff00u)|(key&0xffu));
+                intout[4]=tos_key_lastmods; /* modifiers at key-down, not after queued key-up */
+                events|=1u;++tos_evkbd_n;
+            }
+            if((mask&2u)&&((mouse[3]&intin[2])==intin[3])){
+                events|=2u;intout[6]=1;
+            }
+            for(k=0;k<2u;k++){
+                const int16_t *rect=intin+4u+5u*k;
+                uint16_t bit=(uint16_t)(4u<<k);
+                int inside=mouse[1]>=rect[1]&&mouse[2]>=rect[2]&&
+                    (int32_t)mouse[1]<(int32_t)rect[1]+rect[3]&&
+                    (int32_t)mouse[2]<(int32_t)rect[2]+rect[4];
+                if((mask&bit)&&(inside!=(rect[0]!=0)))events|=bit;
+            }
+            if(mask&16u){
+                /* Messages come from the queue now, so a redraw posted at window
+                   open (or later) is delivered exactly once instead of relying
+                   on a single one-shot flag. */
+                int16_t *m=(addrin&&addrin[0])?(int16_t *)addrin[0]:0;
+                if(m&&tos_msg_take(m)){++tos_evmes_n;events|=16u;}
+            }
+            tos_clock_tick();
+            if((mask&32u)&&(uint32_t)(tos_mfp_ticks-start)>=wait_ticks)events|=32u;
+            if(events||!mask)return events;
+            tos_composite_work();
+            if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+        }
+    }
+    case 120:                                   /* shel_read(path, tail) */
+        /* GEM shel_read: copy the AES command line and its tail into the two
+           addrin buffers.  SysInfo reads it to learn how it was started; an
+           empty result makes it believe it was put in the AUTO folder. */
+        if(addrin){
+            if(addrin[0]){
+                char *dst=(char *)(uintptr_t)addrin[0];uint32_t k=0u;
+                while(tos_cmdline[k]&&k<127u){dst[k]=tos_cmdline[k];++k;}
+                dst[k]=0;
+            }
+            if(addrin[1])((char *)(uintptr_t)addrin[1])[0]=0;
+        }
+        if(intout)intout[0]=1;
+        return 1;
+    case 124:                                   /* shel_find(path) */
+        /* Return our own command path so a caller looking for its file does
+           not conclude the file is missing. */
+        if(addrin&&addrin[0]){
+            char *dst=(char *)(uintptr_t)addrin[0];uint32_t k=0u;
+            while(tos_cmdline[k]&&k<127u){dst[k]=tos_cmdline[k];++k;}
+            dst[k]=0;
+        }
+        if(intout)intout[0]=1;
+        return 1;
+    case 100:                                   /* wind_create(kind,x,y,w,h) */
+        if(aes_windows<8u){
+            unsigned w=aes_windows++;
+            aes_geom[w][0]=intin?intin[1]:0;
+            aes_geom[w][1]=intin?intin[2]:0;
+            aes_geom[w][2]=intin?intin[3]:320;
+            aes_geom[w][3]=intin?intin[4]:160;
+            if(intout)intout[0]=(int16_t)(w+1u);
+            return (int32_t)(w+1u);
+        }
+        if(intout)intout[0]=0;
+        return 0;
+    case 101:                                   /* wind_open(handle,x,y,w,h) */
+        /* The geometry the program asks for must be REMEMBERED: wind_get has to
+           answer with it later.  Returning success without storing it left
+           programs with a zero-sized work area and they divided by it (KOBOLD:
+           divide by zero at 0x0401B6C2). */
+        if(intin){
+            int h=(int)(uint16_t)intin[0];
+            if(h>=1&&h<=8){
+                aes_geom[h-1][0]=(int16_t)intin[1];
+                aes_geom[h-1][1]=(int16_t)intin[2];
+                aes_geom[h-1][2]=(int16_t)intin[3];
+                aes_geom[h-1][3]=(int16_t)intin[4];
+            }
+            if(intout)intout[0]=(int16_t)h;
+            return 1;
+        }
+        return 0;
+    case 105:                                   /* wind_set(handle,field,...) */
+        if(intin){
+            int h=(int)(uint16_t)intin[0];
+            int f=(int)(uint16_t)intin[1];
+            if(h>=1&&h<=8&&f==2){               /* WF_NAME: title, NOT geometry */
+                int k;
+                for(k=0;k<63&&intin[3+k];++k)tos_win_name[k]=(char)intin[3+k];
+                tos_win_name[k]=0;
+            }
+            if(h>=1&&h<=8&&f==5){               /* WF_CXYWH: x,y,w,h */
+                aes_geom[h-1][0]=(int16_t)intin[2];
+                aes_geom[h-1][1]=(int16_t)intin[3];
+                aes_geom[h-1][2]=(int16_t)intin[4];
+                aes_geom[h-1][3]=(int16_t)intin[5];
+            }
+            if(intout)intout[0]=1;
+            return 1;
+        }
+        return 0;
+    case 102:                                   /* wind_close */
+    case 103:                                   /* wind_delete */
+        if(intout&&intin)intout[0]=intin[0];
+        return 1;
+    case 107:                                   /* wind_update */
+        return 1;
+    case 79:                                    /* graf_mkstate -> x,y,buttons,shift */
+        if(intout){
+            /* Report the real input state: no buttons, no modifiers.  Never
+               fabricate a click, or a program polling mkstate sees phantom
+               presses. */
+            tos_mouse_state(intout);
+        }
+        return 1;
+    case 104: {                                 /* wind_get(handle,field,...) */
+        /* Field numbers are the REAL AES ones (EmuTOS include/aesdefs.h):
+             WF_KIND=1 WF_NAME=2 WF_INFO=3 WF_WXYWH=4 WF_CXYWH=5 WF_PXYWH=6
+             WF_FXYWH=7 WF_HSLIDE=8 WF_VSLIDE=9 WF_TOP=10
+             WF_FIRSTXYWH=11 WF_NEXTXYWH=12
+           An earlier version used a private numbering, so WF_NAME returned a
+           coordinate where the program expected a STRING POINTER, WF_CXYWH
+           returned a slider, and WF_FIRST/NEXTXYWH returned the same rectangle
+           for ever - an endless refresh loop. */
+        int h,f;
+        int16_t wx=0,wy=0,ww=0,wh=0;
+        if(!intin||!intout)return 0;
+        h=(int)(uint16_t)intin[0];
+        f=(int)(uint16_t)intin[1];
+        if(h>=1&&h<=8){wx=aes_geom[h-1][0];wy=aes_geom[h-1][1];
+                       ww=aes_geom[h-1][2];wh=aes_geom[h-1][3];}
+        if(ww<=0)ww=640;                         /* never a zero-sized window */
+        if(wh<=0)wh=400;
+        switch(f){
+        case 1:                                  /* WF_KIND */
+            /* NAME|CLOSER|FULLER|MOVER|INFO|SIZER|UPARROW|DNARROW|VSLIDE|
+               HSLIDE, values from EmuTOS include/aesdefs.h:519-530 */
+            intout[1]=(int16_t)0x09ff;
+            return 1;
+        case 2:                                  /* WF_NAME: pointer to the title */
+            intout[1]=(int16_t)(((uint32_t)(uintptr_t)tos_win_name)>>16);
+            intout[2]=(int16_t)((uint32_t)(uintptr_t)tos_win_name);
+            return 1;
+        case 3:                                  /* WF_INFO */
+            intout[1]=0;intout[2]=0;return 1;
+        case 4:                                  /* WF_WXYWH: work (client) area */
+        case 5:                                  /* WF_CXYWH: current */
+        case 6:                                  /* WF_PXYWH: previous */
+        case 7:                                  /* WF_FXYWH: full */
+            intout[1]=wx;intout[2]=wy;intout[3]=ww;intout[4]=wh;return 1;
+        case 8: case 9:                          /* sliders: at the top/left end */
+            intout[1]=0x1000;return 1;
+        case 10:                                 /* WF_TOP */
+            intout[1]=1;return 1;
+        case 11:                                 /* WF_FIRSTXYWH */
+            aes_wg_first=1u;
+            intout[1]=wx;intout[2]=wy;intout[3]=ww;intout[4]=wh;return 1;
+        case 12:                                 /* WF_NEXTXYWH: ends with zeros */
+            if(aes_wg_first){aes_wg_first=0u;intout[1]=wx;intout[2]=wy;
+                             intout[3]=ww;intout[4]=wh;}
+            else {intout[1]=0;intout[2]=0;intout[3]=0;intout[4]=0;}
+            return 1;
+        default:
+            intout[1]=wx;intout[2]=wy;intout[3]=ww;intout[4]=wh;return 1;
+        }
+    }
+
+    case 42:                                    /* objc_draw(tree,start,depth,x,y,w,h) */
+        if(addrin&&addrin[0]){
+            int budget=4096,ax=0,ay=0,obj=intin?(int)(uint16_t)intin[0]:0;
+            int depth=intin?((int)intin[1]):4;
+            const uint8_t *tree=(const uint8_t *)(uintptr_t)addrin[0];
+            aes_dbg_tree=(uint32_t)(uintptr_t)tree;
+            aes_dbg_type=((uint32_t)(uint16_t)obj<<16)|(uint32_t)(uint16_t)depth;
+            /* The clip rectangle lives in intin[2..5]; honouring it is the
+               difference between repainting a button and repainting the panel. */
+            /* width<=0 or height<=0 means "nothing to draw", not "no clipping":
+               treating it as a disabled clip made objc_draw paint the whole
+               640x400 panel for a zero-sized request (the audit's test). */
+            if(intin&&((int16_t)intin[4]<=0||(int16_t)intin[5]<=0))
+                aes_clip_set(0,0,0,0);
+            else if(intin)
+                aes_clip_set((int)intin[2],(int)intin[3],(int)intin[4],(int)intin[5]);
+            else aes_clip_clear();
+            if(aes_clip_visible()){
+                const uint8_t *o=tree+(uint32_t)(uint16_t)obj*AES_OBJ_SIZE;
+                /* The ancestors' offsets still apply when drawing starts at a
+                   child: with (0,0) a child at (10,20) under a parent at
+                   (100,50) was painted at (10,20) instead of (110,70). */
+                if(aes_obj_offset(tree,0,obj,0,0,&ax,&ay,&budget))
+                    aes_obj_draw(tree,obj,ax-aes_w(o+16),ay-aes_w(o+18),depth,&budget);
+                else
+                    aes_obj_draw(tree,obj,0,0,depth,&budget);
+            }
+            aes_clip_clear();
+        }
+        return 1;
+    case 56: { /* form_button: clicked object -> continue flag + next object */
+        uint8_t *tree,*o;uint16_t flags,old_state,new_state;
+        int obj,x=0,y=0,budget=2048,inside=1;int16_t mouse[5];
+        if(!intout)return 1;
+        intout[1]=0;
+        if(!addrin||!addrin[0]||!intin)return 1;
+        tree=addrin[0];obj=intin[0];
+        if(!aes_obj_offset(tree,0,obj,0,0,&x,&y,&budget))return 1;
+        o=tree+(uint32_t)obj*24u;flags=aes_u(o+8);old_state=aes_u(o+10);
+        if((old_state&8u)||(flags&128u))return 1; /* disabled/hidden */
+        new_state=old_state;
+        if(flags&1u)new_state^=1u;
+        if(flags&16u)new_state|=1u;
+        o[10]=(uint8_t)(new_state>>8);o[11]=(uint8_t)new_state;
+        budget=2048;
+        aes_obj_draw(tree,obj,x-aes_w(o+16),y-aes_w(o+18),0,&budget);
+        if(!(flags&64u)&&(flags&(1u|8u))){
+            do{
+                tos_poll_input();tos_mouse_state(mouse);tos_composite_work();
+                if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+            }while(mouse[3]&1u);
+            inside=mouse[1]>=x&&mouse[2]>=y&&mouse[1]<x+aes_w(o+20)&&mouse[2]<y+aes_w(o+22);
+        }
+        if(!inside){
+            o[10]=(uint8_t)(old_state>>8);o[11]=(uint8_t)old_state;
+            budget=2048;aes_obj_draw(tree,obj,x-aes_w(o+16),y-aes_w(o+18),0,&budget);
+            return 1;
+        }
+        if((flags&64u)||((flags&4u)&&(new_state&1u))){
+            intout[1]=(int16_t)(obj|((flags&64u)&&intin[1]==2?0x8000:0));
+            return 0;
+        }
+        if(flags&8u)intout[1]=(int16_t)obj;
+        return 1;
+    }
+    case 47: { /* objc_change: change the state, optionally redraw the object */
+        uint8_t *tree,*o;int obj,x=0,y=0,budget=2048;
+        if(!addrin||!addrin[0]||!intin)return 0;
+        tree=addrin[0];obj=intin[0];
+        if(!aes_obj_offset(tree,0,obj,0,0,&x,&y,&budget))return 0;
+        o=tree+(uint32_t)obj*24u;o[10]=(uint8_t)((uint16_t)intin[6]>>8);o[11]=(uint8_t)intin[6];
+        if(intin[7]){
+            /* intin[2..5] is ob_cxclip..ob_chclip; without it a state change on
+               one button repainted its whole panel. */
+            if((int16_t)intin[4]<=0||(int16_t)intin[5]<=0)aes_clip_set(0,0,0,0);
+            else aes_clip_set((int)intin[2],(int)intin[3],(int)intin[4],(int)intin[5]);
+            budget=2048;
+            if(aes_clip_visible())aes_obj_draw(tree,obj,x-aes_w(o+16),y-aes_w(o+18),0,&budget);
+            aes_clip_clear();
+        }
+        return 1;
+    }
+    case 54: {                                  /* form_center(tree) */
+        /* Bounding box of the WHOLE tree, not just object 0: a dialog whose
+           root has no size of its own used to report w=0,h=0, and a program
+           computing "columns = width / cell" then divided by zero. */
+        if(addrin&&addrin[0]&&intout){
+            int16_t bx=0,by=0,bw=0,bh=0;
+            aes_tree_bbox((const uint8_t *)(uintptr_t)addrin[0],&bx,&by,&bw,&bh);
+            intout[1]=bx;intout[2]=by;intout[3]=bw;intout[4]=bh;
+        }
+        return 1;
+    }
+    case 51:                                    /* form_dial: no-op (we draw direct) */
+    case 52:                                    /* form_alert */
+        return 1;
+    case 112: {                                 /* rsrc_gaddr(type,index) -> addrout */
+        uint32_t ptree=global?rd32(global+10u):0u;
+        if(intin&&addrout){
+            if(intin[0]==0&&ptree){
+                uint32_t v=rd32((const uint8_t *)(uintptr_t)ptree+4u*(uint32_t)(uint16_t)intin[1]);
+                addrout[0]=(void *)(uintptr_t)v;
+                return v?1:0;
+            }
+            addrout[0]=(void *)0;
+        }
+        return 0;
+    }
+    case 114:                                   /* rsrc_obfix(tree,object) */
+        if(addrin&&addrin[0]&&intin)
+            aes_obfix((uint8_t *)(uintptr_t)addrin[0],(int)(uint16_t)intin[0]);
+        return 1;
+    default:
+        tos_note_unsupported_at(4u,(uint32_t)(uint16_t)contrl[0],0,intin,intin?4:0);   /* AES: not implemented */
+        return 0;
+    }
+}
+/* Parameter counts differ between the two APIs:
+     AES: control[1] = int_in words, control[2] = int_out words.
+     VDI: control[1] = ptsin words, control[3] = intin words, control[4] = intout
+          words.
+   Using the VDI indices for AES read the ADDRESS-array counts, so an objc_draw
+   with 11,12,13,14 was logged as 11,0,0,0 and the output count came out zero. */
+static uint16_t aes_abi_in(const int16_t *contrl,int is_aes)
+{
+    uint16_t n=(uint16_t)((is_aes?contrl[1]:contrl[3])&0x7fffu);
+    return n;
+}
+static uint16_t aes_abi_out(const int16_t *contrl,int is_aes)
+{
+    uint16_t n=(uint16_t)((is_aes?contrl[2]:contrl[4])&0x7fffu);
+    return n;
+}
+int32_t asf_tos_aesvdi(const int16_t *contrl,const int16_t *intin,const int16_t *ptsin,
+                       int16_t *intout,int16_t *ptsout,int is_aes,
+                       const uint8_t *global,void **addrin,void **addrout)
+{
+    uint32_t slot;int32_t result;
+    if(tos_exit_pending()){tos_exit_code=0;asf_tos_exit();return 0;}
+    tos_clock_tick();
+    if(!contrl)return 0;
+    /* Diagnostics must never read past the DECLARED parameter lengths: the
+       control array is five words (VDA_CTRL for AES, VDI's contrl is five too),
+       and intin/intout/ptsout are sized by contrl[3]/contrl[4]/contrl[1].
+       AddressSanitizer found three separate over-reads here (control, intin,
+       intout) because the logger read fixed counts of six and four. */
+    {   uint16_t n_in=aes_abi_in(contrl,is_aes);
+        uint32_t t=tos_aes_trace_n++;
+        tos_aes_trace[t&31u]=(uint16_t)contrl[0];
+        tos_aes_trace[32u+(t&31u)]=(uint16_t)((intin&&n_in)?intin[0]:0);}
+    /* AES and VDI opcode spaces overlap (wind_create=100=v_opnvwk), so one
+       shared histogram blamed VDI work on AES opcodes.  Keep them apart. */
+    /* VDI counts itself in tos_vdi_call(); counting it here too double counted
+       every VDI opcode.  The point of the split is that this histogram is AES. */
+    if(is_aes)++tos_aes_opcount[contrl[0]&0xffu];
+    slot=tos_aes_log_n++;
+    if(slot<64u){
+        uint16_t *e=tos_aes_log+slot*32u;uint8_t k;
+        uint16_t n_in=aes_abi_in(contrl,is_aes);
+        e[0]=(uint16_t)(is_aes?1u:0u);
+        /* AES control is five words; VDI's control block also carries the
+           extended indices 5..10 for the MFDB calls, so only the five common
+           words are logged here. */
+        for(k=0u;k<5u;k++)e[1u+k]=(uint16_t)contrl[k];
+        if(intin)for(k=0u;k<4u&&k<n_in;k++)e[7u+k]=(uint16_t)intin[k];
+    }
+    /* trap #2 selects AES (d0=0xC8) or VDI (d0=0x73); both put the opcode in
+       contrl[0].  Opcodes overlap (AES wind_create = VDI v_opnvwk = 100), so
+       the selector decides the dispatcher. */
+    if(!is_aes)
+        result=(int32_t)tos_vdi_call((uint16_t)contrl[0],(int16_t *)contrl,
+                                     intin,ptsin,intout,ptsout,addrin,addrout);
+    else
+        result=tos_aes_dispatch(contrl,intin,ptsin,intout,ptsout,global,addrin,addrout);
+    if(is_aes&&intout)intout[0]=(int16_t)result;
+    /* evnt_multi is the GUI event loop: keep the compositor pumping, but do NOT
+       damage the whole screen for it.  The old unconditional
+       kernel_wm_damage_all() here forced a full-desktop recompose every ~16th
+       call and was the last leftover of the "make it visible somehow" workaround;
+       content damage now comes from the row tracking and the cursor from its own
+       path. */
+    tos_mark_present();
+    /* Presentation has one clock-based owner: tos_composite_work(). */
+    if(slot<64u){
+        uint16_t *e=tos_aes_log+slot*32u;uint8_t k;
+        uint16_t n_out=aes_abi_out(contrl,is_aes);
+        if(intout)for(k=0u;k<16u&&k<n_out;k++)e[16u+k]=(uint16_t)intout[k];
+        e[15]=(uint16_t)result;
+    }
+    return result;
+}
+
+/* --- T2: composite the private TOS screen into a window ------------------- */
+static void (*vid_enter)(void);
+static void (*vid_leave)(void);
+static void (*vid_clear)(uint8_t);
+static void (*vid_fill)(int,int,int,int,uint8_t);
+static void (*vid_text)(int,int,const char *,uint8_t,uint8_t);
+static void (*vid_blit_mono)(int,int,int,int,const uint8_t *,int,uint8_t,uint8_t);
+/* Colour client: source screen, its geometry, then the destination rectangle
+   and the clip rectangle.  mode 0 = 320x200x4 planes, mode 1 = 640x200x2. */
+static void (*vid_blit_planar)(const uint8_t *,int,int,uint8_t,int,uint32_t,int,int,int,int,uint8_t);
+
+static void (*console_clear_hook)(void);
+static volatile uint8_t tos_window_active;
+static uint8_t *tos_client_surface;
+void kernel_tos_window_closed(void)
+{
+    tos_exit_request=1u;
+    tos_desktop_repaint=1u;   /* the compositor dropped the window: show it */
+    /* Stop touching the surface immediately: it is released right after this
+       call, and a band blit must never land in memory the compositor dropped. */
+    tos_client_surface=0;
+    tos_band_valid=0u;
+}
+      /* D2: the WM client surface for the TOS window */
+static uint32_t tos_wm_pid;              /* D2: the WM owner pid (to close the window) */
+static uint16_t tos_wm_handle;           /* D2: the WM window handle */
+#define TOS_WIN_X 160
+#define TOS_WIN_Y 90
+/* G2: window position, cascaded per run so successive windows do not land on
+   top of each other. */
+static int32_t tos_win_x=TOS_WIN_X;
+static int32_t tos_win_y=TOS_WIN_Y;
+static uint8_t tos_window_seq;
+/* WM handle namespace for TOS windows.  The desktop's own dialogs use 2, 3, 5,
+   6 and 7; sharing that range meant a TOS window could overwrite - or release -
+   a desktop window as soon as the sequence reached those values. */
+/* Client geometry follows the PROGRAM's resolution, 1:1:
+     mode 0 (320x200x16) -> client 320x200, 4 planes
+     mode 1 (640x200x4)  -> client 640x200, 2 planes
+     mode 2 (640x400x2)  -> client 640x400, 1 plane (fixed window, no scaling) */
+#define TOS_WIN_H 200
+#define TOS_TITLE 18
+#define TOS_STATUS_Y 424
+static int32_t tos_win_w=320;                    /* window width for the mode */
+static int32_t tos_client_w=320;                 /* blitted width            */
+static int32_t tos_win_h=200;                    /* client height for the mode */
+
+void tos_mouse_state_for_vdi(int16_t *out);
+void tos_mouse_state_for_vdi(int16_t *out){tos_mouse_state(out);}
+
+static void tos_mouse_state(int16_t *out)
+{
+    int32_t ox=tos_win_x,oy=tos_win_y+TOS_TITLE;
+    int32_t x,y;
+    kernel_wm_client_origin(tos_client_surface,&ox,&oy);
+    x=ksessions_mouse_x()-ox;y=ksessions_mouse_y()-oy;
+    if(x<0)x=0;
+    if(x>=tos_client_w)x=tos_client_w-1;
+    if(y<0)y=0;
+    if(y>=tos_win_h)y=tos_win_h-1;
+    out[1]=(int16_t)x;out[2]=(int16_t)y;
+    /* ATOS also carries edge flags in bits 2+, AES accepts only held buttons. */
+    out[3]=(int16_t)(tos_mouse_buttons&3u);out[4]=(int16_t)(tos_kbshift);
+}
+
+/* Source geometry of the program's screen for the current TOS mode. */
+static uint16_t tos_src_stride(void)
+{
+    if(tos_mode==2u)return 80u;                  /* 640 px / 8, 1 plane  */
+    return 160u;                                 /* mode 0 and 1: 160 B  */
+}
+static uint16_t tos_src_width(void){return tos_mode==0u?320u:640u;}
+static uint16_t tos_src_height(void){return tos_mode==2u?400u:200u;}
+static uint8_t  tos_src_bpp(void){return tos_mode==0u?4u:(tos_mode==1u?2u:1u);}
+static int tos_mode_is_colour(void){return tos_mode==0u||tos_mode==1u;}
+
+static void tos_update_window_geometry(void)
+{
+    tos_client_w=tos_src_width();
+    tos_win_w=tos_client_w;
+    tos_win_h=(int32_t)tos_src_height();
+    if(tos_win_x<8)tos_win_x=8;
+    if(tos_win_y<8)tos_win_y=8;
+}
+
+void kernel_tos_set_console_clear(void (*clear)(void)){console_clear_hook=clear;}
+
+void kernel_tos_set_video(void (*enter)(void),void (*leave)(void),void (*clear)(uint8_t),
+                          void (*fill)(int,int,int,int,uint8_t),
+                          void (*text)(int,int,const char *,uint8_t,uint8_t),
+                          void (*blit_mono)(int,int,int,int,const uint8_t *,int,uint8_t,uint8_t),
+                          void (*blit_planar)(const uint8_t *,int,int,uint8_t,int,
+                                              uint32_t,int,int,int,int,uint8_t))
+{
+    vid_enter=enter;vid_leave=leave;vid_clear=clear;
+    vid_fill=fill;vid_text=text;vid_blit_mono=blit_mono;vid_blit_planar=blit_planar;
+    /* NOTE: the window is NOT enabled here.  Installing the video callbacks is
+       not the same event as "the user started a TOS program from the desktop":
+       enabling it at bring-up made every later program depend on a flag that was
+       already stale by the time a program actually ran.  The window is opened
+       lazily in kernel_tos_run_program() (and by T2 opcode 7). */
+}
+
+/* One exact shadow of the private ST screen, allocated only while a window
+   is open. Known writes and raw screen writes feed the same rectangle queue. */
+#define TOS_SHADOW_BYTES 32000u
+static tos_damage_t tos_damage;
+static uint8_t *tos_shadow;
+static uint8_t *tos_shadow_source;
+static uint16_t tos_shadow_stride;
+/* Monotonic 200 Hz counter taken from the free-running MFP Timer C.  The kernel
+   timer ticks do NOT advance while a TOS program runs (the persona holds IPL 7),
+   so any presentation deadline based on kernel_timer_ticks never expired and the
+   screen simply did not refresh - that is the "menu takes 15 seconds" report.
+   Timer C keeps counting regardless of the interrupt mask. */
+/* Time base for the presentation deadlines.  The kernel tick is incremented by
+   the timer interrupt, so it is monotonic and cannot lose overflows.  The
+   previous version guessed MFP overflows from one short read and added 256 on
+   EVERY ordinary decrement of the free-running counter (100 -> 99 became a jump
+   of 255), so a single hardware step exceeded the whole presentation period -
+   the deadline effectively fired at random and the earlier optimisations were
+   nullified.  A short read simply cannot reconstruct missed overflows. */
+uint32_t tos_now_ticks(void)
+{
+    return kernel_timer_ticks;
+}
+
+static uint32_t tos_last_content_tick,tos_last_cursor_tick;
+uint32_t kdbg_perf_note_calls;
+uint32_t kdbg_perf_dirty_rows,kdbg_perf_scan_bytes,kdbg_perf_scan_calls;
+uint32_t kdbg_perf_cursor_only,kdbg_perf_presents,kdbg_perf_frames;
+
+void tos_note_dirty_rect(int x0,int y0,int x1,int y1)
+{
+    int t;
+    if(!tos_window_active)return;
+    if(x0>x1){t=x0;x0=x1;x1=t;}
+    if(y0>y1){t=y0;y0=y1;y1=t;}
+    tos_damage_note(&tos_damage,x0,y0,x1+1,y1+1);
+    tos_composite_pending=1u;
+    ++kdbg_perf_note_calls;
+}
+
+static void tos_present_reset(void)
+{
+    tos_damage_reset(&tos_damage,tos_src_width(),tos_src_height());
+    tos_shadow_source=tos_screen;tos_shadow_stride=tos_src_stride();
+    tos_band_valid=0u;
+}
+
+/* Convert every rectangle first. No WM composition or VRAM flush per row/run.
+   The mono callback accepts byte-aligned input; round only to 8 pixels. */
+static void tos_convert_rect(tos_damage_rect_t *r)
+{
+    unsigned y,x,stride=tos_src_stride();
+    if(tos_mode_is_colour()){
+        r->x=0;r->w=tos_src_width();
+        vid_blit_planar(tos_screen,(int)tos_src_width(),(int)tos_src_height(),
+            tos_src_bpp(),(int)stride,TOS_SHADOW_BYTES,(int)tos_win_x,
+            (int)(tos_win_y+TOS_TITLE),r->y,r->h,(uint8_t)TOS_CLIENT_PALETTE_BASE);
+    }else{
+        int right=(r->x+r->w+7)&~7;
+        r->x&=~7;if(right>(int)tos_src_width())right=tos_src_width();
+        r->w=right-r->x;
+        vid_blit_mono((tos_client_surface?0:tos_win_x)+r->x,
+            (tos_client_surface?0:tos_win_y+TOS_TITLE)+r->y,r->w,r->h,
+            tos_screen+(uint32_t)r->y*stride+(unsigned)r->x/8u,(int)stride,
+            (uint8_t)(TOS_CLIENT_PALETTE_BASE+1u),(uint8_t)TOS_CLIENT_PALETTE_BASE);
+    }
+    /* Keep the shadow coherent for API writes too. A subsequent raw write is
+       detected on the next deadline; an API write does not trigger a duplicate. */
+    if(tos_shadow){
+        unsigned lo=tos_mode_is_colour()?0u:(unsigned)r->x/8u;
+        unsigned hi=tos_mode_is_colour()?stride:(unsigned)(r->x+r->w)/8u;
+        /* Word-wise when possible: byte-by-byte over a full screen was 32 000
+           loads+stores per frame. */
+        if((lo%4u)==0u&&((hi-lo)%4u)==0u){
+            unsigned w4=(hi-lo)/4u;
+            for(y=(unsigned)r->y;y<(unsigned)(r->y+r->h);y++){
+                const uint32_t *s4=(const uint32_t *)(const void *)(tos_screen+y*stride+lo);
+                uint32_t *d4=(uint32_t *)(void *)(tos_shadow+y*stride+lo);
+                for(x=0u;x<w4;x++)d4[x]=s4[x];
+            }
+        }else{
+            for(y=(unsigned)r->y;y<(unsigned)(r->y+r->h);y++)
+                for(x=lo;x<hi;x++)tos_shadow[y*stride+x]=tos_screen[y*stride+x];
+        }
+    }
+    if(tos_client_surface)kernel_wm_app_dirty(tos_client_surface,r->x,r->y,r->x+r->w,r->y+r->h);
+    kdbg_perf_dirty_rows+=(uint32_t)r->h;
+    ++kdbg_perf_presents; /* rectangles, not FPS; frames has its own counter */
+}
+
+static void tos_present_finish(void)
+{
+    if(tos_client_surface)kernel_wm_compose_now();
+    else kvideo_flush();
+    ++kdbg_perf_frames;
+}
+
+static void tos_composite_now(void)
+{
+    tos_damage_rect_t r;
+    if(!tos_screen)return;
+    if(tos_mode_is_colour()? !vid_blit_planar:!vid_blit_mono)return;
+    tos_present_reset();
+    r.x=r.y=0;r.w=tos_src_width();r.h=tos_src_height();
+    tos_convert_rect(&r);
+    tos_band_valid=1u;
+    tos_last_content_tick=tos_now_ticks();
+    tos_present_finish();
+}
+static void tos_draw_console_window(void);
+
+/* Mouse events for the TOS window.  INPUT.SYS owns the raw IKBD stream and
+   decodes packets into the kernel's mouse queue; on the desktop ksessions_pump()
+   drains that queue, but a TOS program runs SYNCHRONOUSLY and blocks the main
+   loop, so nothing consumed it: the pointer stood still and the packet was
+   applied only after the program exited (the reported "cursor jumps when the
+   program closes").  While a TOS program is active this is the single consumer,
+   exactly as the audit recommended.  Position and button state only - no
+   desktop action is run from here, and no keyboard stream is touched. */
+/* Window handles of the TOS personality live above the application range
+   so a close request can be attributed to the running program. */
+void tos_poll_mouse(void)
+{
+    if(!tos_active||tos_input_busy)return;
+    tos_input_busy=1u;tos_poll_mouse_owned();tos_input_busy=0u;
+}
+static void tos_poll_mouse_owned(void)
+{
+    uint32_t buttons;int32_t dx,dy;int guard;
+    if(!tos_active)return;          /* one consumer at a time */
+    /* The window went away (closed from its own chrome or by the desktop):
+       ask the run to unwind at the next OS call instead of blitting into a
+       surface the compositor released. */
+    if(tos_surface_installed&&!tos_client_surface)tos_exit_request=1u;
+    for(guard=0;guard<64;++guard){
+        if(tos_async_state){
+            unsigned q;
+            if(tos_async_mouse_head==tos_async_mouse_tail)break;
+            q=tos_async_mouse_head++%TOS_ASYNC_EVENTS;
+            buttons=tos_async_mice[q].buttons;
+            dx=tos_async_mice[q].x-tos_async_mouse_x;dy=tos_async_mice[q].y-tos_async_mouse_y;
+            tos_async_mouse_x=tos_async_mice[q].x;tos_async_mouse_y=tos_async_mice[q].y;
+        }else if(!kernel_raw_mouse_event(&buttons,&dx,&dy))break;
+        ++kdbg_tos_mouse_packets;
+        kdbg_tos_mouse_dxdy=((uint32_t)(uint16_t)dx<<16)|(uint16_t)dy;
+        if(!tos_async_state)ksessions_pointer_track(dx,dy);
+        if(dx||dy||((buttons^tos_mouse_buttons)&3u))tos_wm_input_pending=1u;
+        /* The blocking compatibility path handles chrome here. In cooperative
+           mode the native input loop has already delivered these edges to WM. */
+        if(!tos_async_state&&(buttons&3u)!=(tos_mouse_buttons&3u))
+            ksessions_pointer_button(buttons,ksessions_mouse_x(),ksessions_mouse_y());
+        tos_mouse_buttons=buttons;                  /* for evnt_mouse/graf_mouse */
+        /* Deliver the packet to the program's mousevec, the way TOS does it:
+           supervisor context, IKBD packet in d0 (buttons<<16 | dx<<8 | dy).
+           We do NOT add a second IKBD reader - this is the same single owner
+           that feeds evnt_mouse, so packet framing stays intact. */
+        if(tos_kbdvecs&&tos_kbdvecs->mousevec){
+            /* IKBD packet: header 0xF8|buttons, then signed dx and dy.  Large
+               deltas are clamped to one byte each (the emulated mouse delivers
+               small steps, and a wrapped value would move the pointer the wrong
+               way); the audit asked for this to be explicit rather than a cast. */
+            static uint8_t mouse_pkt[3];
+            int32_t cdx=dx,cdy=dy;
+            if(cdx>127)cdx=127;
+            if(cdx<-128)cdx=-128;
+            if(cdy>127)cdy=127;
+            if(cdy<-128)cdy=-128;
+            mouse_pkt[0]=(uint8_t)(0xf8u|(buttons&3u));
+            mouse_pkt[1]=(uint8_t)(int8_t)cdx;
+            mouse_pkt[2]=(uint8_t)(int8_t)cdy;
+            asf_tos_call_mousevec(tos_kbdvecs->mousevec,mouse_pkt);
+        }
+    }
+}
+/* Called from the 50 Hz Timer C interrupt.  This must stay CHEAP: it only
+ * drains the raw input ring and flags the window for a deferred composite.
+ * The actual planar conversion runs in tos_composite_work() from the kernel
+ * main loop, because a full 320x200/640x200 blit in the interrupt handler
+ * froze the machine (that is the "1:1 client froze" failure mode). */
+void tos_composite_tick(void)
+{
+    /* The 200 Hz clock has to advance while the guest COMPUTES, not only when
+       it calls a service: SysInfo's CPU benchmark runs a delay loop through
+       XBIOS Supexec and divides by the _hz_200 delta, so a counter updated only
+       on service calls stayed flat and the division faulted.  Timer C keeps
+       running during a TOS run, so this is the real source. */
+    tos_clock_tick();
+    /* Never poll while the program (IPL 5) is inside tos_poll_input(): the two
+       would corrupt the shared mouse framing state. */
+    if(tos_active&&!tos_input_busy)tos_poll_input();
+    if(tos_window_active&&tos_screen)tos_composite_pending=1u;
+}
+
+/* Trap calls only wake the worker; they never advance its deadline. */
+void tos_mark_present(void)
+{
+    if(tos_window_active&&tos_screen)tos_composite_pending=1u;
+}
+
+void tos_composite_work(void)
+{
+    uint32_t now;int input=0,changed=0;
+    tos_damage_rect_t r;
+    if(tos_async_state&&!tos_async_in_guest)return;
+    tos_async_yield();
+    if(tos_desktop_repaint&&!tos_client_surface){
+        tos_desktop_repaint=0u;kernel_wm_compose_now();return;
+    }
+    if(!tos_composite_pending)return;
+    tos_composite_pending=0u;
+    if(!tos_window_active||!tos_screen)return;
+    if(tos_mode_is_colour()? !vid_blit_planar:!vid_blit_mono)return;
+    now=tos_now_ticks();
+    /* Mouse/buttons are serviced at 50 Hz, independently of content (25 Hz).
+       Do not consume their flags before the deadline. Timer C never renders. */
+    if(tos_present_due(now,tos_last_cursor_tick,1u)){
+        extern int ksessions_pointer_take_dirty(void);
+        uint16_t saved_sr;
+        __asm__ volatile("move.w %%sr,%0; ori.w #0x0700,%%sr":"=d"(saved_sr)::"memory");
+        input=ksessions_pointer_take_dirty()||tos_wm_input_pending;
+        tos_wm_input_pending=0u;
+        __asm__ volatile("move.w %0,%%sr"::"d"(saved_sr):"memory");
+        tos_last_cursor_tick=now;
+    }
+    if(tos_desktop_pending||tos_shadow_source!=tos_screen||
+       tos_shadow_stride!=tos_src_stride()){
+        tos_desktop_pending=0u;tos_present_reset();
+    }
+    if(!tos_band_valid||tos_force_present||tos_present_due(now,tos_last_content_tick,2u)){
+        tos_force_present=0u;tos_last_content_tick=now;
+        if(!tos_band_valid||!tos_shadow){
+            /* Allocation failure is correct but slower: repaint on the same
+               bounded deadline, never silently miss direct screen writes. */
+            tos_damage_note(&tos_damage,0,0,tos_src_width(),tos_src_height());
+        }else{
+            tos_damage_scan(&tos_damage,tos_screen,tos_shadow,tos_src_stride(),!tos_mode_is_colour());
+            kdbg_perf_scan_bytes+=(uint32_t)tos_src_stride()*tos_src_height();
+            ++kdbg_perf_scan_calls;
+        }
+        /* Merge by cost, not by habit.  A single bounding box is right for
+           dense damage (one menu repaint: hundreds of row spans), but two small
+           changes far apart made it convert almost the whole screen.  Collect a
+           bounded list instead: convert the rectangles separately while their
+           extra area stays below what one extra call costs, and fall back to the
+           union when the list is full or the box is not much larger than the
+           real damage. */
+        {tos_damage_rect_t list[TOS_PRESENT_RECTS];int n=0,over=0;
+         long area=0;
+         long bx0=0,by0=0,bx1=0,by1=0;
+         while(tos_damage_take(&tos_damage,&r)){
+             area+=(long)r.w*(long)r.h;
+             if(!n){bx0=r.x;by0=r.y;bx1=(long)r.x+r.w;by1=(long)r.y+r.h;}
+             else{
+                 if(r.x<bx0)bx0=r.x;
+                 if(r.y<by0)by0=r.y;
+                 if((long)r.x+r.w>bx1)bx1=(long)r.x+r.w;
+                 if((long)r.y+r.h>by1)by1=(long)r.y+r.h;
+             }
+             if(n<TOS_PRESENT_RECTS)list[n++]=r;
+             else over=1;
+         }
+         if(n){
+             long box=(bx1-bx0)*(by1-by0);
+             if(over||n>TOS_PRESENT_RECTS||box<=area+TOS_PRESENT_MERGE_SLACK){
+                 tos_damage_rect_t u;
+                 u.x=(int)bx0;u.y=(int)by0;u.w=(int)(bx1-bx0);u.h=(int)(by1-by0);
+                 tos_convert_rect(&u);
+                 ++kdbg_perf_present_union;
+             }else{
+                 int k;
+                 for(k=0;k<n;k++)tos_convert_rect(&list[k]);
+                 kdbg_perf_present_split+=(uint32_t)n;
+             }
+             changed=1;
+         }}
+        tos_band_valid=1u;
+    }
+    if(changed||input){
+        if(input&&!changed)++kdbg_perf_cursor_only;
+        tos_present_finish();
+    }
+}
+
+/* A program may call Setrez/Setscreen while its window is already open; the
+   client geometry and the cached band signatures must follow. */
+static void tos_msg_redraw(void)
+{
+    tos_redraw_msg[0]=20;                      /* WM_REDRAW */
+    tos_redraw_msg[1]=0;tos_redraw_msg[2]=0;tos_redraw_msg[3]=1;
+    tos_redraw_msg[4]=(int16_t)(tos_win_x?0:0);
+    tos_redraw_msg[5]=0;
+    tos_redraw_msg[6]=(int16_t)tos_win_w;
+    tos_redraw_msg[7]=(int16_t)tos_win_h;
+    tos_msg_post(tos_redraw_msg);
+}
+
+void tos_window_geometry_changed(void)
+{
+    tos_update_window_geometry();
+    tos_vdi_follow_screen();          /* new screen/stride after Setscreen */
+    /* Centre on the REAL screen: the old 800x600 constants clipped the window
+       on a 640x400 desktop and left it off-centre on 1024x768. */
+    tos_win_x=((int32_t)kvideo_mode_width()-(int32_t)tos_win_w)/2;
+    tos_win_y=((int32_t)kvideo_mode_height()-(int32_t)tos_win_h-(int32_t)TOS_TITLE)/2;
+    if(tos_win_x<8)tos_win_x=8;
+    if(tos_win_y<8)tos_win_y=8;
+    if(tos_wm_pid)kernel_wm_resize_window(tos_wm_pid,tos_wm_handle,
+        (int16_t)tos_win_x,(int16_t)tos_win_y,(uint16_t)tos_win_w,(uint16_t)(tos_win_h+TOS_TITLE));
+    tos_band_valid=0u;
+    tos_present_reset();
+}
+
+/* The console window: shell/TOS output lives here, never on the raw screen. */
+/* The T1 tree had a kernel console log; our kernel does not, so the mini
+   console window stays empty instead of pulling in code we do not have. */
+int32_t kernel_console_log_count(void){return 0;}
+const char *kernel_console_log_line(int32_t index){(void)index;return "";}
+
+/* Our kernel has no raw IKBD counters for the personality yet; keep them
+   zero for now.  The command line itself is provided by the kernel's
+   kernel_user_get_arguments() (see kernel_exception.c). */
+int32_t kernel_ikbd_raw_total(void){return 0;}
+int32_t kernel_ikbd_drop_count(void){return 0;}
+int32_t kernel_ikbd_raw_last(uint32_t back){(void)back;return 0;}
+
+static void tos_draw_console_window(void)
+{
+    int32_t n=kernel_console_log_count(),i;
+    vid_fill(0,312,640,108,15u);
+    vid_fill(2,314,636,104,0u);
+    vid_text(4,314,"CONSOLE",0,15u);
+    for(i=0;i<7;i++){
+        int32_t idx=n-7+i;
+        if(idx<0)continue;
+        vid_text(4,326+i*12,kernel_console_log_line(idx),15,0u);
+    }
+}
+
+/* Called from the kernel main loop (shell context - never from the Timer C
+ * handler, where this much framebuffer work hung the machine).  Redraws the
+ * console window only when the log actually grew. */
+void tos_console_refresh(void)
+{
+    /* Kept for a future THROTTLED refresh.  Calling the full console redraw on
+       every log change (i.e. on most shell output) made typing take hundreds
+       of milliseconds per character and the machine looked hung, so the window
+       is drawn together with the desktop for now. */
+    static int32_t last_n=-1;
+    int32_t n;
+    if(!tos_desktop_active)return;
+    n=kernel_console_log_count();
+    if(n==last_n)return;
+    last_n=n;
+    tos_draw_console_window();
+}
+
+/* Desktop layout. The application window is smaller than the screen and the
+ * private 640x400 TOS screen is shown scaled 2:1 (320x200) inside it, so the
+ * desktop, its icons and the status line stay visible around the window. */
+/* Draw ONLY the TOS window chrome (1px frame, title bar, client background)
+   directly on top of the ALREADY-PRESENT desktop.  The personality no longer
+   fakes its own desktop: the real desktop (desktop_wm) is already in the
+   framebuffer and stays underneath.  The client content is blitted by
+   tos_composite_tick(). */
+static void tos_draw_window_chrome(const char *name)
+{
+    if(!name)return;
+    vid_fill(tos_win_x-2,tos_win_y-2,tos_win_w+4,tos_win_h+TOS_TITLE+4,15u);
+    vid_fill(tos_win_x,tos_win_y,tos_win_w,TOS_TITLE,8u);      /* title bar */
+    vid_text(tos_win_x+4,tos_win_y+3,name[0]?name:"TOS APPLICATION",15,8u);
+    vid_fill(tos_win_x+tos_win_w-16,tos_win_y+3,12,12,0u);
+    vid_text(tos_win_x+tos_win_w-13,tos_win_y+3,"X",15,0u);
+    vid_fill(tos_win_x,tos_win_y+TOS_TITLE,tos_win_w,tos_win_h,0u);
+}
+
+static const char *tos_basename(const char *path)
+{
+    const char *base=path,*p;
+    if(!path)return "";
+    for(p=path;*p;++p)if(*p=='\\'||*p=='/')base=p+1;
+    return base;
+}
+
+/* Push the program's 16 Shifter colours into the desktop palette.  The client
+   blit copies colour INDICES, so the window shows the program's colours only
+   if the RAMDAC entries the program addressed hold the same values.  The
+   desktop restores its own palette when it redraws after the program exits. */
+static void tos_apply_palette(void)
+{
+    int i;
+    for(i=0;i<16;i++)
+        (void)kgfx_set_palette((uint8_t)(TOS_CLIENT_PALETTE_BASE+(uint8_t)i),tos_palette[i]);
+    /* Mono (rez 2) blits use two entries of the TOS CLIENT range, never the
+       desktop's: entries 0 and 15 belong to the system palette (0 is the ink
+       every application draws text with, 15 a theme colour), so pinning those
+       recoloured the desktop.  The client range 236..251 exists for exactly
+       this and nothing else in the system touches it. */
+    if(!tos_mode_is_colour()){
+        (void)kgfx_set_palette((uint8_t)(TOS_CLIENT_PALETTE_BASE+0u),0xFFFu);  /* paper = white */
+        (void)kgfx_set_palette((uint8_t)(TOS_CLIENT_PALETTE_BASE+1u),0x000u);  /* ink   = black */
+    }
+}
+
+static int tos_open_window(const char *name)
+{
+    if(!tos_window_enabled)return 0;     /* T2 opcode 8: classic console */
+    if(!vid_enter||!vid_fill||!vid_text)return 0;
+    tos_update_window_geometry();
+    tos_win_x=((int32_t)kvideo_mode_width()-(int32_t)tos_win_w)/2;
+    tos_win_y=((int32_t)kvideo_mode_height()-(int32_t)tos_win_h-(int32_t)TOS_TITLE)/2;
+    if(tos_win_x<8)tos_win_x=8;
+    if(tos_win_y<8)tos_win_y=8;
+    ++tos_window_seq;
+    vid_enter();
+    tos_desktop_active=1u;
+    tos_apply_palette();
+    /* D2: register the TOS window in the WM with a client surface; the WM
+       draws the frame and composes the client (occlusion).  Fall back to the
+       direct overlay only when the WM cannot provide a surface. */
+    {
+        uint32_t wpid=tos_async_state?TOS_ASYNC_PID:kernel_user_current_pid();
+        uint16_t wh=(uint16_t)(TOS_WM_HANDLE_BASE+(uint16_t)tos_window_seq);
+        tos_wm_pid=wpid;tos_wm_handle=wh;
+        kernel_wm_set_window(wpid,wh,(int16_t)tos_win_x,(int16_t)tos_win_y,
+                             (uint16_t)tos_win_w,(uint16_t)(tos_win_h+TOS_TITLE));
+        /* Name the window after the program: without this the WM chrome said
+           "APPLICATION" for every TOS program. */
+        kernel_wm_set_title(wpid,wh,name);
+        if(tos_async_state)kernel_gui_focus_set(TOS_ASYNC_PID);
+        tos_client_surface=kernel_wm_app_surface(wpid,wh);
+        tos_surface_installed=tos_client_surface?1u:0u;
+        /* A GEM program waits for WM_REDRAW right after opening its window and
+           blocks in evnt_mesag until it arrives; that message is what makes it
+           draw.  Post it once here, from the same place the window appears. */
+        tos_msg_redraw();
+    }
+    /* VDI must follow the window: see tos_vdi_follow_screen(). */
+    tos_vdi_follow_screen();
+    if(tos_client_surface){
+        kgfx_planar_surface_override=tos_client_surface;
+        kgfx_planar_surface_pitch=kvideo_mode_width();
+    }else{
+        kgfx_planar_surface_override=0;
+        tos_draw_window_chrome(name);
+    }
+    tos_window_active=1u;
+    if(!tos_shadow)tos_shadow=(uint8_t *)kmem_alloc(TOS_SHADOW_BYTES,4u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+    tos_wm_input_pending=0u;tos_force_present=0u;
+    tos_last_cursor_tick=tos_now_ticks();
+    tos_composite_now();
+    return 1;
+}
+
+/* The BIOS console and the 8bpp desktop share the ET4000 memory, so after
+ * switching back to the text mode the card holds the desktop's pixels. The
+ * console must be cleared before anything is printed again. */
+int32_t kernel_tos_desktop_active(void){return tos_desktop_active?1:0;}
+
+static void tos_desktop_leave(void)
+{
+    if(vid_leave)vid_leave();
+    if(console_clear_hook)console_clear_hook();   /* resets the console cursor */
+    if(vid_clear)vid_clear(0u);                   /* wipe the whole card memory */
+    /* Give the desktop its own colours back: the program's palette block shares
+       the RAMDAC range with the theme ramp, and mono runs pin entries 0/15. */
+    (void)kgfx_theme_apply(kgfx_theme_current());
+    tos_desktop_active=0u;
+}
+
+static void tos_close_window(void)
+{
+    if(!tos_window_active)return;
+    tos_window_active=0u;
+    if(tos_shadow){kmem_free(tos_shadow,KMEM_OWNER_KERNEL);tos_shadow=0;}
+    tos_shadow_source=0;tos_band_valid=0u;
+    kgfx_planar_surface_override=0;   /* D2: stop redirecting into the client surface */
+    tos_client_surface=0;
+    tos_surface_installed=0u;         /* a later "no surface" is not a loss */
+    tos_vdi_release_screen();         /* VDI back to the profile's target */
+    /* D2: release the WM window + backing surface so repeated runs do not
+       leak slots (the window may never have been registered if the desktop was
+       inactive at open time). */
+    if(tos_wm_pid)kernel_wm_release_surface(tos_wm_pid,tos_wm_handle);
+    tos_wm_pid=0;tos_wm_handle=0;
+    /* While the window mode is on the desktop stays: only the application
+       window disappears.  Leaving the graphics mode here was why the shell
+       "came back" after every program. */
+    /* The window was an overlay; the launching app repaints the desktop when
+       gui_call(65) returns, so nothing has to be redrawn here. */
+    if(tos_window_enabled){
+        /* ...but the RAMDAC does: the client palette block shares its range with
+           the theme ramp, so reapply the desktop theme before handover. */
+        (void)kgfx_theme_apply(kgfx_theme_current());
+        return;
+    }
+    tos_desktop_leave();
+}
+/* ---- TOS TPA -------------------------------------------------------------
+   The kernel lives in ST-RAM just above the program area, so the TPA is the
+   contiguous free region [0x1000, __image_start).  A program is allocated
+   first-fit from the bottom (exactly what EmuTOS alloc_tpa does) and released
+   LIFO when the run returns; the kernel heap (kmem) sits above the image. */
+extern uint8_t __image_start;
+/* The kernel occupies the low ST-RAM, so a TOS program only had a ~520 kB TPA
+   ([0x1000, __image_start)).  Real TOS hands out nearly all of RAM; the
+   HWAM/PFX self-extractors size their decompression buffer from p_hitpa and
+   _memtop, and under-sized geometry makes them unpack only part of the inner
+   program (Session 9).  The TF536 has 64 MB TT-RAM; reserve its top 16 MB for
+   the TOS TPA for p_hitpa. ST sysvars remain separate from this TT-RAM program area. */
+#define TOS_TPA_BASE 0x04000000UL
+#define TOS_TPA_TOP  0x05000000UL
+static uint32_t tos_tpa_next=TOS_TPA_BASE;
+static uint32_t tos_tpa_top(void){return TOS_TPA_TOP;}
+static void *tos_tpa_alloc(uint32_t bytes)
+{
+    uint32_t top=tos_tpa_top(),p=(tos_tpa_next+15u)&~15u;
+    if(bytes==0u||p<TOS_TPA_BASE||p>top||bytes>top-p)return 0;
+    tos_tpa_next=p+bytes;
+    return (void *)(uintptr_t)p;
+}
+/* Sysvars are only 2-byte aligned, so publish them with word stores (68000). */
+static void tpa_wr32(uint32_t address,uint32_t value)
+{
+    __asm__ volatile("move.w %1,%0@" : : "a"((void *)(uintptr_t)address),"d"(value>>16) : "memory");
+    __asm__ volatile("move.w %1,%0@" : : "a"((void *)(uintptr_t)(address+2u)),"d"(value&0xffffu) : "memory");
+}
+static void tos_tpa_publish(void)
+{
+    static const uint8_t cpu_numbers[]={0,10,20,30,40,60};
+    extern uint8_t __image_memory_end;
+    kmem_stats_t st,tt;
+    uint32_t bottom=(uint32_t)(uintptr_t)&__image_memory_end;
+    const char *date=__DATE__,*months="JanFebMarAprMayJunJulAugSepOctNovDec";
+    uint32_t month,day=(date[4]==' '?0u:(uint32_t)(date[4]-'0')*10u)+(uint32_t)(date[5]-'0');
+    uint32_t year=(uint32_t)(date[7]-'0')*1000u+(uint32_t)(date[8]-'0')*100u+(uint32_t)(date[9]-'0')*10u+(uint32_t)(date[10]-'0');
+    uint32_t bcdyear=((year/1000u)<<12)|(((year/100u)%10u)<<8)|(((year/10u)%10u)<<4)|(year%10u);
+    for(month=1u;month<12u;month++)if(date[0]==months[(month-1u)*3u]&&date[1]==months[(month-1u)*3u+1u]&&date[2]==months[(month-1u)*3u+2u])break;
+    kmem_get_st_stats(&st);kmem_get_tt_stats(&tt);
+    tos_cookie_jar[1]=tos_cpu_type<6u?cpu_numbers[tos_cpu_type]:0u;
+    tpa_wr32(0x5a0u,(uint32_t)(uintptr_t)tos_cookie_jar);
+    tpa_wr32(0x42eu,st.total);
+    /* ST system variables must not contain the program's TT-RAM TPA. */
+    tpa_wr32(0x432u,bottom);
+    tpa_wr32(0x436u,st.total>0x4000u?st.total-0x4000u:0u);
+    tpa_wr32(0x5a4u,tt.total?0x01000000u+tt.total:0u);
+    tpa_wr32(0x5a8u,0x1357bd13u);
+    tos_lm_wr8((void *)(uintptr_t)0x59eu,0u);
+    tos_lm_wr8((void *)(uintptr_t)0x59fu,tos_cpu_type?1u:0u);
+    tos_lm_wr8((void *)(uintptr_t)0x446u,0u);
+    tos_lm_wr8((void *)(uintptr_t)0x447u,2u); /* boot drive C */
+    /* Mirror the real ST MMU configuration, as standard TOS does at boot. */
+    tos_lm_wr8((void *)(uintptr_t)0x424u,*(volatile uint8_t *)(uintptr_t)0xffff8001u);
+    tos_syshdr[2]=2u;tos_syshdr[3]=6u; /* compatibility level 2.06 */
+    wr32(tos_syshdr+8u,(uint32_t)(uintptr_t)tos_syshdr);
+    wr32(tos_syshdr+12u,bottom);
+    wr32(tos_syshdr+24u,(((month/10u)<<4)|(month%10u))<<24|(((day/10u)<<4)|(day%10u))<<16|bcdyear);
+    tos_syshdr[28]=0u;tos_syshdr[29]=1u; /* US, PAL */
+    {uint16_t d=(uint16_t)(((year-1980u)<<9)|(month<<5)|day);
+     tos_syshdr[30]=(uint8_t)(d>>8);tos_syshdr[31]=(uint8_t)d;}
+    wr32(tos_syshdr+36u,(uint32_t)(uintptr_t)&tos_kbshift);
+    wr32(tos_syshdr+40u,(uint32_t)(uintptr_t)&tos_current_basepage);
+    wr32(tos_syshdr+44u,0x41544f53u); /* ATOS */
+    tpa_wr32(0x4f2u,(uint32_t)(uintptr_t)tos_syshdr);
+    tpa_wr32(0x4c2u,tos_drivemap());
+    {rtc_datetime_t dt;
+     if(kernel_rtc_read(&dt)){
+        tos_date=(uint16_t)(((dt.year-1980u)<<9)|((uint16_t)dt.month<<5)|dt.day);
+        tos_mfp_ticks=((uint32_t)dt.hour*3600u+(uint32_t)dt.minute*60u+dt.second)*200u;
+        tos_clock_ready=0u;
+     }else tos_date=(uint16_t)(((year-1980u)<<9)|(month<<5)|day);}
+
+}
+
+int32_t kernel_tos_run_program(const char *path)
+{
+    uint32_t size=0u,tlen,dlen,blen,slen,reloc,total,loaded=0u,i,tpa_mark;
+    uint8_t attr=0;
+    uint8_t *file,*mem,*text,*data,*bss,*env_block=0;
+    void *entry;
+    int32_t rc;
+    int slot;
+
+    if(tos_async_state&&!tos_async_in_guest)return -0x2b1;
+    if(!path||!*path)return -1;
+    /* The TOS compatibility module is loaded on first use, which is what keeps
+       the boot short.  When the SETTINGS option ticked TT RAM, boot already
+       preloaded it and this is a no-op. */
+    if(!kernel_tos_compat_loaded()&&kernel_tos_compat_ensure(kernel_tos_cfg_prefer_tt?1:0)<0)
+        tos_trace("TOS.SYS: LOAD FAILED (built-in fallback)\n");
+    {uint32_t k=0u;while(path[k]&&k<127u){tos_cmdline[k]=path[k];++k;}tos_cmdline[k]=0;}
+    /* Window mode is decided BEFORE the screen is chosen: otherwise the first
+       run allocates no private buffer and the program gets the live card VRAM,
+       overwriting the desktop.  The flag is set at that point (below), not here:
+       setting it before the validations meant every early return left the
+       kernel stuck in window mode ("one run, one decision" was untrue). */
+    (void)kernel_tos_bootstrap();
+    tos_trace("LD:enter\n");
+    if(kfat_stat_path(path,&size,&attr)!=FAT_FILE_FOUND||size<28u)return -2;
+    tos_trace("LD:stat\n");
+    file=(uint8_t *)kmem_alloc(size,4u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,0);
+    if(!file)return -3;
+    tos_trace("LD:alloc-file\n");
+    if(kfat_load_path(path,file,size,&loaded)!=FAT_FILE_FOUND||loaded<28u){
+        kmem_free(file,KMEM_OWNER_KERNEL);return -4;
+    }
+    if((((uint32_t)file[0]<<8)|file[1])!=0x601au){
+        kmem_free(file,KMEM_OWNER_KERNEL);return -5;
+    }
+    tlen=rd32(file+2);dlen=rd32(file+6);blen=rd32(file+10);slen=rd32(file+14);
+    if(tlen==0u||tlen>0x70000u||dlen>0x70000u||blen>0x70000u||28u+tlen+dlen>loaded){
+        kmem_free(file,KMEM_OWNER_KERNEL);return -6;
+    }
+    /* TOS gives a normal program the whole remaining TPA: p_hitpa is the TPA
+       top and self-extracting packers (PFX/HWAM) decompress downward from it.
+       Budgeting only text+data+bss made p_hitpa too low, so the unpacker ran
+       past its window and jumped into compressed data. */
+    /* KBDVECS (reserved BEFORE the program takes the rest of the TPA) + IOREC in the program's OWN memory: XBIOS 34/14 hand these
+       addresses to the guest, which reads and writes them (LDW installs its
+       mousevec at +$10).  They must therefore be guest-accessible, and they are
+       reset for every run. */
+    {uint32_t need=(uint32_t)(sizeof(tos_kbdvecs_t)+3u*sizeof(tos_iorec_t)+3u*TOS_IOREC_BYTES);
+     uint8_t *blk=(uint8_t *)tos_tpa_alloc((need+15u)&~15u);
+     tos_kbdvecs=0;tos_iorec[0]=tos_iorec[1]=tos_iorec[2]=0;
+     if(blk){
+         uint32_t z;uint8_t *q;unsigned d;
+         for(z=0u;z<need;++z)blk[z]=0u;
+         tos_kbdvecs=(tos_kbdvecs_t *)(void *)blk;
+         /* A real system always has a mousevec: a program that saves it and
+            chains to it must not jump to address 0. */
+         tos_kbdvecs->mousevec=(void *)asf_tos_default_mousevec;
+         q=blk+sizeof(tos_kbdvecs_t);
+         for(d=0u;d<3u;++d){tos_iorec[d]=(tos_iorec_t *)(void *)q;q+=sizeof(tos_iorec_t);}
+         for(d=0u;d<3u;++d){
+             tos_iorec[d]->buf=q;tos_iorec[d]->size=(int16_t)TOS_IOREC_BYTES;
+             tos_iorec[d]->head=0;tos_iorec[d]->tail=0;q+=TOS_IOREC_BYTES;
+         }
+     }}
+    {uint32_t tpa_start=(tos_tpa_next+15u)&~15u,tpa_top=tos_tpa_top(),need=0x100u+tlen+dlen+blen;
+     if(tpa_top<=tpa_start||tpa_top-tpa_start<need){kmem_free(file,KMEM_OWNER_KERNEL);return -6;}
+     total=tpa_top-tpa_start;}
+    tpa_mark=tos_tpa_next;
+    mem=(uint8_t *)tos_tpa_alloc(total);      /* EmuTOS alloc_tpa: first free ST-RAM block */
+    if(!mem){kmem_free(file,KMEM_OWNER_KERNEL);return -7;}
+    tos_current_basepage=mem;tos_process_limit=(uint32_t)(uintptr_t)mem+total;
+    tos_tpa_publish();
+    tos_trace("LD:alloc-mem\n");
+    text=mem+0x100u;data=text+tlen;bss=data+dlen;
+    for(i=0u;i<tlen+dlen;++i)text[i]=file[28u+i];
+    for(i=0u;i<blen;++i)bss[i]=0u;
+    /* GEMDOS relocation: after the symbol table comes a 32-bit start offset,
+       then a byte stream of deltas (delta 1 means +0xFE).  Each hit fixes up
+       the longword at tbase+offset by adding p_tbase.  The old loader read the
+       stream as a list of 32-bit offsets and therefore relocated almost
+       nothing, which is why SysInfo jumped into low memory and crashed. */
+    reloc=28u+slen+tlen+dlen;
+    if(reloc+4u<=loaded){
+        uint32_t relst=rd32(file+reloc);
+        if(relst!=0u&&relst<tlen+dlen){
+            uint32_t flen=tlen+dlen,off=relst;
+            const uint8_t *rp=file+reloc+4u,*rpend=file+loaded;
+            wr32(text+off,rd32(text+off)+(uint32_t)(uintptr_t)text);
+            while(rp<rpend){
+                uint8_t d=*rp++;
+                if(d==0u)break;
+                if(d==1u){off+=0xFEu;continue;}
+                off+=d;
+                if(off<flen&&!(off&1u))wr32(text+off,rd32(text+off)+(uint32_t)(uintptr_t)text);
+            }
+        }
+    }
+    wr32(mem+0x00u,(uint32_t)(uintptr_t)mem);
+    wr32(mem+0x04u,(uint32_t)(uintptr_t)(mem+total));
+    wr32(mem+0x08u,(uint32_t)(uintptr_t)text);
+    wr32(mem+0x0cu,tlen);
+    wr32(mem+0x10u,(uint32_t)(uintptr_t)data);
+    wr32(mem+0x14u,dlen);
+    wr32(mem+0x18u,(uint32_t)(uintptr_t)bss);
+    wr32(mem+0x1cu,blen);
+    wr32(mem+0x20u,(uint32_t)(uintptr_t)(mem+0x80u));
+    wr32(mem+0x24u,(uint32_t)(uintptr_t)mem);       /* p_parent: self (boot) */
+    mem[0x28]=0u;mem[0x29]=1u;                      /* p_procid = 1 */
+    mem[0x2a]=0u;mem[0x2b]=0u;                      /* p_status */
+    mem[0x36]=0u;                                   /* p_flags: TOS domain */
+    mem[0x37]=2u;                                   /* p_defdrv: C: (boot drive) */
+    {uint32_t k;for(k=0x38u;k<0x60u;++k)mem[k]=0u;} /* p_res3 + p_drvx */
+    wr32(mem+0x68u,0xffffffffu);                    /* p_mem: unlimited */
+    wr32(mem+0x70u,0u);                             /* p_mflags */
+    /* MagiC (MAGIDOS.S): the user stack lives at the end of p_hitpa and
+       p_ssp is always stored. Never leave it zero. */
+    wr32(mem+0x78u,(uint32_t)(uintptr_t)(mem+total)); /* p_ssp */
+    /* p_env must never be NULL: TOS always gives programs a valid environment
+       block, and applications read it at startup. An empty block is empty. */
+    {uint8_t *env=(uint8_t *)kmem_alloc(4u,2u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+     if(env){env[0]=0u;env[1]=0u;wr32(mem+0x2cu,(uint32_t)(uintptr_t)env);env_block=env;}
+     else wr32(mem+0x2cu,0u);}
+    /* The basepage command tail is the ARGUMENTS only (what followed the
+       program name), never the program path itself. */
+    {uint32_t k3=0u;const char *args=kernel_user_get_arguments();
+     while(args&&args[k3]&&k3<126u){mem[0x81u+k3]=(uint8_t)args[k3];++k3;}
+     mem[0x80]=(uint8_t)k3;mem[0x81u+k3]=0u;}
+
+    /* Window mode is the model (T4) and the TOS.SYS buffer is adopted inside
+       this branch, so it stays the default.  What changed: the flag is set HERE
+       - after every validation that can fail - instead of before them, so a
+       failed run no longer leaves the kernel stuck in window mode.  The classic
+       console branch below is legacy: it is reachable only when something
+       cleared the flag before the run (T2 opcode 8 / kernel_tos_use_surface). */
+    tos_window_enabled=1u;
+    if(tos_window_enabled){
+        /* T2/T4 window/fullscreen: the compositor may already have supplied a
+           surface via kernel_tos_use_surface(); only allocate when it did not.
+           TOS.SYS gets first refusal on the private screen: when the module is
+           loaded it OWNS that buffer, so the persona adopts it and must never
+           free it (tos_screen_owned=0). */
+        uint8_t *mod_screen=kernel_tos_compat_screen();
+        if(!tos_screen&&mod_screen){
+            tos_screen=mod_screen;
+            /* The module allocator does not clear reused screen memory. */
+            for(i=0u;i<65536u;++i)tos_screen[i]=0u;
+            tos_screen_owned=0u;                 /* owned by the TOS.SYS module */
+            ++kdbg_tos_adopted_module;
+        }else if(!tos_screen){
+            /* 64 KB: 640x200 with four planes needs 64000 B; 320x200x4 and
+               640x400 mono need 32000.  Reached only when the module is absent
+               or failed: counted so the module test cannot be fooled by this
+               fallback silently doing the work. */
+            tos_screen=(uint8_t *)kmem_alloc(65536u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+            if(tos_screen){for(i=0u;i<65536u;++i)tos_screen[i]=0u;}
+            tos_screen_owned=(tos_screen!=0u);
+            ++kdbg_tos_screen_fallbacks;
+        }else tos_screen_owned=0u;
+    }else{
+        /* Text mode: the program owns the real console screen, exactly like a
+         * classic ST TOS program (Physbase returns the live framebuffer). */
+        tos_screen=(uint8_t *)(uintptr_t)0x00c00000UL;   /* console on the ET4000 */
+        /* Do NOT clear it: this is the SHARED console framebuffer. Zeroing it
+           wiped the whole boot log (black screen) whenever a program crashed
+           before returning. Let the program draw over it instead. */
+        tos_screen_owned=0u;
+    }
+    /* Window mode needs a PRIVATE screen; without one the program would get the
+       live card VRAM (Physbase fallback) and overwrite the desktop.  Fail the
+       run instead of letting that happen. */
+    if(tos_window_enabled&&!tos_screen){
+        kmem_free(file,KMEM_OWNER_KERNEL);
+        if(env_block)kmem_free(env_block,KMEM_OWNER_KERNEL);
+        tos_tpa_next=tpa_mark;
+        tos_window_enabled=0u;      /* do not leave the kernel in window mode */
+        return -0x40;
+    }
+    tos_mode=2u;
+    {int k2;for(k2=0;k2<TOS_MAX_HANDLES;k2++)tos_files[k2].used=0u;}
+    tos_dta=0;tos_dir_count=0;tos_dir_index=0;tos_key_pending=-2;
+    tos_heap=0;tos_heap_used=0u;
+    for(i=0u;i<16u;++i)tos_palette[i]=(uint16_t)(i*0x111u);
+    tos_palette[0]=0x777u;tos_palette[1]=0u; /* default mono paper/ink */
+
+    if(tos_cpu_type>=2u)kernel_image_cache_sync(tos_cpu_type);
+
+    {
+        volatile uint32_t *vec=(volatile uint32_t *)(uintptr_t)0x00000000UL;
+        static const uint16_t vidx[13]={2u,3u,4u,5u,6u,7u,8u,10u,11u,33u,34u,45u,46u};
+        uint32_t hnd[13],k;
+        kaudio_set_port_sink(tos_port_sink);   /* ports 14/15 belong to the window */
+        hnd[0]=(uint32_t)(uintptr_t)asf_tos_fault2;
+        hnd[1]=(uint32_t)(uintptr_t)asf_tos_fault3;
+        hnd[2]=(uint32_t)(uintptr_t)asf_tos_fault4;
+        hnd[3]=(uint32_t)(uintptr_t)asf_tos_fault5;
+        hnd[4]=(uint32_t)(uintptr_t)asf_tos_fault6;
+        hnd[5]=(uint32_t)(uintptr_t)asf_tos_fault7;
+        hnd[6]=(uint32_t)(uintptr_t)asf_tos_fault8;
+        hnd[7]=(uint32_t)(uintptr_t)asf_tos_linea;
+        hnd[8]=(uint32_t)(uintptr_t)asf_tos_fault11;
+        hnd[9]=(uint32_t)(uintptr_t)asf_tos_trap1;
+        hnd[10]=(uint32_t)(uintptr_t)asf_tos_trap2;
+        hnd[11]=(uint32_t)(uintptr_t)asf_tos_trap13;
+        hnd[12]=(uint32_t)(uintptr_t)asf_tos_trap14;
+        for(k=0u;k<13u;++k)tos_saved_vec[k]=vec[vidx[k]];
+        tos_vec_snapshot_save();
+        for(k=0u;k<13u;++k)vec[vidx[k]]=hnd[k];
+        entry=text;
+        /* Register the run as a task slot.  G1.3b hands the slot to the
+           scheduler instead of running it inline. */
+        slot=tos_task_alloc();
+        if(slot>=0){
+            tos_task_current=(uint8_t)slot;
+            tos_task[slot].used=1u;
+            tos_task[slot].sp=0u;
+            tos_task[slot].basepage=mem;
+            tos_task[slot].entry=(uint8_t *)entry;
+            tos_task[slot].pid=0u;
+            tos_task[slot].state=0;
+            tos_task[slot].mem=0;
+            tos_task[slot].stack=0;
+            tos_task[slot].total=0u;
+        }
+        tos_keyq_head=tos_keyq_tail=0u;
+        {unsigned z=0;tos_cur_path[0]='\\';tos_cur_path[1]=0;for(z=0;z<TOS_DIR_MAX;++z)tos_dir[z].name[0]=0;}
+        tos_dir_count=tos_dir_index=0;tos_dir_attr=0xffffu;
+        tos_shift=tos_caps=tos_kbshift=0u;
+        /* A previous run can have ended INSIDE an event wait, because those
+           call asf_tos_exit() from within tos_poll_input()'s caller and never
+           return to clear the guard.  Left at 1 it made every later program
+           ignore the mouse and the keyboard - the reported "first run fine,
+           relaunch hangs".  Reset it, and the pointer buttons with it. */
+        tos_input_busy=0u;
+        tos_mouse_buttons=0u;
+        tos_con_reset();
+        aes_windows=0u;aes_wg_first=0u;tos_redraw_sent=0u;
+        tos_msgq_head=tos_msgq_tail=0u;      /* fresh message queue per run */
+        tos_key_pending=-2;tos_exit_request=0u;
+        tos_active=1u;
+        kernel_tos_runtime_enabled=1u;
+        tos_rawlog_n=0u;tos_rawlog_i=0u;
+        tos_open_window(tos_basename(path));
+        /* Task 3: keep the load geometry readable from normal context even
+           after the program closes. */
+        kernel_tos_dbg_basepage=(uint32_t)(uintptr_t)mem;
+        kernel_tos_dbg_entry=(uint32_t)(uintptr_t)entry;
+        kernel_tos_dbg_total=total;
+        /* GEMDOS/TOS: at program entry the basepage is at 4(sp) (EmuTOS
+           proc_go sets it up that way).  Packers such as HWAM-SOFT read it
+           from the stack, so carry it even though asf_tos_enter also passes
+           the basepage in a0. */
+        /* EmuTOS proc_go/gouser: SP = p_hitpa - sizeof(gouser_stack); at entry
+           0(sp) is a dummy and 4(sp) is the basepage (bdos/proc.c:528-567), and
+           a0 = 0 marks a normal program.  Packers read the basepage from the
+           stack; PFX decompresses downward from p_hitpa. */
+        {uint8_t *usp=(uint8_t *)(uintptr_t)(((uintptr_t)(mem+total-58u))&~1u);
+         uint32_t z;for(z=0u;z<54u;z+=4u)wr32(usp+z,0u);
+         wr32(usp+0,0u);
+         wr32(usp+4,(uint32_t)(uintptr_t)mem);
+         asf_tos_enter(mem,entry,usp);}   /* a3=basepage; a0=0 set inside */
+        tos_active=0u;
+        kernel_tos_runtime_enabled=0u;
+        /* One final composite of the program's last frame, in kernel context
+           (not the interrupt), before the window closes.  Force it past the
+           deadline so the last frame is never dropped. */
+        tos_composite_pending=1u;
+        tos_force_present=1u;
+        tos_composite_work();
+        tos_close_window();
+        tos_task_free(slot);
+        for(k=0u;k<13u;++k)vec[vidx[k]]=tos_saved_vec[k];
+        tos_vec_snapshot_restore();   /* nothing may point into freed TPA */
+        /* Audio belongs in the same category as the vectors: the Dosound table
+           lives in the program's TPA, so the interpreter must be detached and the
+           domain owner released BEFORE that memory goes back to the allocator. */
+        (void)kaudio_tos_teardown();
+        kaudio_set_port_sink(0);
+    }
+    kmem_free(file,KMEM_OWNER_KERNEL);
+    if(env_block)kmem_free(env_block,KMEM_OWNER_KERNEL);   /* was leaked per run */
+    if(tos_screen&&tos_screen_owned)kmem_free(tos_screen,KMEM_OWNER_KERNEL);
+    tos_alloc_cleanup(mem);
+    tos_current_basepage=0;tos_process_limit=0;
+    tos_screen=0;tos_heap=0;
+    tos_window_enabled=0u;                    /* one run, one decision */
+    tos_tpa_next=tpa_mark;                    /* release the program block (LIFO) */
+    kblock_cache_clear();
+    /* Only report the cache when it is actually enabled: an unconditional
+       "DISK CACHE: OFF ..." after every program was pure noise. */
+    tos_print("TOS TASKS LEFT: ");tos_dec((uint32_t)tos_task_count());tos_print("\n");
+    if(tos_last_scancode){
+        tos_print("TOS EXIT KEY: scancode 0x");
+        {const char *hx="0123456789ABCDEF";tos_putc(hx[(tos_last_scancode>>4)&15u]);tos_putc(hx[tos_last_scancode&15u]);}
+        tos_print("  raw(16):");
+        {const char *hx2="0123456789ABCDEF";uint8_t k;
+         for(k=0u;k<tos_rawlog_n;++k){
+            uint8_t b=tos_rawlog[(uint8_t)((tos_rawlog_i+16u-tos_rawlog_n+k)&15u)];
+            tos_putc(' ');tos_putc(hx2[(b>>4)&15u]);tos_putc(hx2[b&15u]);
+        }}
+        tos_print("\n");
+        tos_last_scancode=0u;tos_rawlog_n=0u;tos_rawlog_i=0u;
+    }
+    if(kblock_cache_sectors()){
+        {kblock_stats_t st;kblock_cache_stats(&st);
+         tos_print("DISK CACHE: ");tos_dec(kblock_cache_sectors());tos_print(" sectors, hits=");
+         tos_dec(st.hits);tos_print(" misses=");tos_dec(st.misses);
+         tos_print(" writebacks=");tos_dec(st.writes);tos_print("\n");}
+    }
+    rc=tos_exit_code;
+    if(rc<0)tos_print("TOS PROGRAM FAULT\n");
+    return rc;
+}
+
+/* --- link restores (definitions only) --- */
+volatile uint32_t kernel_wall_ticks = 0u;
+uint32_t kernel_linef_pc = 0u, kernel_linef_op = 0u, kernel_linef_frame[6] = {0,0,0,0,0,0};
+
+static void tos_async_low_copy(uint32_t *dst,const uint32_t *src)
+/* Addresses 0..7 are reset vectors, write-protected by Atari hardware. */
+{unsigned i;for(i=2u;i<512u;++i)((volatile uint32_t *)dst)[i]=((const volatile uint32_t *)src)[i];}
+static uint16_t tos_async_lock(void)
+{uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x0700,%%sr":"=d"(sr)::"memory");return sr;}
+static void tos_async_unlock(uint16_t sr)
+{__asm__ volatile("move.w %0,%%sr"::"d"(sr):"memory");}
+static void tos_async_park(void)
+{
+    uint16_t sr=tos_async_lock();
+    if(tos_cpu_type)tos_async_guest_vbr=tos_async_read_vbr();
+    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_guest_cacr=tos_async_read_cacr();
+    tos_async_low_copy(tos_async_guest_low,(const uint32_t *)0);
+    tos_async_low_copy((uint32_t *)0,tos_async_native_low);
+    tos_async_target=kgfx_planar_surface_override;
+    tos_async_pitch=kgfx_planar_surface_pitch;
+    kgfx_planar_surface_override=0;kgfx_planar_surface_pitch=0;
+    kernel_tos_runtime_enabled=0u;tos_async_in_guest=0u;
+    if(tos_cpu_type)asf_tos_set_vbr(tos_async_native_vbr);
+    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_write_cacr(tos_async_native_cacr|8u);
+    tos_async_switch(&tos_async_guest_sp,tos_async_native_sp);
+    tos_async_unlock(sr);
+}
+static void tos_async_yield(void)
+{
+    uint16_t sr;
+    if(tos_async_state!=2u||!tos_async_in_guest||tos_input_busy)return;
+    __asm__ volatile("move.w %%sr,%0":"=d"(sr));
+    if((sr&0x0700u)>0x0500u)return; /* never suspend an interrupt callback */
+    if((uint32_t)(kernel_user_hires_clock()-tos_async_slice)<246u)return;
+    if(!kernel_tos_async_yields)__asm__ volatile("move.l %%sp,%0":"=m"(kernel_tos_async_first_sp));
+    ++kernel_tos_async_yields;
+    tos_async_park();
+}
+static void tos_async_entry(void)
+{
+    tos_async_unlock(0x2500u);
+    kernel_tos_async_result=kernel_tos_run_program(tos_async_path);
+    tos_async_state=3u;
+    tos_async_park();
+    for(;;){} /* completion is collected by the supervisor, never resumed */
+}
+int32_t kernel_tos_start_async(const char *path)
+{
+    unsigned i;uint32_t size=0u;uint8_t attr=0;
+    if(tos_async_state||tos_active)return -0x2b1;
+    if(tos_cpu_type>3u)return -0x2ff; /* cache/FPU context for 040+ is not implemented */
+    if(!path||!*path)return -1;
+    for(i=0;i<63u&&path[i];++i)tos_async_path[i]=path[i];
+    if(path[i])return -0x2b0;
+    tos_async_path[i]=0;
+    if(kfat_stat_path(path,&size,&attr)!=FAT_FILE_FOUND||size<28u)return -2;
+    tos_async_stack=(uint8_t *)kmem_alloc(32768u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+    if(!tos_async_stack)return -3;
+    /* switch restores USP + eleven callee-saved registers + return PC. */
+    tos_async_guest_sp=tos_async_stack+32768u-52u;
+    for(i=0;i<52u;++i)((uint8_t *)tos_async_guest_sp)[i]=0;
+    ((uint32_t *)tos_async_guest_sp)[12]=(uint32_t)(uintptr_t)tos_async_entry;
+    tos_async_key_head=tos_async_key_tail=tos_async_mouse_head=tos_async_mouse_tail=0;
+    tos_async_mouse_x=ksessions_mouse_x();tos_async_mouse_y=ksessions_mouse_y();
+    tos_async_session=ksessions_current();kernel_tos_async_result=0;kernel_tos_async_yields=0;kernel_tos_async_first_sp=0;
+    tos_async_state=1u;return 0;
+}
+void kernel_tos_async_pump(void)
+{
+    uint16_t sr;
+    if(!tos_async_state||tos_async_in_guest||ksessions_current()!=tos_async_session||kgame_owns_screen())return;
+    sr=tos_async_lock();
+    if(tos_cpu_type)tos_async_native_vbr=tos_async_read_vbr();
+    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_native_cacr=tos_async_read_cacr();
+    tos_async_low_copy(tos_async_native_low,(const uint32_t *)0);
+    if(tos_async_state==2u){
+        tos_async_low_copy((uint32_t *)0,tos_async_guest_low);
+        kgfx_planar_surface_override=tos_async_target;
+        kgfx_planar_surface_pitch=tos_async_pitch;
+        kernel_tos_runtime_enabled=1u;
+        if(tos_cpu_type)asf_tos_set_vbr(tos_async_guest_vbr);
+        if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_write_cacr(tos_async_guest_cacr|8u);
+    }else tos_async_state=2u;
+    tos_async_in_guest=1u;tos_async_slice=kernel_user_hires_clock();
+    tos_async_switch(&tos_async_native_sp,tos_async_guest_sp);
+    tos_async_unlock(sr);
+    if(tos_async_state==3u||tos_async_cancel){
+        /* 3 = gosc zakonczyl sie sam; tos_async_cancel = zadanie uzytkownika
+           (Ctrl+Alt+Esc), gdy program TOS nie chce sie zakonczyc. */
+        kmem_free(tos_async_stack,KMEM_OWNER_KERNEL);tos_async_stack=0;
+        tos_async_state=0u;tos_async_cancel=0u;
+        if(kernel_gui_focus_pid()==TOS_ASYNC_PID)kernel_gui_focus_set(0u);
+    }
+}

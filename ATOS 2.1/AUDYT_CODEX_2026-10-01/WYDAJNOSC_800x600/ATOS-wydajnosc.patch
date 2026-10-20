@@ -1,0 +1,214 @@
+--- a/Makefile
++++ b/Makefile
+@@ -1370,3 +1370,10 @@
+ 	build/tests/test_language_setting
+ 	cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_setup.c system/text_terminal.c -o build/tests/test_setup
+ 	build/tests/test_setup
++
++.PHONY: check-terminal-chunky
++check: check-terminal-chunky
++check-terminal-chunky:
++	@mkdir -p build/tests
++	cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_terminal_chunky.c system/text_terminal.c -o build/tests/test_terminal_chunky
++	build/tests/test_terminal_chunky
+--- a/system/boot_main.c
++++ b/system/boot_main.c
+@@ -1,31 +1,16 @@
+ #include "boot_protocol.h"
+-
+-static const char *machine_name(uint8_t type)
+-{
+-    static const char *const names[]={"ST","MEGA ST","STE","MEGA STE","TT","FALCON"};
+-    return type<6u?names[type]:"UNKNOWN";
+-}
+-
+-static const char *cpu_name(uint8_t type)
+-{
+-    static const char *const names[]={"68000","68010","68020","68030","68040","68060"};
+-    return type<6u?names[type]:"UNKNOWN";
+-}
+ 
+ void boot_main(const boot_handoff_t *h)
+ {
+     if(!h||h->magic!=BOOT_HANDOFF_MAGIC||h->version!=BOOT_HANDOFF_VERSION||
+        h->size<sizeof(*h)||!h->console_clear||!h->console_puts||!h->console_put_u32||!h->start_kernel)
+         for(;;)__asm__ volatile("stop #0x2700");
+-    /* No clear: the ROM boot log scrolls on instead of being erased. */
+-    h->console_puts("\n\nATARI SYSTEM LOADER\n\nBOOT.SYS LOADED SUCCESSFULLY\n\nMACHINE: ");
+-    h->console_puts(machine_name(h->machine_type));
+-    h->console_puts("\nCPU: ");h->console_puts(cpu_name(h->cpu_type));
+-    h->console_puts("\nST-RAM: ");h->console_put_u32(h->st_ram_bytes/1024u);h->console_puts(" KB");
+-    h->console_puts("\nTT-RAM: ");h->console_put_u32(h->tt_ram_bytes/1024u);h->console_puts(" KB");
+-    h->console_puts("\nBOOT DEVICE: ");h->console_puts((h->boot_acsi_id&0x80u)?"IDE ":"ACSI ");h->console_put_u32((uint32_t)(h->boot_acsi_id&0x7fu));
+-    h->console_puts("\nBOOT PARTITION: ");h->console_put_u32(h->boot_partition+1u);
+-    h->console_puts("\n\nLOADING SYSTEM/KERNEL.SYS...");
++    /* The ROM leaves the cursor on its fixed boot status row. Hardware is
++       already listed by POST (and again by the kernel), so repeating that
++       table here scrolls the entire VRAM once per line, particularly costly
++       at 800x600x8. A short acknowledgement fits the existing row; the ROM
++       start_kernel callback owns the subsequent load/error status. */
++    h->console_puts(" OK");
+     h->start_kernel();
+     h->console_puts("\nKERNEL LOAD FAILED\nPRESS RESET");
+     for(;;)__asm__ volatile("stop #0x2700");
+--- a/system/kernel_console.c
++++ b/system/kernel_console.c
+@@ -162,10 +162,10 @@
+          if(text[i]=='\n'||text[i]=='\r')continue;
+          console.cells[(unsigned)status_row*TERM_COLS+status_col++]=(term_cell_t)(uint8_t)text[i];
+      }
++     if(!status_label_done){status_field=(status_col<TERM_COLS-1u)?(status_col+1u):status_col;
++                            status_label_done=1u;}
+      while(status_col<TERM_COLS)           /* erase the rest of the field */
+          console.cells[(unsigned)status_row*TERM_COLS+status_col++]=(term_cell_t)' ';
+-     if(!status_label_done){status_field=(status_col<TERM_COLS-1u)?(status_col+1u):status_col;
+-                            status_label_done=1u;}
+      if(target==ksessions_current())dirty=1;
+      kconsole_flush();
+      return;
+--- a/system/kernel_video.c
++++ b/system/kernel_video.c
+@@ -134,14 +134,16 @@
+ }
+ void kvideo_damage(int32_t x,int32_t y,int32_t w,int32_t h)
+ {
+- unsigned first,last,end;uint16_t maxw;
++ unsigned first,last,end,pixel_shift;uint16_t maxw;
+  if(!card||!row_left||w<=0||h<=0||x>=(int32_t)mode_w||y>=(int32_t)mode_h)return;
+  if(x<0){if(x<=-w)return;w+=x;x=0;}
+  if(y<0){if(y<=-h)return;h+=y;y=0;}
+  if(w>(int32_t)mode_w-x)w=(int32_t)mode_w-x;
+  if(h>(int32_t)mode_h-y)h=(int32_t)mode_h-y;
+  maxw=row_words();
+- pending=1;first=(unsigned)x/16;last=((unsigned)(x+w)+15)/16;end=(unsigned)(y+h);
++ pixel_shift=mode_bpp==8u?1u:4u;
++ pending=1;first=(unsigned)x>>pixel_shift;
++ last=((unsigned)(x+w)+(1u<<pixel_shift)-1u)>>pixel_shift;end=(unsigned)(y+h);
+  if(last>maxw)last=maxw;
+  {unsigned start=(unsigned)y;
+   if(start<row_min)row_min=start;
+@@ -154,6 +156,10 @@
+  uint16_t maxw=row_words();
+  ++kvideo_dbg_calls;
+  if(!card||!front||!shadow||!row_left||!row_right||(!full&&!pending))return;
++ /* The boot console draws straight into VRAM. Reading the aperture back
++    into itself costs a full bus scan without presenting anything new.
++    A later front-buffer switch sets full=1 and rebuilds the shadow. */
++ if(front==card){full=0;pending=0;damage_clear_rows();return;}
+  ++kvideo_dbg_copies;
+  {unsigned y0=full?0u:row_min,y1=full?mode_h:row_max;
+   if(y0>=y1){full=0;pending=0;return;}
+--- a/system/text_terminal.c
++++ b/system/text_terminal.c
+@@ -174,7 +174,7 @@
+   }
+   d->cells[i]=a;changed++;
+  }
+- return changed;
++ d->valid=1;return changed;
+ }
+ unsigned term_render_mono(term_display_t *d,const term_cell_t *cells,
+                           volatile uint16_t *screen,const uint8_t font[256][16])
+--- a/tests/test_kernel_console.c
++++ b/tests/test_kernel_console.c
+@@ -78,6 +78,15 @@
+  initialize(0);kconsole_clear();kconsole_puts("color fallback");
+  kconsole_put_u32(123);kconsole_flush();
+  assert(clears==1&&numbers==1&&presents==0&&!strcmp(fallback_text,"color fallback"));
++ /* Status field starts after the label, not after padding the whole row. */
++ initialize(1);kconsole_status_row(20);
++ kconsole_puts("LOADING COMPONENTS:");
++ kconsole_puts("CORE.SYS: OK");
++ for(i=0;i<19;i++)assert(console.cells[20*80+i]==(unsigned char)"LOADING COMPONENTS:"[i]);
++ for(i=0;i<8;i++)assert(console.cells[20*80+20+i]==(unsigned char)"CORE.SYS"[i]);
++ kconsole_puts("VFS: OK");
++ assert(console.cells[20*80+20]=='V' && console.cells[20*80+23]==' ');
++ kconsole_status_row(-1);
+  puts("Kernel console PASS: batched writes, bounded flush, CR/Tab/Backspace, scroll, desktop isolation, restore, legacy invalidation, panic and non-mono fallback");
+  return 0;
+ }
+--- /dev/null
++++ b/tests/test_terminal_chunky.c
+@@ -0,0 +1,26 @@
++#include <assert.h>
++#include <stdio.h>
++#include <string.h>
++#include "text_terminal.h"
++static text_terminal_t terminal;
++static term_display_t display;
++static uint32_t pixels[800*600/4];
++static uint8_t font[256][16];
++int main(void)
++{
++ unsigned first,idle,single,invalidated;
++ term_clear(&terminal,0);
++ memset(font['A'],0x5a,16);
++ first=term_render_chunky_polled(&display,terminal.cells,(uint8_t *)pixels,800,font,0);
++ idle=term_render_chunky_polled(&display,terminal.cells,(uint8_t *)pixels,800,font,0);
++ terminal.cells[10]='A';
++ single=term_render_chunky_polled(&display,terminal.cells,(uint8_t *)pixels,800,font,0);
++ printf("CHUNKY cells rendered: first=%u unchanged=%u one-change=%u\n",first,idle,single);fflush(stdout);
++ assert(first==TERM_CELLS && idle==0 && single==1 && display.valid);
++ assert(((uint8_t *)pixels)[80]==0 && ((uint8_t *)pixels)[81]==1);
++ term_display_invalidate(&display);
++ invalidated=term_render_chunky_polled(&display,terminal.cells,(uint8_t *)pixels,800,font,0);
++ assert(invalidated==TERM_CELLS);
++ puts("Chunky terminal cache PASS");
++ return 0;
++}
+--- a/tests/test_video_output.c
++++ b/tests/test_video_output.c
+@@ -12,7 +12,7 @@
+    allocation gets its own storage, and the shadow - the only 16-byte-aligned
+    request - still has its exact size checked, so a geometry regression still
+    fails the test instead of being ignored. */
+-static uint8_t heap[65536];static uint32_t heap_used;static uint16_t *shadow_ptr;
++static uint8_t heap[1024*1024];static uint32_t heap_used;static uint16_t *shadow_ptr;
+ void *kmem_alloc(uint32_t bytes,uint32_t align,uint16_t owner,uint16_t flags,int region)
+ {
+  (void)owner;(void)flags;(void)region;
+@@ -54,6 +54,32 @@
+   kvideo_damage((int32_t)x,(int32_t)y,1,1);kvideo_flush();
+   assert(vram[1+offset*2]==(b[offset]>>8)&&vram[2+offset*2]==(b[offset]&255));
+  }
++ /* 8 bpp damage is measured in two-pixel words, not 16-pixel words. */
++ {static uint16_t colour[800*600/2];static uint8_t colour_vram[800*600+2];
++  kvideo_set_mode_format(800,600,8);kvideo_select((uint8_t *)colour);
++  memset(colour_vram,0xa5,sizeof colour_vram);
++  assert(kvideo_activate_vofa(colour_vram+1));kvideo_flush();
++  for(unsigned x=0;x<800;++x){
++   unsigned y=x%600,offset=y*400+x/2;
++   colour[offset]^=0x4321;
++   kvideo_damage((int32_t)x,(int32_t)y,1,1);kvideo_flush();
++   assert(colour_vram[1+offset*2]==(colour[offset]>>8));
++   assert(colour_vram[2+offset*2]==(colour[offset]&255));
++  }
++  colour[239999]=0x4567;kvideo_damage(799,599,99,99);kvideo_flush();
++  assert(colour_vram[479999]==0x45 && colour_vram[480000]==0x67);
++  assert(colour_vram[0]==0xa5 && colour_vram[480001]==0xa5);
++  /* Direct console rendering must not read/write the aperture again. */
++  {unsigned copies=kvideo_dbg_copies;
++   kvideo_select(colour_vram+1);colour_vram[1]=0x39;
++   kvideo_damage(0,0,800,600);kvideo_flush();
++   assert(kvideo_dbg_copies==copies && colour_vram[1]==0x39);
++   assert(!full && !pending);
++   kvideo_select((uint8_t *)colour);kvideo_flush();
++   assert(kvideo_dbg_copies==copies+1);
++   assert(colour_vram[1]==(colour[0]>>8));}
++
++ }
+  puts("Video output PASS: Shifter selection, allocation fallback, big-endian pixels, changed words, idle, clipping, edges and session buffer switches");
+  return 0;
+ }
+--- a/ui/console.c
++++ b/ui/console.c
+@@ -62,7 +62,8 @@
+         kblit_fill_planar((volatile uint16_t *)screen,40u,1u,0u,0u,640u,400u,0u)) {
+         /* blitter cleared the framebuffer */
+     } else {
+-        for (i=0; i<shifter_frame_bytes()/4u; ++i) screen[i]=0;
++        uint32_t longs=shifter_frame_bytes()/4u;
++        for (i=0; i<longs; ++i) screen[i]=0;
+     }
+     console_text_blank_rows(0u,(uint16_t)(CONSOLE_TEXT_ROWS-1u));
+     cursor_x=cursor_y=0;

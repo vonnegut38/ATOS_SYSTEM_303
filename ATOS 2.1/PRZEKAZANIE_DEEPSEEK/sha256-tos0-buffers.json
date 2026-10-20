@@ -1,0 +1,14 @@
+{
+  "checkpoint": "atos2-tos0-dynamic-buffers-2026-09-24",
+  "note": "TOS=0 profil build-time oraz dynamiczne bufory FAT undo (66 KB) i WM surfaces (96 KB); BSS 261 618 -> 67 590.",
+  "build/bios_mste.bin": "798d254bf37f5b44752579dc6779a548f55a48c47f1c8fdf9899e5563f6af100",
+  "build/system/KERNEL.SYS": "e6fb92fe336259b4b4c7a73d576b3b14a2b11cbf4426b62f6104c820c290fe07",
+  "build/system/VOFA.SYS": "809780c9c1fdab609e3e1364360ae0e9a53293ee03d6a7244185e27c09fc46a1",
+  "build/system/INPUT.SYS": "771e9ef39335f573e205dc7af29f165ff8b9b2988e3c3c71c54f81f632a2419b",
+  "build/system/ACSI.SYS": "8adf896a19c296682ccf9525a538fab9e2db5019ea1fbd1ff039138661a4fb9b",
+  "build/system/SHELL.SYS": "244d112d59576ffb6b0df456ca8bd5d96607cc3a99c87cb3373c9c0f84a42ec4",
+  "work/atos-v2.img": "aa19cfb119d6cab423dbfe10f1b0535a4032052139093e5e088bf169c77c6d77",
+  "system/kernel_fat.c": "56271abae6ef6dd851f7f41e6ff51248d8f184ca048e3ef73539bd06f88ab165",
+  "system/kernel_wm.c": "9cd9c7f220d36a94b98cfa5611c2edab69e401157de645f3b4e4a6e8b1092eba",
+  "work/tos-buffers.patch": "7ce98047239bba120309b002503b5d60bb9d3ffabc3db2c937f4c116a8ff4b6b"
+}

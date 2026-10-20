@@ -1,0 +1,72 @@
+--- Nowy uklad pamieci: kernel 0x80000 -> 0x20000, BOOT.SYS 0x20000 -> 0x8000 ---
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/include/boot_protocol.h"	2026-09-21 23:16:26.000000000 +0200
++++ include/boot_protocol.h	2026-09-24 21:56:24.162543570 +0200
+@@ -16,7 +16,7 @@
+    (linker/kernel-sys.ld) and system/kernel_entry.S hardcode the same value and
+    MUST stay in sync; a mismatch makes load_image() reject the image
+    (header_load check).  Guarded by tests/test_kernel_load_addr.py. */
+-#define KERNEL_IMAGE_LOAD_ADDRESS 0x00080000UL
++#define KERNEL_IMAGE_LOAD_ADDRESS 0x00020000UL
+ 
+ typedef struct {uint32_t file_size,memory_size,entry_offset;} module_image_info_t;
+ 
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/linker/kernel-sys.ld"	2026-09-21 13:21:37.000000000 +0200
++++ linker/kernel-sys.ld	2026-09-24 21:56:32.610487935 +0200
+@@ -2,7 +2,7 @@
+ OUTPUT_ARCH(m68k)
+ ENTRY(kernel_entry)
+ SECTIONS {
+-    . = 0x00080000;
++    . = 0x00020000;
+     __image_start = .;
+     .kernel_header : { KEEP(*(.kernel_header)) }
+     .text : { *(.text.startup) *(.text*) *(.rodata*) }
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/linker/boot-sys.ld"	2026-09-16 21:13:39.000000000 +0200
++++ linker/boot-sys.ld	2026-09-24 21:56:32.631189089 +0200
+@@ -3,7 +3,7 @@
+ ENTRY(boot_entry)
+ 
+ SECTIONS {
+-    . = 0x00020000;
++    . = 0x00008000;
+     __image_start = .;
+     .boot_header : { KEEP(*(.boot_header)) }
+     .text : { *(.text.startup) *(.text*) *(.rodata*) }
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/boot_entry.S"	2026-09-16 21:13:39.000000000 +0200
++++ system/boot_entry.S	2026-09-24 21:56:32.640672239 +0200
+@@ -2,10 +2,10 @@
+     .ascii  "ASYSBOOT"
+     .word   1
+     .word   32
+-    .long   __image_file_end-0x00020000
+-    .long   0x00020000
+-    .long   boot_entry-0x00020000
+-    .long   __image_memory_end-0x00020000
++    .long   __image_file_end-0x00008000
++    .long   0x00008000
++    .long   boot_entry-0x00008000
++    .long   __image_memory_end-0x00008000
+     .long   0                       /* patched byte-sum */
+ 
+     .section .text.startup,"ax"
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/loader/bootstage.c"	2026-09-22 11:50:21.000000000 +0200
++++ loader/bootstage.c	2026-09-24 21:56:32.648752192 +0200
+@@ -132,6 +132,6 @@
+     handoff.blitter_present=g_system.blitter_present;
+     handoff.blitter_enabled=g_system.blitter_enabled;
+     result=locate_system_file(id,g_system.acsi_part_start[part],boot_name,&file);
+-    if(result==1&&load_image(&file,boot_magic,BOOT_IMAGE_VERSION,0x00020000UL,0x00020000UL,&entry)){console_puts("\nSTARTING BOOT.SYS...");active_id=id;active_part=part;handoff.magic=BOOT_HANDOFF_MAGIC;handoff.version=BOOT_HANDOFF_VERSION;handoff.size=sizeof(handoff);handoff.machine_type=g_system.machine_type;handoff.cpu_type=g_system.cpu_type;handoff.fpu_type=g_system.fpu_type;handoff.clock_mhz=g_system.clock_mhz;handoff.clock_known=g_system.clock_known;handoff.reserved0=(uint8_t)(0x80u|g_system.nova_adapter);handoff.reserved1=g_system.nova_chipset;handoff.video_mode=g_system.video_mode;handoff.boot_acsi_id=id;handoff.boot_partition=part;handoff.blitter_present=g_system.blitter_present;handoff.blitter_enabled=g_system.blitter_enabled;handoff.st_ram_bytes=g_system.ram_bytes;handoff.tt_ram_bytes=g_system.tt_ram_bytes;handoff.console_clear=console_clear;handoff.console_puts=console_puts;handoff.console_put_u32=console_put_u32;handoff.start_kernel=start_kernel;handoff.load_module=load_module_service;handoff.acsi_read_sector=acsi_read_sector;((void (*)(const boot_handoff_t *))(uintptr_t)entry)(&handoff);console_clear();console_puts("ATARI SYSTEM BOOT\n\nBOOT.SYS RETURNED UNEXPECTEDLY");wait_return();return;}
++    if(result==1&&load_image(&file,boot_magic,BOOT_IMAGE_VERSION,0x00008000UL,0x00008000UL,&entry)){console_puts("\nSTARTING BOOT.SYS...");active_id=id;active_part=part;handoff.magic=BOOT_HANDOFF_MAGIC;handoff.version=BOOT_HANDOFF_VERSION;handoff.size=sizeof(handoff);handoff.machine_type=g_system.machine_type;handoff.cpu_type=g_system.cpu_type;handoff.fpu_type=g_system.fpu_type;handoff.clock_mhz=g_system.clock_mhz;handoff.clock_known=g_system.clock_known;handoff.reserved0=(uint8_t)(0x80u|g_system.nova_adapter);handoff.reserved1=g_system.nova_chipset;handoff.video_mode=g_system.video_mode;handoff.boot_acsi_id=id;handoff.boot_partition=part;handoff.blitter_present=g_system.blitter_present;handoff.blitter_enabled=g_system.blitter_enabled;handoff.st_ram_bytes=g_system.ram_bytes;handoff.tt_ram_bytes=g_system.tt_ram_bytes;handoff.console_clear=console_clear;handoff.console_puts=console_puts;handoff.console_put_u32=console_put_u32;handoff.start_kernel=start_kernel;handoff.load_module=load_module_service;handoff.acsi_read_sector=acsi_read_sector;((void (*)(const boot_handoff_t *))(uintptr_t)entry)(&handoff);console_clear();console_puts("ATARI SYSTEM BOOT\n\nBOOT.SYS RETURNED UNEXPECTEDLY");wait_return();return;}
+     console_clear();console_puts("ATARI SYSTEM BOOT\n\n");if(result==-2)console_puts("BOOT FILESYSTEM ERROR");else if(result<=0)console_puts("SYSTEM/BOOT.SYS NOT FOUND");else console_puts("BOOT.SYS INVALID OR LOAD FAILED");wait_return();
+ }
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/tests/test_kernel_load_addr.py"	2026-09-21 23:16:31.000000000 +0200
++++ tests/test_kernel_load_addr.py	2026-09-24 21:56:32.623764279 +0200
+@@ -12,7 +12,7 @@
+ from pathlib import Path
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-ADDRESS = 0x00080000
++ADDRESS = 0x00020000
+ 
+ 
+ def read(rel):

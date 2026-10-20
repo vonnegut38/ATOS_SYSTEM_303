@@ -1,0 +1,15 @@
+{
+  "checkpoint": "atos2-vofa-module-2026-09-24",
+  "note": "VOFA/ET4000 wydzielone z jadra do opcjonalnego VOFA.SYS (ladowany gdy VIDEO.CFG=VOFA); shadow 32 KB alokowany leniwie.",
+  "build/bios_mste.bin": "798d254bf37f5b44752579dc6779a548f55a48c47f1c8fdf9899e5563f6af100",
+  "build/system/KERNEL.SYS": "304475fd02d3eb70a9e0e7bad6279aeb9e66aed74625ee03c6268359fb48ec6a",
+  "build/system/VOFA.SYS": "809780c9c1fdab609e3e1364360ae0e9a53293ee03d6a7244185e27c09fc46a1",
+  "build/system/INPUT.SYS": "771e9ef39335f573e205dc7af29f165ff8b9b2988e3c3c71c54f81f632a2419b",
+  "build/system/ACSI.SYS": "8adf896a19c296682ccf9525a538fab9e2db5019ea1fbd1ff039138661a4fb9b",
+  "build/system/SHELL.SYS": "244d112d59576ffb6b0df456ca8bd5d96607cc3a99c87cb3373c9c0f84a42ec4",
+  "work/atos-v2.img": "aa36ad8fd2cea1fe585bba07117b78b0acbd697f73eb268b2811d57f1d578837",
+  "include/kernel_video_service.h": "9d785c0700fdbe14abe168904d764e92d4dd98d651f2c99a34b66485c2a659a1",
+  "system/vofa_module.c": "1122309d14f45d96705659499b4b5c2f444768b4718536c07adaa14ff9360c54",
+  "system/vofa_entry.S": "e38c16d7c1cea5e1e701250935b5ee92a1aa62768268e332a008e30cd60999fe",
+  "work/vofa-module.patch": "8983bdee73060b9389368b5e6f63c909e25724f638c56891fc0c0e8eed6dddee"
+}

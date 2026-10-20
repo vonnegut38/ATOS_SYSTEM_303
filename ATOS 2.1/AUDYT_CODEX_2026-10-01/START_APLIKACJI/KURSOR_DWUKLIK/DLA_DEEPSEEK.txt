@@ -1,0 +1,7 @@
+Przeczytaj RAPORT.md. Priorytet: sesja nadpisuje DOWN/UP w pojedynczym forward_buttons. Test rzeczywistego kodu: dwa kliknięcia 13,0,13,0 -> jedna wiadomość 12 (puszczony), zamiast czterech zdarzeń. Dalsze wydłużanie DBL_TICKS nie pomoże; już jest około 0,98 s.
+
+Napraw transport uporządkowanych zdarzeń z pozycją i czasem, sprawdzaj pojemność rzeczywistego odbiorcy przed odbiorem, zachowaj przechwycenie kliknięcia. Osobno aktualna pozycja kursora, osobno kolejka interakcji. Nie kasuj cicho UP w pending pulpitu. Zmień protokół i wszystkich odbiorców spójnie.
+
+Hover nadal rysuje wszystkie ikony i rozciąga jeden damage na ich cały obszar. Ogranicz to po naprawie poprawności. Ikony mają teraz 48x48, lecz gui_damage i sprzątanie starych pozycji nadal zakładają 32x32/48 wysokości; renderer ma za małe minimum szerokości. Dołączony test icon48 odtwarza błąd.
+
+Oba testy diagnostyczne mają obecnie zwracać błąd. Po naprawie muszą przejść. Nie wykonano benchmarku kursora ani testu całego systemu w emulatorze; przeprowadź scenariusze odbioru z raportu na kopii obrazu.

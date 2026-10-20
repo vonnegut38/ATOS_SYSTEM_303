@@ -1,0 +1,7 @@
+{
+  "system/kernel_wm.c": "5d70a8c067cb3e1fffdd0b00e6d10847d94c96a480d8e78a8e0b5d32f322df0f",
+  "system/kernel_video.c": "451c6f56ccd66b2f74a4de9a4a734d452f80807163257a880930f062fb59cd01",
+  "system/wm_core.c": "4465967868cbbcf635e58a7f83780143df3f561f0929676df3a7ab07c260e25f",
+  "system/desktop_wm.c": "aa05dd43503f905290fa22a15770226c3bb052be92be4923d2402747574a8e1f",
+  "system/ac.c": "d6e327e8a3bf2c4e9c3b669962bc386b53a96f416a98f281eb301c9cd8516a2e"
+}

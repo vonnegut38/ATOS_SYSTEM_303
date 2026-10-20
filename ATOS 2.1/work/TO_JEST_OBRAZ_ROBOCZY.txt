@@ -1,0 +1,4 @@
+atos-v2.img jest obrazem ROBOCZYM: tools/build_atos2.py nadpisuje go podczas budowania.
+Do codziennego uruchamiania używaj ../../ATOS_AKTUALNY/URUCHOM_ATOS.command.
+Kopia bez eksperymentalnego audio: ../../ATOS_KOPIA.
+audio-baseline zawiera eksperymenty, NIE zaakceptowane wydanie.

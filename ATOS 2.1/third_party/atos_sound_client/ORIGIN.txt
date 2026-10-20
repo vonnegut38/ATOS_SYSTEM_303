@@ -1,0 +1,1 @@
+ATOS Sound reference-v1 client snapshot, 2026-10-13. Source: ATOS-SOUND/reference-v1 (client, upload, wire and public headers). wire.c includes the optional AS_FAST_CRC32 table from the tested Prehistorik music integration. Protocol ASND-v1 unchanged. No mixer or platform firmware linked into the Atari app.

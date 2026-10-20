@@ -1,0 +1,26 @@
+[    0.0s] image /Users/xxx/Documents/Deepseek_test/ATOS 2.0/work/atos-v2.img
+[    9.3s] shot L0-baseline True
+[   37.6s] setup done, current=2097184 - ruszaj mysza
+[   47.3s] cycle 1: nie udalo sie wrocic do tts1 (cur=2097184)
+[   65.4s] cycle 1/20
+[   75.1s] cycle 2: nie udalo sie wrocic do tts1 (cur=2097184)
+[   93.2s] cycle 2/20
+[  102.9s] cycle 3: nie udalo sie wrocic do tts1 (cur=2097184)
+[  121.0s] cycle 3/20
+[  130.7s] cycle 4: nie udalo sie wrocic do tts1 (cur=2097184)
+[  148.8s] cycle 4/20
+[  159.0s] shot L05-inputstat-cur2097184 True
+[  159.0s] cycle 5: nie udalo sie wrocic do tts1 (cur=2097184)
+[  177.1s] cycle 5/20
+[  186.8s] cycle 6: nie udalo sie wrocic do tts1 (cur=2097184)
+[  204.9s] cycle 6/20
+[  214.6s] cycle 7: nie udalo sie wrocic do tts1 (cur=2097184)
+[  232.7s] cycle 7/20
+[  242.4s] cycle 8: nie udalo sie wrocic do tts1 (cur=2097184)
+[  260.5s] cycle 8/20
+[  270.2s] cycle 9: nie udalo sie wrocic do tts1 (cur=2097184)
+[  288.3s] cycle 9/20
+[  298.5s] shot L10-inputstat-cur2097184 True
+[  298.5s] cycle 10: nie udalo sie wrocic do tts1 (cur=2097184)
+[  316.9s] cycle 10/20
+[  326.7s] cycle 11: nie udalo sie wrocic do tts1 (cur=2097184)

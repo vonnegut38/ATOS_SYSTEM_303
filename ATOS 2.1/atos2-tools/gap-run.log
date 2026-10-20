@@ -1,0 +1,18 @@
+--- baseline: words=128 irq_dropped=[0, 0, 0, 0] ---
+setup done
+--- after cycle 8: words=128 irq_dropped=[0, 0, 0, 0] ---
+    id  7 7 ksessions2         overrun=   9 pending=   0
+    id 11 11 ksessions_paint   overrun=   1 pending=   3
+    id 15 15?                  overrun=   3 pending=   0
+--- after cycle 16: words=128 irq_dropped=[0, 0, 0, 0] ---
+    id  3 3 consumer loop      overrun=   0 pending=   1
+    id  7 7 ksessions2         overrun=  17 pending=   0
+    id 11 11 ksessions_paint   overrun=   1 pending=   4
+    id 15 15?                  overrun=   6 pending=   1
+--- final: words=128 irq_dropped=[0, 0, 0, 0] ---
+    id  3 3 consumer loop      overrun=   0 pending=   1
+    id  7 7 ksessions2         overrun=  17 pending=   0
+    id 11 11 ksessions_paint   overrun=   1 pending=   4
+    id 15 15?                  overrun=   6 pending=   1
+closing
+hatari rc= 0

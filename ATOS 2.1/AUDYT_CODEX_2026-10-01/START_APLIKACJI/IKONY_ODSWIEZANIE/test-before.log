@@ -1,0 +1,4 @@
+Assertion failed: (gui_damage(&c,1,64,64,&l,&t,&r,&b)), function main, file test.c, line 76.
+Assertion failed: (violations==0), function main, file test.c, line 71.
+pixel writes=8488500, outside surface=6240550
+Return codes (damage, clipping): [-6, -6]

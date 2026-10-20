@@ -1,0 +1,14 @@
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_entry.S"	2026-09-24 16:06:19.542991498 +0200
++++ system/kernel_entry.S	2026-09-24 17:56:41.213473639 +0200
+@@ -589,6 +589,11 @@
+     move.l 0(%a0,%d1.w),%sp
+     moveq #0,%d0
+     movem.l (%sp)+,%d2-%d7/%a2-%a6
++    /* This path returns to the supervisor with RTS instead of RTE, so the
++       Timer-C exception's SR (IPL6, IRQ6 masked) would leak into the main
++       loop. Restore the kernel's baseline supervisor SR (S=1, IPL5): the
++       same level used when a native process is entered below (0x0500 user). */
++    move.w #0x2500,%sr
+     rts
+ 
+ kernel_user_depth_failed:

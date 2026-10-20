@@ -1,0 +1,178 @@
+--- a/system/kernel_block.c
++++ b/system/kernel_block.c
+@@ -77,12 +77,15 @@
+ }
+ int kblock_select(uint8_t device)
+ {
+-    if(device==block_device)return 1;
++    if(device==block_device&&ready)return 1;
++    ready=0;
+     block_device=device;
+     kblock_cache_clear();          /* cached sectors belong to the old device */
+     if(!dma_buffer)return 0;
++    stats.reads++;
+     if(!kernel_acsi_read_blocks(device,0,1,dma_buffer))return 0;
+     put(0,dma_buffer);
++    ready=1;
+     return 1;
+ }
+ int kblock_read(uint32_t sector,uint16_t count,void *destination)
+--- a/system/wm_blit.c
++++ b/system/wm_blit.c
+@@ -6,8 +6,13 @@
+ void wm_fill_rect(wm_fb_t *fb,const wm_rect_t *r,uint8_t level)
+ {
+     int y,x0,y0,x1,y1;
+-    if(!fb||!r)return;
++    if(!fb||!fb->data||!r)return;
+     x0=r->x;y0=r->y;x1=r->x+r->w;y1=r->y+r->h;
++    if(x0<0)x0=0;
++    if(y0<0)y0=0;
++    if(x1>(int)fb->w)x1=fb->w;
++    if(y1>(int)fb->h)y1=fb->h;
++    if(x1<=x0||y1<=y0)return;
+     for(y=y0;y<y1;++y){
+         uint8_t *row=fb->data+(uint32_t)y*fb->pitch;
+         if(fb->bpp==8){
+@@ -96,8 +101,16 @@
+ }
+ void wm_copy_rect(wm_fb_t *dst,const wm_fb_t *src,const wm_rect_t *d,uint16_t sx,uint16_t sy)
+ {
+-    int row,col;
+-    if(!dst||!src||!d)return;
++    int row,col,dx,source_x,width,skip;
++    wm_rect_t clipped;
++    if(!dst||!src||!dst->data||!src->data||!d)return;
++    dx=d->x;source_x=sx;width=d->w;
++    if(dx<0){skip=-dx;dx=0;source_x+=skip;width-=skip;}
++    if(width>(int)dst->w-dx)width=(int)dst->w-dx;
++    if(width>(int)src->w-source_x)width=(int)src->w-source_x;
++    if(width<=0)return;
++    clipped=*d;clipped.x=(int16_t)dx;clipped.w=(uint16_t)width;
++    d=&clipped;sx=(uint16_t)source_x;
+     for(row=0;row<(int)d->h;++row){
+         int dy=d->y+row,sy2=(int)sy+row;
+         const uint8_t *srow;uint8_t *drow;
+@@ -106,14 +119,12 @@
+         srow=src->data+(uint32_t)sy2*src->pitch;
+         drow=dst->data+(uint32_t)dy*dst->pitch;
+         if(dst->bpp==8&&src->bpp==8){
+-            /* chunky: 32-bit row copy, with byte ends for the unaligned parts.
+-               BOTH pointers must be 4-byte aligned - a 68030 faults on an
+-               unaligned longword access, and checking only the destination
+-               crashed the desktop on mouse-driven repaints in 8 bpp. */
+-            int n=d->w,c=0;uint8_t *dp=drow+d->x;const uint8_t *sp=srow+sx;
+-            while(n>=(int)4&&(((uintptr_t)dp&3u)==0u)&&(((uintptr_t)sp&3u)==0u)){*(uint32_t *)(void *)dp=*(const uint32_t *)(const void *)sp;dp+=4;sp+=4;n-=4;}
++            /* Keep both pointers aligned for portable 32-bit accesses.
++               Equal alignment phases need only a short byte prefix. */
++            int n=d->w;uint8_t *dp=drow+d->x;const uint8_t *sp=srow+sx;
++            while(n&&(((uintptr_t)dp|(uintptr_t)sp)&3u)){*dp++=*sp++;--n;}
++            while(n>=4){*(uint32_t *)(void *)dp=*(const uint32_t *)(const void *)sp;dp+=4;sp+=4;n-=4;}
+             while(n--){*dp++=*sp++;}
+-            (void)c;
+         }else if(dst->bpp==1&&src->bpp==1){
+             /* Window/canvas blit: fast bit-aligned mono copy. */
+             mono_span_copy(srow,drow,sx,(uint16_t)d->x,(uint16_t)d->w,(uint16_t)src->pitch);
+--- a/tests/test_block_cache.c
++++ b/tests/test_block_cache.c
+@@ -4,7 +4,7 @@
+ #include <string.h>
+ #include "kernel_block.h"
+ #include "kernel_memory.h"
+-#define N 512u
++#define N 2048u
+ static unsigned char disk[2][N*512],out[4096],input[4096];
+ static unsigned reads,writes,allocs;
+ static int read_fail,write_fail,no_cache;
+@@ -20,12 +20,22 @@
+ int main(int argc,char **argv)
+ {unsigned i,j,r;uint32_t seed=0x12345678;kblock_stats_t st;(void)argv;no_cache=argc>1;
+  for(i=0;i<2;i++)for(j=0;j<N*512;j++)disk[i][j]=(unsigned char)(j*13+j/512+i*71);
+- assert(kblock_init(0)==BLOCK_READY);r=reads;check_read(0,12,1);check_read(0,44,1);check_read(0,12,1);
++ /* Selecting a device before init must not claim success. */
++ assert(!kblock_select(0));
++ assert(kblock_init(0)==BLOCK_READY);
++ /* A failed switch must disable I/O, and retry must probe again. */
++ read_fail=1;assert(!kblock_select(1));
++ r=reads;assert(!kblock_select(1));assert(reads==r+1);
++ assert(!kblock_read(0,1,out));assert(!kblock_write(0,1,input));
++ read_fail=0;assert(kblock_select(1));check_read(1,0,1);
++ assert(kblock_select(0));check_read(0,0,1);
++ r=reads;check_read(0,12,1);check_read(0,44,1);check_read(0,12,1);
+  assert(reads==r+(no_cache?3:2));
+  /* Eviction: read more distinct sectors than the cache can hold, then the
+     oldest must miss while the newest still hits.  Driven by the reported cache
+     size instead of hardcoded sector numbers, so the geometry can change. */
+- if(!no_cache&&kblock_cache_sectors()<=N){unsigned k,total=kblock_cache_sectors();
++ if(!no_cache){unsigned k,total=kblock_cache_sectors();
++  assert(total>0u && total<N);
+   kblock_cache_clear();
+   for(k=0;k<total+1u;++k)check_read(0,k,1);
+   r=reads;check_read(0,total,1);assert(reads==r);        /* newest still cached */
+@@ -45,4 +55,4 @@
+  /* Mixed runs, conflicts and partial failed writes against physical bytes. */
+  for(i=0;i<10000;i++){unsigned s,n;seed=seed*1664525u+1013904223u;n=1+(seed%8);s=(seed>>8)%(N-8);
+  if(seed&1){memset(input,(int)(seed>>24),n*512);write_fail=(i%17==0);assert(kblock_write(s,n,input)==!write_fail);write_fail=0;}check_read(0,s,n);}
+- kblock_cache_stats(&st);assert(st.reads&&st.writes);printf("Block cache %s: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS\n",no_cache?"low-memory bypass":"64KB");return 0;}
++ kblock_cache_stats(&st);assert(st.reads&&st.writes);printf("Block cache %s: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS\n",no_cache?"low-memory bypass":"cached");return 0;}
+--- a/tests/test_wm_blit.c
++++ b/tests/test_wm_blit.c
+@@ -18,6 +18,15 @@
+     wm_copy_rect(&d,&s,&r,5,3);
+     CHECK(fb8[2*64+10]==0x11&&fb8[2*64+11]==0x22&&fb8[3*64+10]==0x33&&fb8[3*64+11]==0x44);
+     CHECK(fb8[2*64+9]==0x00&&fb8[4*64+10]==0x00);
++
++    /* Copy may cross either surface edge; untouched bytes are guards. */
++    memset(fb8,0,sizeof fb8);memset(src8,0xAA,sizeof src8);
++    {wm_rect_t edge={62,7,8,2};wm_copy_rect(&d,&s,&edge,63,7);
++     CHECK(fb8[7*64+62]==0xAA && fb8[7*64+63]==0);}
++    {wm_rect_t edge={-2,-1,4,3};
++     memset(fb8,0,sizeof fb8);wm_fill_rect(&d,&edge,0x55);
++     CHECK(fb8[0]==0x55 && fb8[1]==0x55 && fb8[2]==0);
++     CHECK(fb8[64]==0x55 && fb8[128]==0);}
+ 
+     /* chunky fill */
+     wm_fill_rect(&d,&r,0x55);
+@@ -59,6 +68,42 @@
+         }
+     }
+ 
++    /* Clipped fill/copy for both formats against a pixel reference.
++       Includes negative destinations, empty rectangles, all alignment phases,
++       source overflow and all screen edges. */
++    {
++        uint8_t actual[8*64], expected[8*64], source[8*64];
++        unsigned mode,iteration,seed=9187u,i;
++        for(i=0;i<sizeof source;++i)source[i]=(uint8_t)(i*37u+11u);
++        for(mode=0;mode<2;++mode){
++            unsigned pitch=mode?64u:8u;
++            wm_fb_t df={actual,(uint16_t)pitch,64,8,mode?8:1};
++            wm_fb_t sf={source,(uint16_t)pitch,64,8,mode?8:1};
++            for(iteration=0;iteration<2000;++iteration){
++                wm_rect_t rc;unsigned sx,sy,op;int x,y;
++                seed=seed*1664525u+1013904223u;
++                rc.x=(int16_t)((int)(seed%90u)-15);
++                rc.y=(int16_t)((int)((seed>>8)%16u)-4);
++                rc.w=(uint16_t)((seed>>16)%80u);rc.h=(uint16_t)((seed>>24)%12u);
++                sx=(seed>>4)%72u;sy=(seed>>12)%12u;op=iteration&1u;
++                memset(actual,0x5A,sizeof actual);memcpy(expected,actual,sizeof actual);
++                for(y=0;y<8;++y)for(x=0;x<64;++x){
++                    int xx=(int)sx+x-rc.x,yy=(int)sy+y-rc.y;unsigned value;
++                    if(x<rc.x||x>=rc.x+(int)rc.w||y<rc.y||y>=rc.y+(int)rc.h)continue;
++                    if(op&&(xx<0||xx>=64||yy<0||yy>=8))continue;
++                    value=op?(mode?source[yy*pitch+xx]:((source[yy*pitch+(xx>>3)]>>(7-(xx&7)))&1u)):1u;
++                    if(mode)expected[y*pitch+x]=(uint8_t)value;
++                    else{uint8_t mask=(uint8_t)(0x80u>>(x&7));
++                         if(value)expected[y*pitch+(x>>3)]|=mask;
++                         else expected[y*pitch+(x>>3)]&=(uint8_t)~mask;}
++                }
++                if(op)wm_copy_rect(&df,&sf,&rc,(uint16_t)sx,(uint16_t)sy);
++                else wm_fill_rect(&df,&rc,1);
++                CHECK(memcmp(actual,expected,sizeof actual)==0);
++            }
++        }
++    }
++
+     printf(fails?"WM_BLIT: %d FAIL\n":"WM_BLIT: ALL PASS\n",fails);
+     return fails?1:0;
+ }

@@ -1,0 +1,61 @@
+Flashback na głównym obrazie ATOS — 2026-10-10
+
+Objaw i przyczyna
+Otwarta przez użytkownika instancja prezentowała czerwone piksele na czarnym
+640x400. Karta miała seq4=06, pitch=80, bpp=1, chociaż gra wysyłała chunky 8 bpp.
+Główny work/atos-v2.img zawierał FLASHBK.APP 272532 B oraz stare VOFA.SYS
+I SYSTEM/DRV/ET4000.SYS (5112 B, SHA256 5d787d8c57078729f76b21a6eb2b249ee9cbfbd1c135d0c67ad5387ab4af5c8e).
+Moduł ET4000 w DRV ma pierwszeństwo przed płaskim VOFA.SYS. Stary moduł nie znał
+indeksu 5 (640x480x8), więc wybierał mono i zwracał sukces. Kernel ufał temu bez
+sprawdzenia geometrii i liczby bajtów. Dane były nadal wersją demonstracyjną.
+Działający osobny flash.img miał nowszy sterownik 5169 B i zoptymalizowany APP.
+
+Zmiany
+1. W głównym obrazie aktualizacja obu kopii sterownika ET4000/VOFA oraz gry
+   z obecnego zoptymalizowanego źródła. Pełne dane DOS (wszystkie pliki z wcześniej
+   dostarczonego flashdos.rar), konfiguracja zgodna z działającym flash.img.
+   Dotychczasowe DATA w całości zachowane jako GAMES/FLASHBK/DEMODATA.
+2. Kernel sprawdza geometrię i rozmiar powierzchni oferowanej przez moduł PRZED
+   zapisem rejestrów. Nieznany format albo stary moduł daje błąd; nie ma fałszywego
+   sukcesu z kolorowym buforem przy monochromatycznej karcie. Test regresji
+   odtwarza stary moduł, zły rozmiar bufora i poprawny 640x480x8.
+3. Flashback używa istniejącego trybu 256 kolorów. Widok gry nadal 256x224
+   powiększany 2x, centralnie, ten sam transport zmienionych prostokątów.
+   Większy pusty margines nie zwiększa transferu każdej klatki. Dla trybu mono
+   pozostaje dotychczasowa próba przełączenia do 640x480x256.
+4. Wbudowany ekran FLASHBACK / LOADING, pasek etapów i nazwa aktualnego etapu:
+   finding game data, configuration, game engine, resources, sprites, sound data,
+   starting. Bez plików graficznych, sztucznych opóźnień i animacji obciążającej
+   rozpakowywanie. Wykorzystuje zwykłe API GAME FRAME/PALETTE.
+   Ekran zostaje do pierwszego rzeczywistego obrazu; pierwszy fadeOut nie gasi go
+   podczas wczytywania menu. Kolejne wygaszenia działają jak wcześniej.
+
+Weryfikacja
+Build KERNEL.SYS i FLASHBK.APP, checksum/relokacje/ABI — PASS.
+check-video (w tym test starego modułu) i check-game, ASan/UBSan — PASS.
+Hatari z renderowaniem SDL dummy, bez fast-forward, konfiguracja jak widoczne
+Hatari: Mega ST / 68030 32 MHz / TF536 / 8 MB ST + 64 MB TT / ET4000.
+Start z ikony pulpitu, ekran ładowania, menu, pierwsza plansza, obsługa klawiszy,
+Alt+X i powrót do pulpitu — sprawdzone na kopii obrazu. Raport runtime i zrzuty
+w work/flashback-start obok kopii zapasowej. Licznik wyjątków kernela = 0.
+
+Uwaga dla dalszych prac nad WM
+Test z wymuszoną zmianą 800x600 -> 640x480 -> 800x600 ujawnił niezależny problem:
+WM używa wspólnego pitch dla istniejących powierzchni, a aplikacja pulpitu może
+nadal je aktualizować w czasie gry. Po powrocie pojawiały się powielone wiersze.
+Zachowanie bieżącego trybu w tej grze eliminuje tę ścieżkę i zbędne przełączanie.
+Nie jest to ogólna przebudowa modelu powierzchni WM. Przed udostępnieniem dowolnych
+zmian rozdzielczości w innych aplikacjach należy oddzielić format powierzchni
+klienta od formatu scanout, konwertować/repaintować powierzchnie przy zmianach
+oraz przetestować przejścia mono/kolor i przełączanie sesji. Mono nie jest celem
+tego wdrożenia Flashbacka.
+
+Wdrożenie
+Tylko główny work/atos-v2.img. Osobne Flashback.app/flash.img pozostają wcześniejszą
+wersją. Boot z logo, BIOS.CFG, BIOS ROM i pozostałe aplikacje zachowane. Pełna
+kopia obrazu sprzed naprawy: work/flashback-start/before/atos-v2.img w katalogu
+zadania Codex. deployment.json zawiera hashe, zmienione pliki i audyt FAT.
+
+Końcowy krótki pomiar na pierwszej planszy: 29.80 FPS średnio, 28.70–30.68 FPS
+(9 próbek, około 9 s, mierzone licznikiem klatek silnika, nie liczbą blitów).
+30 zrzutów sekwencji startu: brak całkowicie czarnej klatki.

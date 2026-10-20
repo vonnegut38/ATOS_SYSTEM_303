@@ -1,0 +1,10 @@
+{
+  "system/wm_core.c": {
+    "sha256_base": "13d2a47dc31ec9f107a8a4ff49d9a0f5876cc9a614fed15f39fc3c3aa4339131",
+    "live_unchanged": true
+  },
+  "system/desktop_wm.c": {
+    "sha256_base": "cf4a596d8360ff181880343c4d1dca4639c67f103b3694d674849f5a4a97eff5",
+    "live_unchanged": true
+  }
+}

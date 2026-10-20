@@ -1,0 +1,6 @@
+Makefile:920: warning: overriding commands for target `&'
+Makefile:917: warning: ignoring old commands for target `&'
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/kernel_rtc.o  build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+/opt/homebrew/opt/m68k-elf-binutils/bin/m68k-elf-ld: warning: build/system/kernel.elf has a LOAD segment with RWX permissions
+m68k-elf-objcopy -O binary build/system/kernel.elf build/system/KERNEL.SYS
+python3 tools/patch_boot_checksum.py build/system/KERNEL.SYS

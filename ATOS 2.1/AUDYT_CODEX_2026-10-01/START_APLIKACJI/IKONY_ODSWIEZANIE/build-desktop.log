@@ -1,0 +1,11 @@
+Makefile:920: warning: overriding commands for target `&'
+Makefile:917: warning: ignoring old commands for target `&'
+m68k-elf-gcc -m68000 -ffreestanding -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -c system/gui_app_runtime.S -o build/system/gui_app_runtime.o
+python3 tools/mk_icons_color.py
+wrote /Users/xxx/Documents/Codex/2026-10-01/prz/work/atos-icon-refresh/tools/../system/icons_color.h icons=50 palette=32
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -mpcrel -ffunction-sections -fdata-sections -fno-jump-tables -MMD -MP -c system/desktop_wm.c -o build/system/desktop_wm.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -mpcrel -ffunction-sections -fdata-sections -fno-jump-tables -fno-tree-loop-distribute-patterns -MMD -MP -c system/app_math.c -o build/system/app_math.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -nostdlib -nostartfiles -Wl,-T,linker/app-sys.ld -Wl,--gc-sections -o build/system/desktop_wm.elf build/system/gui_app_runtime.o build/system/desktop_wm.o build/system/app_math.o -lgcc
+/opt/homebrew/opt/m68k-elf-binutils/bin/m68k-elf-ld: warning: build/system/desktop_wm.elf has a LOAD segment with RWX permissions
+m68k-elf-objcopy -O binary build/system/desktop_wm.elf build/system/DESKTOP.APP
+python3 tools/patch_boot_checksum.py build/system/DESKTOP.APP

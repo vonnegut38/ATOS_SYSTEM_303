@@ -1,0 +1,179 @@
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -MMD -MP -ffunction-sections -fdata-sections -c system/kernel_wm.c -o build/system/kernel_wm.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -MMD -MP -ffunction-sections -fdata-sections -c system/kernel_graphics.c -o build/system/kernel_graphics.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/kernel_rtc.o  build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+/opt/homebrew/opt/m68k-elf-binutils/bin/m68k-elf-ld: warning: build/system/kernel.elf has a LOAD segment with RWX permissions
+m68k-elf-objcopy -O binary build/system/kernel.elf build/system/KERNEL.SYS
+python3 tools/patch_boot_checksum.py build/system/KERNEL.SYS
+=== shell_module.S : 0 violation(s)
+=== kernel_entry.S : 0 violation(s)
+=== exception.S : 0 violation(s)
+=== mmu030.S : 0 violation(s)
+=== boot_entry.S : 0 violation(s)
+=== tos_entry.S : 0 violation(s)
+=== tos_start.S : 0 violation(s)
+=== vofa_entry.S : 0 violation(s)
+=== video_bus.S : 0 violation(s)
+=== gui_app_runtime.S : 0 violation(s)
+=== acsi_module.S : 0 violation(s)
+=== core_module.S : 0 violation(s)
+=== event_module.S : 0 violation(s)
+=== input_module.S : 0 violation(s)
+=== proc_module.S : 0 violation(s)
+=== timer_module.S : 0 violation(s)
+=== vfs_module.S : 0 violation(s)
+ABI CHECK PASS: no callee-saved clobbers in kernel-called assembly
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_machine_detect.c -o build/tests/test_machine_detect
+build/tests/test_machine_detect
+MACHINE_DETECT: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_lang.c ui/lang.c -o build/tests/test_lang
+build/tests/test_lang
+LANG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_config.c -o build/tests/test_config
+build/tests/test_config
+CONFIG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_exception.c -o build/tests/test_exception
+build/tests/test_exception
+EXCEPTION: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_irq.c system/irq.c -o build/tests/test_irq
+build/tests/test_irq
+IRQ: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_driver.c system/video_driver.c -o build/tests/test_video_driver
+build/tests/test_video_driver
+VIDEO_DRIVER: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_backends.c system/video_driver.c video/shifter.c video/et4000.c -o build/tests/test_video_backends
+build/tests/test_video_backends
+VIDEO_BACKENDS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_vofa.c -o build/tests/test_vofa
+build/tests/test_vofa
+VOFA PASS: absent/no writes, VGA mode, VOFA 8-bit IO, divider, timer/stuck sync, VRAM lanes, injected bus faults, generic and wide-store aperture clear
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_video_output.c -o build/tests/test_video_output
+build/tests/test_video_output
+Video output PASS: Shifter selection, allocation fallback, big-endian pixels, changed words, idle, clipping, edges and session buffer switches
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_video_boot.c -o build/tests/test_video_boot
+build/tests/test_video_boot
+Video boot PASS: explicit opt-in, invalid config, no CPU gate, RAM/mode/timer guards and every fallback
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_cpu_ops.c system/cpu_ops.c -o build/tests/test_cpu_ops
+build/tests/test_cpu_ops
+CPU_OPS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_desktop_module.c system/desktop_module.c -o build/tests/test_desktop_module
+build/tests/test_desktop_module
+DESKTOP_MODULE: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_mod_clock.c system/mod_clock.c system/video_driver.c -o build/tests/test_mod_clock
+build/tests/test_mod_clock
+MOD_CLOCK: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_app_abi.c -o build/tests/test_app_abi
+build/tests/test_app_abi
+APP_ABI: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sessions.c -o build/tests/test_sessions
+build/tests/test_sessions
+Sessions PASS: active-only menu, create/close, busy guard, deferred switching, both Shifts, autorepeat, Escape, outside click, GUI input isolation and graphics badge
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_text_terminal.c system/text_terminal.c -o build/tests/test_text_terminal
+build/tests/test_text_terminal
+Terminal PASS: semigraphics, attributes, raster reference, bounds, scroll/wrap, isolated buffers; initial 32000 bytes / unchanged 0 / single cell 32 bytes
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_kernel_console.c system/text_terminal.c -o build/tests/test_kernel_console
+build/tests/test_kernel_console
+Kernel console PASS: batched writes, bounded flush, CR/Tab/Backspace, scroll, desktop isolation, restore, legacy invalidation, panic and non-mono fallback
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_mono_font.c system/emutos_vdi_mono.c -o build/tests/test_mono_font
+build/tests/test_mono_font
+Mono glyph: 32768 combinations vs pixel reference, guards/offsets/transparent PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_gui_damage.c -o build/tests/test_gui_damage
+build/tests/test_gui_damage
+Damage PASS: clipping, text newlines, bounded window rects, word copy for 1/2/4 planes and edge guards
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -DFAT_TEST_CACHE -Iinclude tests/test_trash.c system/kernel_fat.c system/kernel_block.c -o build/tests/test_trash
+build/tests/test_trash
+Trash PASS: subtree metadata move, restore, collisions, cycle/root guards, recursive purge, read-only preflight, every failed write/rollback with partial DMA
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_fat_write.c system/kernel_fat.c -o build/tests/test_fat_write
+build/tests/test_fat_write
+FAT writes: copy/mkdir/delete, both FATs, 512/1024-byte BPB, full disk, cycles, every write failure rollback, session transport contract PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -Iinclude tests/test_block_cache.c system/kernel_block.c -o build/tests/test_block_cache
+build/tests/test_block_cache
+Block cache cached: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS
+build/tests/test_block_cache low-memory
+Block cache low-memory bypass: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -DFAT_TEST_CACHE -Iinclude tests/test_fat_write.c system/kernel_fat.c system/kernel_block.c -o build/tests/test_fat_cached
+build/tests/test_fat_cached
+FAT writes: copy/mkdir/delete, both FATs, 512/1024-byte BPB, full disk, cycles, every write failure rollback, session transport contract PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_emutos_planar.c system/emutos_vdi_mono.c -o build/tests/test_emutos_planar
+build/tests/test_emutos_planar
+EmuTOS planar: 30000 differential fills + 30000 vertical lines, guards OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_emutos_copy.c system/emutos_vdi_mono.c -o build/tests/test_emutos_copy
+build/tests/test_emutos_copy
+EmuTOS mono copy: 20000 differential aligned+shifted cases, guards OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_wm_core.c system/wm_core.c -o build/tests/test_wm_core
+build/tests/test_wm_core
+WM_CORE: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_wm_blit.c system/wm_blit.c -o build/tests/test_wm_blit
+build/tests/test_wm_blit
+WM_BLIT: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_terminal_chunky.c system/text_terminal.c -o build/tests/test_terminal_chunky
+build/tests/test_terminal_chunky
+CHUNKY cells rendered: first=2000 unchanged=0 one-change=1
+Chunky terminal cache PASS
+python3 -m unittest discover -s tests -v
+test_config_allocation_updates_both_copies (test_bios_fat_mirrors.BiosFatMirrors.test_config_allocation_updates_both_copies) ... ok
+test_on_screen_gets_16_ticks_per_background_tick (test_cpu_weight.CpuWeight.test_on_screen_gets_16_ticks_per_background_tick) ... ok
+test_all_planes_offsets_and_edges (test_cursor_words.CursorWordsTest.test_all_planes_offsets_and_edges) ... ok
+test_pagination_and_guards (test_directory_page.DirectoryPageTest.test_pagination_and_guards) ... ok
+test_capture_during_wait_and_timeout (test_disk_input_poll.DiskInputPoll.test_capture_during_wait_and_timeout) ... ok
+test_cpu_type_is_stored_at_install (test_exception_frame_68000.ExceptionFrame68000.test_cpu_type_is_stored_at_install) ... ok
+test_group1_handlers_use_the_group1_macro (test_exception_frame_68000.ExceptionFrame68000.test_group1_handlers_use_the_group1_macro) ... ok
+test_group1_macro_reads_sr_from_plus8 (test_exception_frame_68000.ExceptionFrame68000.test_group1_macro_reads_sr_from_plus8) ... ok
+test_standard_macro_still_reads_sr_from_plus0 (test_exception_frame_68000.ExceptionFrame68000.test_standard_macro_still_reads_sr_from_plus0) ... ok
+test_user_test_reads_group1_sr_at_plus12 (test_exception_frame_68000.ExceptionFrame68000.test_user_test_reads_group1_sr_at_plus12) ... ok
+test_foreground_gui_does_not_lose_keys_to_console (test_foreground_input.ForegroundInput.test_foreground_gui_does_not_lose_keys_to_console) ... ok
+test_keys_follow_focus_mouse_follows_window (test_gui_focus_routing.GuiFocusRouting.test_keys_follow_focus_mouse_follows_window) ... ok
+test_full_mailbox_keeps_click (test_gui_input_backpressure.GuiBackpressure.test_full_mailbox_keeps_click) ... ok
+test_background_lifecycle (test_gui_session_owners.GuiOwners.test_background_lifecycle) ... ok
+test_kernel_entry_header (test_kernel_load_addr.KernelLoadAddress.test_kernel_entry_header) ... ok
+test_linker_script (test_kernel_load_addr.KernelLoadAddress.test_linker_script) ... ok
+test_loader_uses_macro_and_not_stale_address (test_kernel_load_addr.KernelLoadAddress.test_loader_uses_macro_and_not_stale_address) ... ok
+test_shared_macro (test_kernel_load_addr.KernelLoadAddress.test_shared_macro) ... ok
+test_mouse_coordinates_are_not_keys (test_keyboard_framing.KeyboardFraming.test_mouse_coordinates_are_not_keys) ... ok
+test_edges (test_mouse_edges.MouseEdgeTest.test_edges) ... ok
+test_mste (test_rom_checksum.RomChecksumTest.test_mste) ... ok
+test_st (test_rom_checksum.RomChecksumTest.test_st) ... ok
+test_padding (test_rom_tools.RomToolsTest.test_padding) ... ok
+test_split_join_roundtrip (test_rom_tools.RomToolsTest.test_split_join_roundtrip) ... ok
+test_overlay_pixels_and_restore (test_session_overlay.SessionOverlayTest.test_overlay_pixels_and_restore) ... ok
+test_retained_frames_and_exit (test_session_redraw.SessionRedrawTest.test_retained_frames_and_exit) ... ok
+test_background_routing (test_session_routing.Routing.test_background_routing) ... ok
+test_builtins_exist (test_shell_fs.ShellFs.test_builtins_exist) ... ok
+test_command_table_has_no_stored_pointers (test_shell_fs.ShellFs.test_command_table_has_no_stored_pointers) ... ok
+test_dispatched_from_shell_module (test_shell_fs.ShellFs.test_dispatched_from_shell_module) ... ok
+test_module_api_exposes_mutations (test_shell_fs.ShellFs.test_module_api_exposes_mutations) ... ok
+test_shell_c_sources_are_pcrel (test_shell_fs.ShellFs.test_shell_c_sources_are_pcrel) ... ok
+test_readonly_bounds (test_sysinfo_api.SysinfoApiTest.test_readonly_bounds) ... ok
+test_kernel_main_stubs_runner_when_tos_disabled (test_tos_profile.TosProfile.test_kernel_main_stubs_runner_when_tos_disabled) ... ok
+test_makefile_default_is_native (test_tos_profile.TosProfile.test_makefile_default_is_native) ... ok
+test_makefile_drops_persona_objects (test_tos_profile.TosProfile.test_makefile_drops_persona_objects) ... ok
+test_shell_reports_missing_persona (test_tos_profile.TosProfile.test_shell_reports_missing_persona) ... ok
+test_tos_hooks_are_gated (test_tos_profile.TosProfile.test_tos_hooks_are_gated) ... ok
+test_idle_dispatch_wakes_sleepers (test_user_sleep_wakeup.UserSleepWakeup.test_idle_dispatch_wakes_sleepers) ... ok
+test_character_damage (test_video_damage.VideoDamage.test_character_damage) ... ok
+test_detect_families_and_scale_palette (test_vofa_dac.VofaDacTest.test_detect_families_and_scale_palette) ... ok
+test_extra_modes_are_selected_at_runtime (test_vofa_reference.VofaReference.test_extra_modes_are_selected_at_runtime)
+VOFA.SYS is loaded without relocation, so the mode table must not store ... ok
+test_register_tables (test_vofa_reference.VofaReference.test_register_tables) ... ok
+
+----------------------------------------------------------------------
+Ran 43 tests in 9.588s
+
+OK
+gmake: Nothing to be done for 'check-terminal'.
+gmake: Nothing to be done for 'check-console'.
+gmake: Nothing to be done for 'check-sessions'.
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_commander.c system/text_terminal.c -o build/tests/test_commander
+build/tests/test_commander
+Commander PASS: double active frame, incremental redraw, marks across pages/panels, group copy/cancel/error, mouse/trash/restore/purge
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sysinfo.c system/text_terminal.c -o build/tests/test_sysinfo
+build/tests/test_sysinfo
+SYSINFO PASS: report views, output vs detected card, unknown values, partition paging, division, CPU/RAM/disk accounting, skips, cancel and mouse tabs
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_language_setting.c -o build/tests/test_language_setting
+build/tests/test_language_setting
+Language setting PASS: EN/PL write, bounded selector, missing/invalid/read-only file and failed/short writes
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_setup.c system/text_terminal.c -o build/tests/test_setup
+build/tests/test_setup
+SETUP PASS: EN/PL preview and selection, persisted preference, failed save, missing pack, cancel and invalid-config fallback

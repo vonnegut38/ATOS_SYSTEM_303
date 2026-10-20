@@ -1,0 +1,11 @@
+--- a/system/gfx_service_app.S
++++ b/system/gfx_service_app.S
+@@ -32,7 +32,7 @@
+     beq command_restore
+     cmpi.l #2,%d2
+     blo command_invalid
+-    cmpi.l #34,%d2            /* 32/33 = window state, 34 = 800x600x256 */
++    cmpi.l #35,%d2            /* 34 = colour mode; 35 = active depth query */
+     bhi command_invalid
+     lea request(%pc),%a1
+     move.l 4(%a0),(%a1)

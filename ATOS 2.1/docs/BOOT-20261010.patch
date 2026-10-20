@@ -1,0 +1,786 @@
+--- a/include/console.h
++++ b/include/console.h
+@@ -21,6 +21,7 @@
+ /* Retarget console output (Shifter framebuffer by default, or card VRAM). */
+ void console_set_screen(volatile uint8_t *screen);
+ void post_draw_logo(void);
++void post_begin_boot(void);
+ void post_draw_progress(uint16_t percent,const char *label);
+ void post_boot_progress(uint16_t percent,const char *label);
+ #endif
+--- a/include/kernel_console.h
++++ b/include/kernel_console.h
+@@ -16,6 +16,10 @@
+ /* Quiet boot: verbose kernel lines are captured but not drawn; the system
+    table uses the notice_* calls, so the screen never scrolls. */
+ void kconsole_quiet(int on);
++/* Retain the graphical boot screen until the desktop owns presentation.
++   Explicit notices and exception output remain visible. */
++void kconsole_boot_screen(int on);
++int kconsole_boot_active(void);
+ void kconsole_notice_puts(const char *s);
+ void kconsole_notice_u32(uint32_t v);
+ void kconsole_invalidate(void);
+--- a/loader/bootstage.c
++++ b/loader/bootstage.c
+@@ -14,7 +14,6 @@
+ typedef struct {uint8_t id,spc,scale,fat12;uint16_t cluster;uint32_t size,fat_start,data_start;} boot_file_t;
+ static uint16_t io_words[256],fat_words[256];static boot_handoff_t handoff;
+ static uint8_t active_id,active_part;
+-static char disk_name[25];
+ static uint16_t le16(const uint8_t *p){return (uint16_t)p[0]|((uint16_t)p[1]<<8);}
+ static uint32_t le32(const uint8_t *p){return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);}
+ static uint16_t be16(const uint8_t *p){return ((uint16_t)p[0]<<8)|p[1];}
+@@ -77,7 +76,7 @@
+     if(!validate_chain(f))return 0;
+     while(remaining){uint32_t lba=f->data_start+(uint32_t)(cluster-2u)*cluster_sectors+sector;uint16_t amount=remaining<512u?(uint16_t)remaining:512u,copy;if(!acsi_read_sector(f->id,lba,io_words))return 0;for(copy=0;copy<amount;++copy)*dst++=src[copy];remaining-=amount;
+         {uint16_t percent=(uint16_t)(((f->size-remaining)*100u)/f->size);
+-         if(magic[4]!='M'&&(shown==0xffffu||percent==100u||percent>=shown+5u)){post_draw_progress(percent,magic[4]=='K'?"LOADING KERNEL.SYS":"LOADING BOOT.SYS");shown=percent;}}
++         if(magic[4]!='M'&&(shown==0xffffu||percent==100u||percent>=shown+5u)){post_draw_progress((uint16_t)(magic[4]=='K'?5u+percent*40u/100u:percent*5u/100u),magic[4]=='K'?"LOADING KERNEL.SYS":"LOADING BOOT.SYS");shown=percent;}}
+         if(++sector>=cluster_sectors){sector=0;if(remaining){cluster=fat_next(f->id,f->fat_start,cluster,f->fat12);if(cluster<2u||cluster>=fat_eoc(f->fat12))return 0;}}}
+     system_image_cache_sync(g_system.cpu_type);
+     dst=(uint8_t *)(uintptr_t)load;for(i=0;i<8u;++i)if(dst[i]!=(uint8_t)magic[i])return 0;
+@@ -113,23 +112,18 @@
+     static const char kernel_name[11]={'K','E','R','N','E','L',' ',' ','S','Y','S'};
+     static const char kernel_magic[8]={'A','S','Y','S','K','E','R','N'};
+     boot_file_t file;uint32_t entry;kernel_header_t hdr;
+-    console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);console_puts("SEARCHING KERNEL.SYS...    ");
++    post_draw_progress(5u,"LOADING KERNEL.SYS");
+     if(locate_system_file(active_id,g_system.acsi_part_start[active_part],kernel_name,&file)!=1){
+         console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);console_puts("KERNEL.SYS NOT FOUND        ");return;
+     }
+     if(!read_kernel_header(&file,&hdr)){
+         console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);console_puts("KERNEL HEADER READ FAILED   ");return;
+     }
+-    console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);
+-    console_puts("KERNEL.SYS  LOAD ");put_hex32(hdr.load);
+-    console_puts("  ENTRY ");put_hex32(hdr.entry);
+-    console_puts("  SIZE ");console_put_u32(hdr.size);console_puts("    ");
+     if(hdr.load!=KERNEL_IMAGE_LOAD_ADDRESS){
+         console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);
+         console_puts("KERNEL LOAD ADDRESS MISMATCH: EXPECTED ");put_hex32(KERNEL_IMAGE_LOAD_ADDRESS);
+         console_puts(" GOT ");put_hex32(hdr.load);console_puts("    ");return;
+     }
+-    console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);console_puts("KERNEL.SYS READY - STARTING...  ");
+     if(load_image(&file,kernel_magic,BOOT_IMAGE_VERSION,KERNEL_IMAGE_LOAD_ADDRESS,KERNEL_IMAGE_LOAD_ADDRESS,&entry)){
+         ((void (*)(const boot_handoff_t *))(uintptr_t)entry)(&handoff);
+     } else {
+@@ -199,12 +193,7 @@
+     }
+     for(k=0u;k<n;++k){
+         uint8_t cand=order[k];
+-        /* ONE line, rewritten in place: the header stays on screen and only the
+-           unit number changes (user request) - probing never scrolls. */
+-        console_clear_text_row(PROBE_ROW);console_set_cursor(0,PROBE_ROW);
+-        console_puts((cand&0x80u)?"PROBING IDE UNIT ":"PROBING ACSI ID ");
+-        console_put_u32((uint32_t)(cand&0x7fu));
+-        console_puts("    ");      /* erase the previous value's tail */
++        post_draw_progress(0u,(cand&0x80u)?"SCANNING IDE":"SCANNING ACSI");
+         if(block_probe(cand)){
+             if(cand&0x80u)g_system.ide_units=(uint8_t)(g_system.ide_units|(uint8_t)(1u<<(cand&0x7fu)));
+             else g_system.acsi_devices=(uint8_t)(g_system.acsi_devices|(uint8_t)(1u<<cand));
+@@ -227,12 +216,12 @@
+ {
+     static const char boot_name[11]={'B','O','O','T',' ',' ',' ',' ','S','Y','S'};
+     static const char boot_magic[8]={'A','S','Y','S','B','O','O','T'};
+-    boot_file_t file;uint32_t entry;uint8_t id=0xffu,part=0u;int result;console_clear();post_draw_logo();post_draw_progress(0u,"SCANNING BOOT DEVICE");console_set_cursor(0,12);
++    boot_file_t file;uint32_t entry;uint8_t id=0xffu,part=0u;int result;post_begin_boot();console_set_cursor(0,22);
+     if(g_system.boot_selection_valid){
+         id=g_system.boot_acsi_id;part=g_system.boot_partition;
+         if(id==BLOCK_FLOPPY_ID){
+             /* Remembered floppy: usable only while a bootable disk is inserted. */
+-            if(floppy_bootable()){console_puts("\nFOUND FLOPPY A:");part=0;floppy_set_partition();}
++            if(floppy_bootable()){part=0;floppy_set_partition();}
+             else{console_puts("\n\nREMEMBERED BOOT FLOPPY UNAVAILABLE");g_system.boot_selection_valid=0;}
+         }else
+         /* The remembered drive may be gone (moved disk, failed adapter). Do not
+@@ -253,25 +242,21 @@
+             console_puts("\n\nRESCANNING...");
+         }
+         if(id==BLOCK_FLOPPY_ID){
+-            console_puts("\nFOUND FLOPPY A:");
++            
+             part=0;floppy_set_partition();
+         }else{
+-            console_puts((id&0x80u)?"\nFOUND IDE UNIT ":"\nFOUND ACSI ID ");console_put_u32((uint32_t)(id&0x7fu));
+-            console_puts("\nDISK: ");if(acsi_inquiry_name(id,disk_name,sizeof(disk_name)))console_puts(disk_name);else console_puts("HARD DISK");
+             if(!acsi_inspect_device(&g_system,id)){console_puts("\n\nBOOT DISK READ ERROR");wait_return();return;}
+             for(part=0;part<4u;++part)if(g_system.acsi_partitions&(uint8_t)(1u<<part))break;
+             if(part>=4u){console_puts("\n\nBOOT PARTITION NOT FOUND");wait_return();return;}
+         }
+     }
+-    console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);
+-    console_puts("PARTITION ");console_puts(g_system.acsi_part_id[part]);console_puts(" ");console_put_u32(part+1u);
+-    console_puts("  SEARCHING SYSTEM/BOOT.SYS...    ");
++    post_draw_progress(0u,"LOADING BOOT.SYS");
+     handoff.fpu_type=g_system.fpu_type;handoff.clock_mhz=g_system.clock_mhz;
+     handoff.clock_known=g_system.clock_known;
+     handoff.blitter_present=g_system.blitter_present;
+     handoff.blitter_enabled=g_system.blitter_enabled;
+     result=locate_system_file(id,g_system.acsi_part_start[part],boot_name,&file);
+-    if(result==1&&load_image(&file,boot_magic,BOOT_IMAGE_VERSION,0x00008000UL,0x00008000UL,&entry)){console_clear_text_row(STATUS_ROW);console_set_cursor(0,STATUS_ROW);console_puts("STARTING BOOT.SYS...               ");active_id=id;active_part=part;handoff.magic=BOOT_HANDOFF_MAGIC;handoff.version=BOOT_HANDOFF_VERSION;handoff.size=sizeof(handoff);handoff.machine_type=g_system.machine_type;handoff.cpu_type=g_system.cpu_type;handoff.fpu_type=g_system.fpu_type;handoff.clock_mhz=g_system.clock_mhz;handoff.clock_known=g_system.clock_known;handoff.reserved0=(uint8_t)(0x80u|g_system.nova_adapter);handoff.reserved1=g_system.nova_chipset;handoff.netusbee_ethernet=g_system.netusbee_ethernet;handoff.netusbee_usb=g_system.netusbee_usb;handoff.video_mode=g_system.video_mode;handoff.boot_acsi_id=id;handoff.boot_partition=part;handoff.blitter_present=g_system.blitter_present;handoff.blitter_enabled=g_system.blitter_enabled;handoff.st_ram_bytes=g_system.ram_bytes;handoff.tt_ram_bytes=g_system.tt_ram_bytes;handoff.boot_progress=post_boot_progress;handoff.console_clear=console_clear;handoff.console_puts=console_puts;handoff.console_put_u32=console_put_u32;handoff.start_kernel=start_kernel;handoff.load_module=load_module_service;handoff.acsi_read_sector=acsi_read_sector;handoff.console_text_copy=console_text_copy;handoff.nova_initialized=g_system.nova_initialized;handoff.card_video_mode=(g_system.nova_initialized&&g_config.video_mode==CFG_MODE_640)?CFG_MODE_800:g_config.video_mode;handoff.video_force_shifter=g_system.video_force_shifter;handoff.reset=bios_reset;handoff.video_boot_ok=bios_video_boot_ok;handoff.acsi_write_sector=acsi_write_sector;handoff.floppy_mount=fat12_mount;handoff.floppy_dir=fat12_dir;handoff.floppy_read_file=fat12_read_file;
++    if(result==1&&load_image(&file,boot_magic,BOOT_IMAGE_VERSION,0x00008000UL,0x00008000UL,&entry)){post_draw_progress(5u,"STARTING BOOT.SYS");active_id=id;active_part=part;handoff.magic=BOOT_HANDOFF_MAGIC;handoff.version=BOOT_HANDOFF_VERSION;handoff.size=sizeof(handoff);handoff.machine_type=g_system.machine_type;handoff.cpu_type=g_system.cpu_type;handoff.fpu_type=g_system.fpu_type;handoff.clock_mhz=g_system.clock_mhz;handoff.clock_known=g_system.clock_known;handoff.reserved0=(uint8_t)(0x80u|g_system.nova_adapter);handoff.reserved1=g_system.nova_chipset;handoff.netusbee_ethernet=g_system.netusbee_ethernet;handoff.netusbee_usb=g_system.netusbee_usb;handoff.video_mode=g_system.video_mode;handoff.boot_acsi_id=id;handoff.boot_partition=part;handoff.blitter_present=g_system.blitter_present;handoff.blitter_enabled=g_system.blitter_enabled;handoff.st_ram_bytes=g_system.ram_bytes;handoff.tt_ram_bytes=g_system.tt_ram_bytes;handoff.boot_progress=post_boot_progress;handoff.console_clear=console_clear;handoff.console_puts=console_puts;handoff.console_put_u32=console_put_u32;handoff.start_kernel=start_kernel;handoff.load_module=load_module_service;handoff.acsi_read_sector=acsi_read_sector;handoff.console_text_copy=console_text_copy;handoff.nova_initialized=g_system.nova_initialized;handoff.card_video_mode=(g_system.nova_initialized&&g_config.video_mode==CFG_MODE_640)?CFG_MODE_800:g_config.video_mode;handoff.video_force_shifter=g_system.video_force_shifter;handoff.reset=bios_reset;handoff.video_boot_ok=bios_video_boot_ok;handoff.acsi_write_sector=acsi_write_sector;handoff.floppy_mount=fat12_mount;handoff.floppy_dir=fat12_dir;handoff.floppy_read_file=fat12_read_file;
+ handoff.disk_known=0;handoff.disk_name[0]=0;handoff.disk_sectors=0;handoff.disk_sector_bytes=0;
+ handoff.acsi_devices=g_system.acsi_devices;handoff.ide_units=g_system.ide_units;
+ if(id==BLOCK_FLOPPY_ID)handoff.disk_known=1;   /* floppy: identity known, no model */
+--- a/main.c
++++ b/main.c
+@@ -63,12 +63,8 @@
+     int result=-1;
+     if(delay>30u)delay=30u;
+     if(!delay)return -1;   /* 0 = do not wait for a key */
+-    /* The boot countdown is two seconds, as asked: enough to read the logo and
+-       press F1..F10, short enough not to be a wait.  Images written by an older
+-       BIOS carry 3..5 in their saved config, so the value is clamped here; a
+-       deliberate postponement is F1 SETUP's job (raise this clamp when the
+-       per-machine setting should win again).  delay==0 still means "no wait". */
+-    if(delay<2u)delay=2u;
++    /* Keep the quick-boot cap, but honour a saved one-second delay too.
++       Zero skips the countdown; any key opens the BIOS menu. */
+     if(delay>2u)delay=2u;
+     REG8(MFP_TCDCR)=(uint8_t)((old_control&0x0fu)|0x70u);
+     REG8(MFP_TCDR)=246u; /* 2.4576 MHz / 200 / 246: 50 reloads per second. */
+@@ -88,7 +84,7 @@
+     REG8(MFP_TCDCR)=(uint8_t)(old_control&0x0fu);
+     REG8(MFP_TCDR)=old_data;
+     REG8(MFP_TCDCR)=old_control;
+-    console_clear_text_row(20);
++    console_clear_text_row(23);
+     return result;
+ }
+ 
+@@ -102,6 +98,8 @@
+        the ACIA and flushes that byte. */
+     g_system.keyboard_present = 1;
+     g_system.ram_bytes = memory_detect();
++    shifter_init();
++    post_draw_logo();
+     g_system.cpu_type = cpu_detect_type();
+     g_system.fpu_type = cpu_detect_fpu(g_system.cpu_type);
+     machine_detect(&g_system);
+@@ -147,22 +145,6 @@
+         }
+     }
+     rtc_init();
+-    shifter_init();
+-    {extern uint8_t g_dbg_cfg_device,g_dbg_cfg_probe,g_dbg_cfg_inspect,g_dbg_cfg_part,
+-                   g_dbg_cfg_mounted,g_dbg_cfg_dir,g_dbg_cfg_read,g_dbg_cfg_error;
+-     /* CFG-DBG: where the configuration search stopped. */
+-     console_puts("CFG-DBG dev=");console_put_u32(g_dbg_cfg_device);
+-     console_puts(" probe=");console_put_u32(g_dbg_cfg_probe);
+-     console_puts(" insp=");console_put_u32(g_dbg_cfg_inspect);
+-     console_puts(" part=");console_put_u32(g_dbg_cfg_part);
+-     console_puts(" mnt=");console_put_u32(g_dbg_cfg_mounted);
+-     console_puts(" dir=");console_put_u32(g_dbg_cfg_dir);
+-     console_puts(" read=");console_put_u32(g_dbg_cfg_read);
+-     console_puts(" err=");console_put_u32(g_dbg_cfg_error);
+-     console_puts(" loaded=");
+-     {extern uint8_t g_config_loaded;console_put_u32(g_config_loaded);}
+-     console_puts("\n");}
+- 
+     /* The boot device probe can miss the disk this early; retry the config once
+        the machine is further along, and re-apply what depends on it. */
+     if(!g_config_loaded&&cfg_load()){
+@@ -245,7 +227,7 @@
+             g_system.video_force_shifter=1u;
+             console_set_screen((volatile uint8_t *)(uintptr_t)SCREEN_BASE);
+             console_puts("VIDEO: SHIFTER (ALT)\n");
+-            console_clear();boot_stage2_run();post_run();continue;   /* keep booting on the Shifter */
++            boot_stage2_run();post_run();continue;   /* keep booting on the Shifter */
+         }
+         /* Ctrl+Alt+Del reboots, like the reset button. */
+         if(key==0x1d)ctrl_down=1;
+@@ -276,10 +258,10 @@
+             tos_menu_run(); selected=0; post_run(); continue;
+         }
+         if (key==0x44 || ((key==0x1c || key==0x72) && selected==5)) {
+-            console_clear(); boot_stage2_run(); selected=0; post_run(); continue;
++            boot_stage2_run(); selected=0; post_run(); continue;
+         }
+         if ((key==0x1c || key==0x72) && selected==6) {
+-            console_clear(); boot_stage2_run(); selected=0; post_run(); continue;
++            boot_stage2_run(); selected=0; post_run(); continue;
+         }
+         if (key==0x01) { selected=0; post_run(); }
+     }
+--- a/system/boot_main.c
++++ b/system/boot_main.c
+@@ -10,7 +10,6 @@
+        table here scrolls the entire VRAM once per line, particularly costly
+        at 800x600x8. A short acknowledgement fits the existing row; the ROM
+        start_kernel callback owns the subsequent load/error status. */
+-    h->console_puts(" OK");
+     h->start_kernel();
+     h->console_puts("\nKERNEL LOAD FAILED\nPRESS RESET");
+     for(;;)__asm__ volatile("stop #0x2700");
+--- a/system/desktop_wm.c
++++ b/system/desktop_wm.c
+@@ -2219,13 +2219,6 @@
+     mode_query();
+     (void)gui(GUI_REG);
+     (void)gui(GUI_BEGIN_KEYS);       /* register + become the keyboard owner */
+-    if(gfx(GFX_DESKTOP,0,0,0)){
+-        /* Exactly one desktop owns a session.  A second 'start desktop.app'
+-           is not an error: say so and exit cleanly instead of stacking a
+-           second screen (opcode 13 already refuses the enrolment). */
+-        (void)gui_call(1,0,0,(void *)(uintptr_t)"DESKTOP ALREADY RUNNING\n",0);
+-        return 0;
+-    }
+     list=(gui_draw_t *)(uintptr_t)(uint32_t)gui_call(16,LIST_MAX*(uint32_t)sizeof(gui_draw_t),1u,0,0);
+     if(!list)return 1;               /* no draw list, no desktop */
+     fb_all=(dir_ent_t *)(uintptr_t)(uint32_t)gui_call(16,FB_TOTAL*(uint32_t)sizeof(dir_ent_t),1u,0,0);
+@@ -2238,6 +2231,15 @@
+ 
+     ic_load();                       /* type->icon mapping (\SYSTEM\ICONS.CFG) */
+     load_dyn_icons();                /* per-app foo.png icons */
++
++    /* Load resources before taking the screen: keep the boot logo visible. */
++    if(gfx(GFX_DESKTOP,0,0,0)){
++        /* Exactly one desktop owns a session.  A second 'start desktop.app'
++           is not an error: say so and exit cleanly instead of stacking a
++           second screen (opcode 13 already refuses the enrolment). */
++        (void)gui_call(1,0,0,(void *)(uintptr_t)"DESKTOP ALREADY RUNNING\n",0);
++        return 0;
++    }
+ 
+     if(save_res_valid&&!(SCRW==save_w&&SCRH==save_h&&cur_bpp==save_depth))
+         video_try(save_w,save_h,save_depth);   /* repaints at the saved mode */
+--- a/system/kernel_console.c
++++ b/system/kernel_console.c
+@@ -16,7 +16,9 @@
+ static uint8_t status_label_done;/* first message is the header, later ones values */
+ /* Quiet boot: verbose lines are captured (for the ROM mirror) but NOT drawn, so
+    the screen keeps only the system table and the LOADING COMPONENTS line. */
+-static uint8_t quiet;
++static uint8_t quiet,boot_screen;
++void kconsole_boot_screen(int on){boot_screen=(uint8_t)(on!=0);}
++int kconsole_boot_active(void){return boot_screen!=0;}
+ static term_display_t display;
+ static uint8_t active,dirty;
+ static unsigned pending;
+@@ -75,7 +77,7 @@
+ void kconsole_flush(void)
+ {
+  /* Keep background text in cells; never write over a foreground desktop. */
+- if(!active||!dirty)return;
++ if(boot_screen||!active||!dirty)return;
+  if(kernel_wm_desktop_session())return;   /* desktop session: no text at all */
+  /* In desktop mode the console is a window drawn by the compositor. */
+  if(kernel_wm_enabled()&&kgfx_desktop_active()){kernel_wm_console_present();dirty=0;pending=0;return;}
+@@ -132,8 +134,8 @@
+ void kconsole_status_here(void){kconsole_status_row((int)console.row);}
+ void kconsole_quiet(int on){quiet=(uint8_t)(on!=0);}
+ /* Explicit lines that stay visible even in quiet mode (the system table). */
+-void kconsole_notice_puts(const char *s){uint8_t q=quiet;quiet=0;kconsole_puts(s);quiet=q;}
+-void kconsole_notice_u32(uint32_t v){uint8_t q=quiet;quiet=0;kconsole_put_u32(v);quiet=q;}
++void kconsole_notice_puts(const char *s){uint8_t q=quiet,b=boot_screen;quiet=boot_screen=0;kconsole_puts(s);kconsole_flush();quiet=q;boot_screen=b;}
++void kconsole_notice_u32(uint32_t v){uint8_t q=quiet,b=boot_screen;quiet=boot_screen=0;kconsole_put_u32(v);kconsole_flush();quiet=q;boot_screen=b;}
+ void kconsole_puts(const char *s)
+ {
+  unsigned written;
+@@ -190,7 +192,7 @@
+ void kconsole_emergency(void)
+ {
+  /* A panic must be visible even if the normal pump or terminal is broken. */
+- active=0;dirty=0;pending=0;
++ boot_screen=0;active=0;dirty=0;pending=0;
+  kgfx_restore_console();
+ }
+ 
+--- a/system/kernel_exception.c
++++ b/system/kernel_exception.c
+@@ -2326,6 +2326,14 @@
+                  if(kgfx_batch_bounds(&dl,&dt,&dr,&db))
+                      kernel_wm_app_dirty(surface,dl,dt,dr,db);}
+              else kgfx_draw_batch(list,n);}
++            /* The first validated desktop canvas is ready. Compose it offscreen
++               before releasing the boot frame; enrolment alone is too early
++               (resources and the first draw can still take several frames). */
++            if(kconsole_boot_active()&&argument0==gui_desktop_pids[client_session]&&
++               client_session==ksessions_current()&&request->color==0u){
++                kernel_wm_compose_now();
++                kconsole_boot_screen(0);
++            }
+         }
+         else if(request->opcode==36u){
+             /* Register a dynamic per-app icon from PNG data: xy -> PNG bytes,
+--- a/system/kernel_graphics.c
++++ b/system/kernel_graphics.c
+@@ -1062,6 +1062,7 @@
+ 
+ void kgfx_session_view(int show)
+ {
++ if(kconsole_boot_active())return;
+  uint8_t hidden=!show;
+  if(hidden==desktop_hidden&&presented_session==ksessions_current())return;
+  kgfx_overlay_hide();kgfx_cursor_hide();desktop_hidden=hidden;
+--- a/system/kernel_main.c
++++ b/system/kernel_main.c
+@@ -212,7 +212,7 @@
+    black.  Paint the machine's identity and its real hardware there instead, with
+    a progress bar.  The desktop repaints the whole screen when it takes over, so
+    nothing here has to be undone.  No libc: numbers are formatted by hand. */
+-static const boot_handoff_t *boot_hw;
++static void (*rom_boot_progress)(uint16_t,const char *);
+ /* Desktop process supervision.  The desktop used to be spawned with its result
+    discarded and its later death unreported: a crash at start-up left the boot
+    board on screen (quiet mode hid the completion line) and the machine looked
+@@ -223,11 +223,12 @@
+ static void kernel_desktop_report(int32_t status,int spawn_failed)
+ {
+     kernel_desktop_stopped=1u;
++    kconsole_boot_screen(0);
+     kconsole_quiet(0);                       /* diagnostics are visible again */
+     if(kgfx_desktop_active())(void)kgfx_restore_console();
+     /* Cover the boot board: kgfx_clear() writes the application target, which is
+        not necessarily the frame that is on screen (the board stayed visible).
+-       boot_splash() painted the FRAME with exactly this pair instead. */
++       Paint the active frame explicitly before showing the diagnostic. */
+     kgfx_fill_rect(0,0,(int32_t)kvideo_mode_width(),(int32_t)kvideo_mode_height(),0);
+     kvideo_flush();
+     kconsole_clear();
+@@ -247,65 +248,11 @@
+     kconsole_puts("\nTEXT SHELL ACTIVE - THE DESKTOP CAN BE STARTED AGAIN\n");
+     kconsole_flush();
+ }
+-static char *boot_put(char *d,const char *s){while(s&&*s)*d++=*s++;return d;}
+-static char *boot_num(char *d,uint32_t v)
+-{
+-    char tmp[12];unsigned n=0;
+-    if(!v){*d++='0';return d;}
+-    while(v&&n<sizeof(tmp)){tmp[n++]=(char)('0'+v%10u);v/=10u;}
+-    while(n)*d++=tmp[--n];
+-    return d;
+-}
+-static void boot_splash(unsigned step,unsigned total,const char *label)
+-{
+-    int32_t W,H,lx,ly,lw,lh,pw,bh,bx,bw,tw,gw,gh,gx,gy,gt;char line[80];char *c;
+-    /* The graphics layer may not report a size this early; the video mode does. */
+-    W=(int32_t)kvideo_mode_width();H=(int32_t)kvideo_mode_height();
+-    if(W<320||H<200){W=640;H=400;}
+-    /* Same geometry as the ROM POST logo (ui/post.c): ly = H/4 - lh/2.  The two
+-       used to differ (H/3 here) and the mark visibly jumped at the handover. */
+-    gw=W/7;gh=(gw*3)/4;gx=(W-gw)/2;gy=H/4-gh/2;gt=gw/5;
+-    if(gt<2)gt=2;
+-    if(step==0u){
+-            /* Clear the screen AROUND the logo rectangle instead of over it:
+-               the ROM already painted the identical mark, so leaving those
+-               pixels alone makes the handover invisible - no blink, no redraw. */
+-            kgfx_fill_rect(0,0,W,gy,0);                       /* above */
+-            kgfx_fill_rect(0,gy,gx,gh,0);                     /* left */
+-            kgfx_fill_rect(gx+gw,gy,W-(gx+gw),gh,0);          /* right */
+-            kgfx_fill_rect(0,gy+gh,W,H-(gy+gh),0);            /* below */
+-    }
+-    /* Mirrored E ("E turned to the left"): a vertical bar on the right and
+-       three horizontal bars, the middle one shorter - the same mark the ROM
+-       POST screen draws in text, so the logo does not change between them. */
+-    lw=gw;lh=gh;lx=gx;ly=gy;
+-    pw=gt;bh=lh/5;
+-    kgfx_fill_rect(lx+lw-pw,ly,pw,lh,1);              /* right vertical */
+-    kgfx_fill_rect(lx,ly,lw,bh,1);                    /* top bar */
+-    kgfx_fill_rect(lx,ly+lh/2-bh/2,(lw*3)/4,bh,1);    /* middle bar, shorter */
+-    kgfx_fill_rect(lx,ly+lh-bh,lw,bh,1);              /* bottom bar */
+-    tw=8*9;                                          /* "ATOS 2.1" */
+-    kgfx_text((W-tw)/2,ly+lh+16,"ATOS 2.1",1,0,1);
+-    /* What the machine actually is, along the bottom. */
+-    c=line;
+-    c=boot_put(c,"ST ");c=boot_num(c,boot_hw?boot_hw->st_ram_bytes/1024u:0u);c=boot_put(c,"K");
+-    c=boot_put(c,"   TT ");c=boot_num(c,boot_hw?boot_hw->tt_ram_bytes/1024u:0u);c=boot_put(c,"K   ");
+-    if(kvideo_is_vofa()){
+-        c=boot_put(c,"VGA ET4000  ");
+-        c=boot_num(c,kvideo_mode_width());c=boot_put(c,"x");c=boot_num(c,kvideo_mode_height());
+-        c=boot_put(c,"x");c=boot_num(c,kvideo_mode_bpp()*2u);
+-    }else c=boot_put(c,"SHIFTER");
+-    *c=0;
+-    kgfx_text((W-(int32_t)(8u*(unsigned)(c-line)))/2,H-24,line,1,0,1);
+-    /* Progress bar, one segment per start-up stage. */
+-    bw=W/2;bh=14;bx=(W-bw)/2;
+-    {int32_t by=H-H/4;
+-     kgfx_fill_rect(bx-2,by-2,bw+4,bh+4,1);
+-     kgfx_fill_rect(bx,by,bw,bh,0);
+-     if(total){int32_t f=bw*(int32_t)step/(int32_t)total;if(f>0)kgfx_fill_rect(bx,by,f,bh,1);}
+-     kgfx_fill_rect(bx,by+bh+6,bw,16,0);
+-     if(label)kgfx_text(bx,by+bh+6,label,1,0,1);}
+-    kvideo_flush();
++/* Keep the ROM's screen and renderer until the desktop takes ownership.
++   No duplicate logo renderer, resolution change or full-frame redraw here. */
++static void boot_show(uint16_t percent,const char *label)
++{
++    if(rom_boot_progress)rom_boot_progress(percent,label);
+ }
+ 
+ static void kernel_startup_services(const boot_handoff_t *h,
+@@ -317,18 +264,18 @@
+         {"\\SYSTEM\\GUI.APP","SYSTEM.GUI",250u}
+     };
+     uint8_t i;uint32_t pid,start,now;int32_t result;
+-    boot_hw=h;
+-    boot_splash(0u,3u,"STARTUP SERVICES");
++    boot_show(85u,"STARTUP SERVICES");
+     h->console_puts("STARTUP SERVICES: ");
+     for(i=0;i<(uint8_t)(sizeof(table)/sizeof(table[0]));++i){
+         if(i)h->console_puts("                  ");
++        boot_show((uint16_t)(85u+i*3u),table[i].name);
+         pid=0;result=kernel_spawn_user_async(table[i].path,"","\\",&pid);
+         if(result<0||!pid){h->console_puts(table[i].name);h->console_puts(" LOAD FAILED\n");continue;}
+         timer->poll();start=timer->ticks();
+         for(;;){
+             if(kernel_user_service_pid(table[i].name)==pid){
+                 h->console_puts(table[i].name);h->console_puts(" READY\n");
+-                boot_splash((unsigned)i+1u,3u,table[i].name);break;}
++                boot_show((uint16_t)(88u+i*3u),table[i].name);break;}
+             kernel_dispatch_ready_user();timer->poll();now=timer->ticks();
+             if((uint32_t)(now-start)>=table[i].timeout_ticks){
+                 (void)kernel_user_kill(pid);h->console_puts(table[i].name);
+@@ -417,12 +364,13 @@
+ }
+ 
+ static unsigned boot_completed;
+-static void (*rom_boot_progress)(uint16_t,const char *);
++static void boot_loading(const char *label)
++{boot_show((uint16_t)(45u+boot_completed*35u/11u),label);}
+ static void boot_loaded(const char *label)
+ {
+     kconsole_puts(label);
+     if(boot_completed<11u)++boot_completed;
+-    if(rom_boot_progress)rom_boot_progress((uint16_t)(boot_completed*100u/11u),label);
++    boot_show((uint16_t)(45u+boot_completed*35u/11u),label);
+ }
+ 
+ void kernel_main(const boot_handoff_t *h)
+@@ -462,6 +410,8 @@
+     kgfx_set_palette(0,0x0000u);
+     kgfx_set_palette(1,0x0fffu);
+     kconsole_init(1,h->console_clear,h->console_puts,h->console_put_u32);
++    kconsole_boot_screen(1);
++    kvideo_set_flush_gate(kconsole_boot_active);
+     kconsole_set_grid(80u,25u);
+     {static char boot_cells[80u*25u];uint16_t bc=0u,br=0u;
+      if(h->console_text_copy){h->console_text_copy(boot_cells,&bc,&br);kconsole_seed(boot_cells,bc,br);}}
+@@ -481,6 +431,7 @@
+             else if(h->card_video_mode==4u){kvideo_set_mode_format(800u,600u,1u);kgfx_set_depth(800u,600u,1u);}
+             else if(h->card_video_mode==5u){kvideo_set_mode_format(1024u,768u,1u);kgfx_set_depth(1024u,768u,1u);}
+             (void)kgfx_set_target((uint8_t *)(uintptr_t)VOFA_MEM);
++            kvideo_select((const volatile uint8_t *)(uintptr_t)VOFA_MEM);
+             kgfx_palette_defaults();   /* the RAMDAC is reachable only now */
+         }
+     }
+@@ -496,20 +447,22 @@
+     ksessions_set_reset(runtime_handoff.reset);
+     boot_completed=0u;
+     rom_boot_progress=h->boot_progress;
+-    if(rom_boot_progress)rom_boot_progress(0u,"LOADING COMPONENTS");
++    boot_show(45u,"LOADING COMPONENTS");
+     kconsole_status_row(22);
+     kconsole_puts("LOADING COMPONENTS:");
+ 
+-    {kernel_load_acsi(&runtime_handoff);boot_loaded("ACSI.SYS");}   /* any failure falls back to the BIOS driver - not an error */
++    {boot_loading("ACSI.SYS");kernel_load_acsi(&runtime_handoff);boot_loaded("ACSI.SYS");}   /* any failure falls back to the BIOS driver - not an error */
++    boot_loading("DISK");
+     block_state=kblock_init(runtime_handoff.boot_acsi_id);if(block_state==BLOCK_READY)boot_loaded("DISK");else boot_fail("DISK",block_state==BLOCK_NO_MEMORY?"NO MEMORY":"I/O FAILED");
+     if(block_state==BLOCK_READY){
++        boot_loading("VOLUMES");
+         enum partition_state ps=kpart_scan(runtime_handoff.boot_acsi_id,runtime_handoff.boot_partition,runtime_handoff.acsi_devices,runtime_handoff.ide_units);
+         if(ps==KPART_READY)boot_loaded("VOLUMES");
+         else boot_fail("VOLUMES",ps==KPART_IO_FAILED?"I/O FAILED":"INVALID TABLE");
+         /* The transport must be selected BEFORE the mount: a failed select
+            leaves the block layer not-ready, and the mount would then report a
+            generic I/O error instead of the real cause. */
+-        {enum fat_state state;
++        {boot_loading("FAT");enum fat_state state;
+          if(!kblock_select(kpart_boot_device()))state=FAT_IO_FAILED;
+          else state=kfat_mount(kpart_boot_start(),kpart_boot_id());
+          {unsigned s;for(s=1;s<SESSION_COUNT;s++){(void)kfat_select_session(s);
+@@ -527,16 +480,16 @@
+         if(kfat_health()==FAT_HEALTH_DIRTY)boot_fail("FAT","DIRTY - READ ONLY");
+         else if(kfat_health()==FAT_HEALTH_HARD_ERROR)boot_fail("FAT","HARD ERROR - READ ONLY");
+         else if(kfat_health()!=FAT_HEALTH_CLEAN)boot_fail("FAT","UNKNOWN");
+-        {static const char core_name[11]={'C','O','R','E',' ',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(core_name,0x0101u,1);
++        {boot_loading("CORE.SYS");static const char core_name[11]={'C','O','R','E',' ',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(core_name,0x0101u,1);
+          if(state==MODULE_READY&&kernel_find_service(KERNEL_SERVICE_CORE,1u))boot_loaded("CORE.SYS");
+          else boot_fail("CORE.SYS",state==MODULE_READY?"SERVICE MISSING":module_fail_reason(state));}
+     }
+-    if(fat_mounted){static const char vfs_name[11]={'V','F','S',' ',' ',' ',' ',' ','S','Y','S'},core_name[11]={'C','O','R','E',' ',' ',' ',' ','S','Y','S'};uint32_t size=0;enum module_state state=kernel_load_system_module(vfs_name,0x0102u,1);const kernel_vfs_service_t *vfs=(const kernel_vfs_service_t *)kernel_find_service(KERNEL_SERVICE_VFS,1u);if(state==MODULE_READY&&vfs&&vfs->magic==KERNEL_VFS_MAGIC&&vfs->version>=KERNEL_VFS_VERSION&&vfs->size>=sizeof(*vfs)&&vfs->stat_system&&vfs->stat_system(core_name,&size)&&size>=BOOT_IMAGE_HEADER_SIZE)boot_loaded("VFS.SYS");else boot_fail("VFS.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
+-    if(fat_mounted){static const char proc_name[11]={'P','R','O','C',' ',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(proc_name,0x0103u,1);proc_service=(const kernel_proc_service_t *)kernel_find_service(KERNEL_SERVICE_PROC,KERNEL_PROC_VERSION);proc_ready=state==MODULE_READY&&proc_service&&proc_service->magic==KERNEL_PROC_MAGIC&&proc_service->version>=KERNEL_PROC_VERSION&&proc_service->size>=sizeof(*proc_service)&&proc_service->task_count&&proc_service->cooperate&&proc_service->dispatch_count&&proc_service->sleep_ticks&&proc_service->timer_tick&&proc_service->sleep_remaining&&proc_service->context_self_test&&(proc_service->capabilities&KERNEL_PROC_CAP_FULL_CONTEXT)&&proc_service->task_count()==2u&&proc_service->cooperate()&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==2u&&proc_service->dispatch_count(1u)==2u&&proc_service->context_self_test();if(proc_ready)boot_loaded("PROC.SYS");else boot_fail("PROC.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
+-    if(fat_mounted){static const char timer_name[11]={'T','I','M','E','R',' ',' ',' ','S','Y','S'};uint32_t before,guard,quantum;enum module_state state=kernel_load_system_module(timer_name,0x0104u,1);timer_service=(const kernel_timer_service_t *)kernel_find_service(KERNEL_SERVICE_TIMER,KERNEL_TIMER_VERSION);timer_ready=proc_ready&&state==MODULE_READY&&timer_service&&timer_service->magic==KERNEL_TIMER_MAGIC&&timer_service->version>=KERNEL_TIMER_VERSION&&timer_service->size>=sizeof(*timer_service)&&timer_service->poll&&timer_service->ticks&&timer_service->switch_pending&&timer_service->acknowledge_switch&&timer_service->frequency_hz==50u&&proc_service->sleep_ticks(0u,2u)&&proc_service->sleep_remaining(0u)==2u;before=timer_ready?timer_service->ticks():0;for(quantum=0;timer_ready&&quantum<4u;++quantum){guard=2000000UL;while(guard--&&!timer_service->switch_pending())timer_service->poll();if(!timer_service->switch_pending()){timer_ready=0;break;}timer_service->acknowledge_switch();proc_service->timer_tick();if(timer_service->switch_pending()||!proc_service->cooperate())timer_ready=0;}if(timer_ready)timer_ready=timer_service->ticks()>=before+4u&&proc_service->sleep_remaining(0u)==0u&&proc_service->dispatch_count(0u)==5u&&proc_service->dispatch_count(1u)==6u;if(timer_ready)boot_loaded("TIMER.SYS");else boot_fail("TIMER.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
+-    if(fat_mounted){static const char event_name[11]={'E','V','E','N','T',' ',' ',' ','S','Y','S'};uint32_t type=0,value=0;enum module_state state=kernel_load_system_module(event_name,0x0105u,1);const kernel_event_service_t *event=(const kernel_event_service_t *)kernel_find_service(KERNEL_SERVICE_EVENT,KERNEL_EVENT_VERSION);int ok=proc_ready&&state==MODULE_READY&&event&&event->magic==KERNEL_EVENT_MAGIC&&event->version>=KERNEL_EVENT_VERSION&&event->size>=sizeof(*event)&&event->receive&&event->send&&event->pending&&!event->receive(0u,&type,&value)&&proc_service->task_state(0u)==KERNEL_PROC_WAITING&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==5u&&proc_service->dispatch_count(1u)==7u&&event->send(0u,0x1234u,0x41535953UL)&&event->pending(0u)&&proc_service->task_state(0u)==KERNEL_PROC_READY&&event->receive(0u,&type,&value)&&!event->pending(0u)&&type==0x1234u&&value==0x41535953UL&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==6u&&proc_service->dispatch_count(1u)==8u;if(ok)boot_loaded("EVENT.SYS");else boot_fail("EVENT.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
+-    if(fat_mounted){static const char input_name[11]={'I','N','P','U','T',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(input_name,0x0106u,1);input_service=(const kernel_input_service_t *)kernel_find_service(KERNEL_SERVICE_INPUT,KERNEL_INPUT_VERSION);input_ready=state==MODULE_READY&&input_service&&input_service->magic==KERNEL_INPUT_MAGIC&&input_service->version>=KERNEL_INPUT_VERSION&&input_service->size>=sizeof(*input_service)&&input_service->poll&&input_service->classify&&input_service->dropped_events&&input_service->classify(0x1eu)==KERNEL_INPUT_KEY_DOWN&&input_service->classify(0x9eu)==KERNEL_INPUT_KEY_UP&&input_service->classify(0xf8u)==0u&&input_service->dropped_events()==0u;if(input_ready)boot_loaded("INPUT.SYS");else boot_fail("INPUT.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
+-    if(fat_mounted){static const char shell_name[11]={'S','H','E','L','L',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(shell_name,0x0107u,1);const kernel_shell_service_t *shell=(const kernel_shell_service_t *)kernel_find_service(KERNEL_SERVICE_SHELL,KERNEL_SHELL_VERSION);shell_ready=state==MODULE_READY&&timer_ready&&input_ready&&shell&&shell->magic==KERNEL_SHELL_MAGIC&&shell->version>=KERNEL_SHELL_VERSION&&shell->size>=sizeof(*shell)&&shell->start&&shell->pump&&shell->key_count&&shell->redraw_prompt&&shell->line_active&&shell->select_session&&shell->key_count()==0u;if(shell_ready)boot_loaded("SHELL.SYS");else boot_fail("SHELL.SYS",state!=MODULE_READY?module_fail_reason(state):"UNAVAILABLE");
++    if(fat_mounted){boot_loading("VFS.SYS");static const char vfs_name[11]={'V','F','S',' ',' ',' ',' ',' ','S','Y','S'},core_name[11]={'C','O','R','E',' ',' ',' ',' ','S','Y','S'};uint32_t size=0;enum module_state state=kernel_load_system_module(vfs_name,0x0102u,1);const kernel_vfs_service_t *vfs=(const kernel_vfs_service_t *)kernel_find_service(KERNEL_SERVICE_VFS,1u);if(state==MODULE_READY&&vfs&&vfs->magic==KERNEL_VFS_MAGIC&&vfs->version>=KERNEL_VFS_VERSION&&vfs->size>=sizeof(*vfs)&&vfs->stat_system&&vfs->stat_system(core_name,&size)&&size>=BOOT_IMAGE_HEADER_SIZE)boot_loaded("VFS.SYS");else boot_fail("VFS.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
++    if(fat_mounted){boot_loading("PROC.SYS");static const char proc_name[11]={'P','R','O','C',' ',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(proc_name,0x0103u,1);proc_service=(const kernel_proc_service_t *)kernel_find_service(KERNEL_SERVICE_PROC,KERNEL_PROC_VERSION);proc_ready=state==MODULE_READY&&proc_service&&proc_service->magic==KERNEL_PROC_MAGIC&&proc_service->version>=KERNEL_PROC_VERSION&&proc_service->size>=sizeof(*proc_service)&&proc_service->task_count&&proc_service->cooperate&&proc_service->dispatch_count&&proc_service->sleep_ticks&&proc_service->timer_tick&&proc_service->sleep_remaining&&proc_service->context_self_test&&(proc_service->capabilities&KERNEL_PROC_CAP_FULL_CONTEXT)&&proc_service->task_count()==2u&&proc_service->cooperate()&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==2u&&proc_service->dispatch_count(1u)==2u&&proc_service->context_self_test();if(proc_ready)boot_loaded("PROC.SYS");else boot_fail("PROC.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
++    if(fat_mounted){boot_loading("TIMER.SYS");static const char timer_name[11]={'T','I','M','E','R',' ',' ',' ','S','Y','S'};uint32_t before,guard,quantum;enum module_state state=kernel_load_system_module(timer_name,0x0104u,1);timer_service=(const kernel_timer_service_t *)kernel_find_service(KERNEL_SERVICE_TIMER,KERNEL_TIMER_VERSION);timer_ready=proc_ready&&state==MODULE_READY&&timer_service&&timer_service->magic==KERNEL_TIMER_MAGIC&&timer_service->version>=KERNEL_TIMER_VERSION&&timer_service->size>=sizeof(*timer_service)&&timer_service->poll&&timer_service->ticks&&timer_service->switch_pending&&timer_service->acknowledge_switch&&timer_service->frequency_hz==50u&&proc_service->sleep_ticks(0u,2u)&&proc_service->sleep_remaining(0u)==2u;before=timer_ready?timer_service->ticks():0;for(quantum=0;timer_ready&&quantum<4u;++quantum){guard=2000000UL;while(guard--&&!timer_service->switch_pending())timer_service->poll();if(!timer_service->switch_pending()){timer_ready=0;break;}timer_service->acknowledge_switch();proc_service->timer_tick();if(timer_service->switch_pending()||!proc_service->cooperate())timer_ready=0;}if(timer_ready)timer_ready=timer_service->ticks()>=before+4u&&proc_service->sleep_remaining(0u)==0u&&proc_service->dispatch_count(0u)==5u&&proc_service->dispatch_count(1u)==6u;if(timer_ready)boot_loaded("TIMER.SYS");else boot_fail("TIMER.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
++    if(fat_mounted){boot_loading("EVENT.SYS");static const char event_name[11]={'E','V','E','N','T',' ',' ',' ','S','Y','S'};uint32_t type=0,value=0;enum module_state state=kernel_load_system_module(event_name,0x0105u,1);const kernel_event_service_t *event=(const kernel_event_service_t *)kernel_find_service(KERNEL_SERVICE_EVENT,KERNEL_EVENT_VERSION);int ok=proc_ready&&state==MODULE_READY&&event&&event->magic==KERNEL_EVENT_MAGIC&&event->version>=KERNEL_EVENT_VERSION&&event->size>=sizeof(*event)&&event->receive&&event->send&&event->pending&&!event->receive(0u,&type,&value)&&proc_service->task_state(0u)==KERNEL_PROC_WAITING&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==5u&&proc_service->dispatch_count(1u)==7u&&event->send(0u,0x1234u,0x41535953UL)&&event->pending(0u)&&proc_service->task_state(0u)==KERNEL_PROC_READY&&event->receive(0u,&type,&value)&&!event->pending(0u)&&type==0x1234u&&value==0x41535953UL&&proc_service->cooperate()&&proc_service->dispatch_count(0u)==6u&&proc_service->dispatch_count(1u)==8u;if(ok)boot_loaded("EVENT.SYS");else boot_fail("EVENT.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
++    if(fat_mounted){boot_loading("INPUT.SYS");static const char input_name[11]={'I','N','P','U','T',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(input_name,0x0106u,1);input_service=(const kernel_input_service_t *)kernel_find_service(KERNEL_SERVICE_INPUT,KERNEL_INPUT_VERSION);input_ready=state==MODULE_READY&&input_service&&input_service->magic==KERNEL_INPUT_MAGIC&&input_service->version>=KERNEL_INPUT_VERSION&&input_service->size>=sizeof(*input_service)&&input_service->poll&&input_service->classify&&input_service->dropped_events&&input_service->classify(0x1eu)==KERNEL_INPUT_KEY_DOWN&&input_service->classify(0x9eu)==KERNEL_INPUT_KEY_UP&&input_service->classify(0xf8u)==0u&&input_service->dropped_events()==0u;if(input_ready)boot_loaded("INPUT.SYS");else boot_fail("INPUT.SYS",state==MODULE_READY?"SELF-TEST FAILED":module_fail_reason(state));}
++    if(fat_mounted){boot_loading("SHELL.SYS");static const char shell_name[11]={'S','H','E','L','L',' ',' ',' ','S','Y','S'};enum module_state state=kernel_load_system_module(shell_name,0x0107u,1);const kernel_shell_service_t *shell=(const kernel_shell_service_t *)kernel_find_service(KERNEL_SERVICE_SHELL,KERNEL_SHELL_VERSION);shell_ready=state==MODULE_READY&&timer_ready&&input_ready&&shell&&shell->magic==KERNEL_SHELL_MAGIC&&shell->version>=KERNEL_SHELL_VERSION&&shell->size>=sizeof(*shell)&&shell->start&&shell->pump&&shell->key_count&&shell->redraw_prompt&&shell->line_active&&shell->select_session&&shell->key_count()==0u;if(shell_ready)boot_loaded("SHELL.SYS");else boot_fail("SHELL.SYS",state!=MODULE_READY?module_fail_reason(state):"UNAVAILABLE");
+     boot_phase_ticks[1]=timer_service?timer_service->ticks():0;
+     kconsole_flush();     /* the status row is short: flush it instead of batching */
+     kconsole_status_row(-1);          /* back to normal appending after the bring-up */
+@@ -554,6 +507,7 @@
+             runtime_handoff.video_boot_ok();
+         /* Tell the video layer which card the BIOS found, so it can load the
+            matching driver from \SYSTEM\DRV instead of assuming ET4000. */
++        boot_show(82u,"VIDEO DRIVER");
+         kvideo_set_detected(runtime_handoff.reserved0,runtime_handoff.reserved1);
+         if(runtime_handoff.video_force_shifter)
+             runtime_handoff.console_puts("VIDEO: SHIFTER (FORCED - ALT OR SETUP)\n");
+@@ -569,17 +523,8 @@
+             /* The VOFA service exists only now, so this is the first moment the
+                card's RAMDAC can receive the system palette. */
+             kgfx_palette_defaults();
+-            /* The ROM already brought the card up in the configured mode, so
+-               the kernel must ADOPT that geometry (width, pitch and depth) or
+-               the compositor would compose a 640x400 mono frame over an
+-               800x600 colour scanout.  Re-programming through the same path the
+-               OPTIONS menu uses is idempotent and keeps one code path. */
+-            if(runtime_handoff.card_video_mode==3u)
+-                (void)kgfx_video_reconfigure_format(800u,600u,8u);
+-            else if(runtime_handoff.card_video_mode==4u)
+-                (void)kgfx_video_reconfigure_format(800u,600u,1u);
+-            else if(runtime_handoff.card_video_mode==5u)
+-                (void)kgfx_video_reconfigure_format(1024u,768u,1u);
++            /* Adopt the ROM mode already set above. Reprogramming it here
++               cleared VRAM and made the logo disappear for a second time. */
+         }
+         else
+             kvideo_boot(runtime_handoff.video_mode,runtime_handoff.cpu_type,runtime_handoff.st_ram_bytes,timer_service);
+@@ -622,6 +567,7 @@
+             from the launcher's "Open terminal".  If the image has no desktop the
+             spawn simply fails and the text shell stays in charge. */
+          {extern int32_t kernel_spawn_user_async(const char *,const char *,const char *,uint32_t *);
++          boot_show(96u,"LOADING DESKTOP.APP");
+           int32_t desktop_rc=kernel_spawn_user_async("\\SYSTEM\\APP\\DESKTOP.APP","","\\",&kernel_desktop_pid);
+           if(desktop_rc<0){kernel_desktop_pid=0u;kernel_desktop_report(desktop_rc,1);}}
+          fb=kgfx_framebuffer(&pitch,&bpp);
+@@ -654,6 +600,7 @@
+            screen clean; leaving it on into normal operation silently swallowed
+            every later kernel diagnostic (a dead desktop left no trace at all).
+            Nothing after START is "boot noise" any more. */
++        boot_show(99u,"STARTING DESKTOP");
+         kconsole_quiet(0);
+         for(;;){
+             extern uint32_t kernel_user_hires_clock(void);
+@@ -696,7 +643,8 @@
+                path) reports the desktop once, with its real fault status. */
+             if(kernel_desktop_pid&&!kernel_desktop_stopped){
+                 int32_t desktop_status=0;
+-                if(kernel_user_take_completion(kernel_desktop_pid,&desktop_status)){
++                /* -1 means still alive; only 1 carries a completed exit status. */
++                if(kernel_user_take_completion(kernel_desktop_pid,&desktop_status)==1){
+                     kernel_desktop_report(desktop_status,0);
+                     kernel_desktop_pid=0u;
+                 }
+@@ -735,6 +683,8 @@
+         }
+     }
+     }
++    kconsole_boot_screen(0);kconsole_quiet(0);
+     runtime_handoff.console_puts("\nPRESS RESET");
++    kconsole_flush();
+     for(;;)__asm__ volatile("stop #0x2700");
+ }
+--- a/system/kernel_sessions.c
++++ b/system/kernel_sessions.c
+@@ -309,6 +309,7 @@
+ }
+ void ksessions_paint(void)
+ {
++ if(kconsole_boot_active())return;
+  term_cell_t cells[32];unsigned i,j,rows=1;
+  if(!enabled)return;
+  /* Graphics mode: the session indicator is a graphic badge painted by the
+--- a/system/kernel_wm.c
++++ b/system/kernel_wm.c
+@@ -1809,6 +1809,7 @@
+ void kernel_wm_applet_bar(uint32_t now)
+ {
+     static uint32_t last_minute=0xFFFFFFFFu;uint32_t minute;
++    if(kconsole_boot_active())return;
+     if(!kgfx_desktop_active()&&!kernel_wm_desktop_session())return;
+     if(kgame_owns_screen())return;
+     minute=now/(50u*60u);
+--- a/tests/test_kernel_console.c
++++ b/tests/test_kernel_console.c
+@@ -32,6 +32,10 @@
+  unsigned i,j;char row[32];text_terminal_t expected;
+  for(i=0;i<256;i++)for(j=0;j<16;j++)font[i][j]=(uint8_t)(i^(j*13));
+  memset(font[32],0,16);
++ initialize(1);kconsole_boot_screen(1);kconsole_quiet(1);
++ kconsole_status_row(22);kconsole_puts("LOADING");kconsole_flush();assert(presents==0);
++ kconsole_notice_puts("DISK FAILED");assert(presents==1&&kconsole_boot_active());
++ kconsole_boot_screen(0);kconsole_quiet(0);kconsole_status_row(-1);
+  initialize(1);kconsole_flush();assert(presents==1&&pairs==1000);
+  kconsole_flush();assert(presents==1);
+  /* Short module callbacks form one presentation, not one per character. */
+--- a/tests/test_session_redraw.py
++++ b/tests/test_session_redraw.py
+@@ -16,6 +16,8 @@
+ #include "text_terminal.h"
+ #define SESSION_COUNT 3
+ static unsigned current,presented_session,invalidations;
++static int boot_hold;
++static int kconsole_boot_active(void){return boot_hold;}
+ static unsigned ksessions_current(void){return current;}
+ static term_cell_t session_cells[SESSION_COUNT][TERM_CELLS];
+ static uint8_t session_cells_valid[SESSION_COUNT];
+@@ -49,7 +51,8 @@
+  term_clear(&b,0);term_text(&b,21,15,"COMMANDER B",0,11);
+  assert(kgfx_terminal_present(a.cells)==1000);
+  memcpy(expected,pixels+1,sizeof expected);
+- current=1;kgfx_session_view(0);
++ boot_hold=1;kgfx_session_view(0);assert(!desktop_hidden);
++ boot_hold=0;current=1;kgfx_session_view(0);
+  memset(pixels+1,0,sizeof expected); /* shell owns visible pixels */
+  current=0;kgfx_session_view(1);
+  assert(!memcmp(expected,pixels+1,sizeof expected));
+--- a/tests/test_sessions.c
++++ b/tests/test_sessions.c
+@@ -18,6 +18,7 @@
+ int kernel_user_desktop_visible(void){return current==graphic_session;}
+ int kernel_user_gui_keyboard_active(void){return current==graphic_session;}
+ int kgfx_desktop_active(void){return desktop_active;}
++int kconsole_boot_active(void){return 0;}
+ /* Geometry the pointer clamp follows; the test switches it to 800x600. */
+ static kgfx_info_t test_info;
+ const kgfx_info_t *kgfx_get_info(void){return &test_info;}
+--- a/ui/post.c
++++ b/ui/post.c
+@@ -89,6 +89,17 @@
+ }
+ 
+ /* The mirrored-E mark, the same shape the kernel splash draws. */
++static uint16_t post_title_row(void)
++{
++    int W=shifter_text_columns()*8,H=shifter_frame_bytes()/shifter_line_bytes();
++    int lh=(W/7)*3/4,ch=g_system.video_mode==VIDEO_ST_MONO?16:8;
++    return (uint16_t)((H/4+lh/2+16+ch-1)/ch);
++}
++static uint16_t post_cell_height(void)
++{return g_system.video_mode==VIDEO_ST_MONO?16u:8u;}
++static uint16_t progress_fill;
++static uint8_t progress_ready;
++
+ static void post_draw_logo_pixels(void)
+ {
+     /* Width and height must come from the ACTIVE mode, not constants: the card
+@@ -104,7 +115,7 @@
+     tw=lw/5;if(tw<2)tw=2;
+     post_fill_rect(lx+lw-tw,ly,tw,lh,1);              /* right vertical */
+     post_fill_rect(lx,ly,lw,tw,1);                    /* top bar */
+-    post_fill_rect(lx,ly+lh/2-tw/2,lw*3/4,tw,1);      /* middle bar, shorter */
++    post_fill_rect(lx+lw/4,ly+lh/2-tw/2,lw-lw/4,tw,1);      /* middle bar, shorter */
+     post_fill_rect(lx,ly+lh-tw,lw,tw,1);              /* bottom bar */
+ }
+ 
+@@ -115,45 +126,40 @@
+        The text console cannot make that shape, so it goes through the video
+        driver's rectangles on the freshly cleared screen. */
+     post_draw_logo_pixels();
+-    centered(11u,"ATOS 2.1");
++    centered(post_title_row(),"ATOS 2.1");
+ }
+ /* The loader reports completed bytes/stages, never a timed animation. */
++/* One graphical bar for the whole boot. Only its growing span and the
++   status label are touched; changing a filename must not reset progress. */
+ void post_draw_progress(uint16_t percent,const char *label)
+ {
+-    static const char *previous_label;
+-    static uint16_t previous_fill,previous_cols;
+-    static uint16_t previous_label_len,previous_label_start;
+-    uint16_t cols=shifter_text_columns(),width=cols>44u?40u:20u,i,fill,x;
++    uint16_t W=shifter_text_columns()*8u,ch=post_cell_height();
++    uint16_t width=W/2u,x=(W-width)/2u;
++    uint16_t row=post_title_row()+3u,y=row*ch,fill;
+     if(percent>100u)percent=100u;
+     fill=(uint16_t)((uint32_t)width*percent/100u);
+-    x=(uint16_t)((cols-width-2u)/2u);
+-    if(!percent||previous_label!=label||previous_cols!=cols||fill<previous_fill){
+-        /* Redraw only what is ours: the frame around the bar, the label text and
+-           the percentage.  Clearing whole rows (and later the whole screen) made
+-           the logo area flicker on every file change. */
+-        console_set_cursor(x,18u);console_putc('[');
+-        console_set_cursor((uint16_t)(x+width+1u),18u);console_putc(']');
+-        {uint16_t row=19u,cols2=shifter_text_columns(),len=slen(label);
+-         uint16_t start=cols2>len?(uint16_t)((cols2-len)/2u):0u,i2;
+-         for(i2=0u;i2<previous_label_len;++i2){
+-             console_set_cursor((uint16_t)(previous_label_start+i2),row);
+-             console_putc(' ');
+-         }
+-         centered(row,label);
+-         previous_label_len=len;previous_label_start=start;}
+-        {uint16_t row=20u,i2;
+-         for(i2=0u;i2<5u;++i2){console_set_cursor((uint16_t)((cols-5u)/2u+i2),row);console_putc(' ');}
+-        }
+-        previous_fill=0u;previous_cols=cols;previous_label=label;
+-    }
+-    /* Write just the newly completed cells, not three full VRAM rows. */
+-    console_set_cursor((uint16_t)(x+1u+previous_fill),18u);
+-    for(i=previous_fill;i<fill;++i)console_putc('#');
+-    previous_fill=fill;
+-    console_set_cursor((uint16_t)((cols-4u)/2u),20u);
+-    console_put_u32(percent);console_putc('%');
+-    if(percent<10u)console_putc(' ');
+-    if(percent<100u)console_putc(' ');
++    if(!progress_ready){
++        post_fill_rect(x-2,y-2,width+4,14,1);
++        post_fill_rect(x,y,width,10,0);
++        progress_fill=0;progress_ready=1;
++    }
++    if(fill>progress_fill){
++        post_fill_rect(x+progress_fill,y,fill-progress_fill,10,1);
++        progress_fill=fill;
++    }
++    console_clear_text_row(row+2u);
++    centered(row+2u,label?label:"");
++}
++
++void post_begin_boot(void)
++{
++    /* Preserve the logo/title pixels. Drop the BIOS hardware and F-key rows.
++       post_run() owns a fresh screen on every return from setup. */
++    uint16_t row=post_title_row()+2u,ch=post_cell_height();
++    uint16_t h=shifter_frame_bytes()/shifter_line_bytes();
++    post_fill_rect(0,row*ch,shifter_text_columns()*8u,h-row*ch,0);
++    progress_ready=0;progress_fill=0;
++    post_draw_progress(0u,"SCANNING BOOT DEVICE");
+ }
+ 
+ static void post_draw_tests(void)
+@@ -191,26 +197,23 @@
+ 
+ void post_draw_countdown(uint8_t seconds)
+ {
+-    static uint8_t shown,len;
+-    if(!shown){                       /* draw the sentence once */
+-        console_set_cursor(0,20);
+-        console_puts_thin("AUTO BOOT:    PRESS ANY KEY");
+-        shown=1u;len=0u;
+-    }
+-    /* Only the digit changes; one cell is enough because the value is < 10. */
+-    console_set_cursor(11u,20);
+-    console_putc_thin((char)('0'+(seconds%10u)));
+-    (void)len;
++    console_clear_text_row(23u);console_set_cursor(0,23u);
++    console_puts_thin("AUTO BOOT: ");console_put_u32(seconds);
++    console_puts_thin("   PRESS ANY KEY");
+ }
+ 
+ void post_run(void)
+ {
++    console_clear();post_draw_logo();progress_ready=0;
++    console_set_cursor(0,21u);console_puts_thin("CPU: ");
++    console_put_u32(g_system.cpu_type==4u?68040u:68000u+10u*g_system.cpu_type);
++    if(g_system.clock_known){console_puts_thin("  ");console_put_u32(g_system.clock_mhz);console_puts_thin(" MHz");}
++    console_set_cursor(0,22u);console_puts_thin("ST-RAM: ");
++    console_put_u32(g_system.ram_bytes/1024u);console_puts_thin(" KB   TT-RAM: ");
++    console_put_u32(g_system.tt_ram_bytes/1024u);console_puts_thin(" KB");
++    post_draw_choices(0);
+     post_run_tests();
+-    console_clear();
+-    console_set_cursor(0,0);console_puts(lang_str(LANG_ID_BIOS_TITLE));
+-    post_draw_logo();
+-    post_draw_tests();
+-    post_draw_choices(0);
++    if(post_tests_failed())post_draw_tests();
+ }
+ 
+ void post_boot_progress(uint16_t percent,const char *label)

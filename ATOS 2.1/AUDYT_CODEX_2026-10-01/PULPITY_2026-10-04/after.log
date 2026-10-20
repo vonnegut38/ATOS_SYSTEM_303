@@ -1,0 +1,5 @@
+session=1 visible canvas=2 expected=2
+session=0 visible canvas=1 expected=1
+session=1 visible canvas=2 expected=2
+session=0 visible canvas=1 expected=1
+autostart early=0 after switch=1 (expected 0,1)

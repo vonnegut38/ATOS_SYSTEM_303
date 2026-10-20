@@ -1,0 +1,9 @@
+INFO : Hatari v2.6.1-devel (Oct 12 2026), compiled on:  Oct 12 2026, 22:50:47
+INFO : Mounting ACSI HD image '/Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-nftest.img'
+WARN : Need TOS patching for memory sizes > 4 MiB on ST/STE
+WARN : Bus Error reading at address $ffff8282, PC=$e00278 addr_e3=e00278 op_e3=3290
+WARN : Bus Error reading at address $ffff8400, PC=$e00278 addr_e3=e00278 op_e3=3290
+WARN : Bus Error reading at address $5000000, PC=$e0033a addr_e3=e0033a op_e3=2210
+WARN : Bus Error reading at address $f0001d, PC=$e0023a addr_e3=e0023a op_e3=1290
+WARN : Bus Error reading at address $fff0001d, PC=$e0023a addr_e3=e0023a op_e3=1290
+WARN : Storing NVRAM to '/Users/xxx/Library/Application Support/Hatari/hatari.nvram' failed

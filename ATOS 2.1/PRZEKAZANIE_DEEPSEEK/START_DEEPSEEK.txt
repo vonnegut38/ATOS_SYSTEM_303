@@ -1,0 +1,11 @@
+Kontynuuj ATOS 2.0 w istniejącym katalogu albo po rozpakowaniu do osobnego katalogu. Najpierw przeczytaj docs/PRZEKAZANIE_DEEPSEEK_2026_09_24_PL.md — to aktualny stan, starsze audyty są historyczne. Nie modyfikuj oryginalnego commander-v10.
+
+Pierwsze zadanie: kwalifikacja ostatniej poprawki wejścia, bez przebudowy architektury. Zbuduj i uruchom testy przez python3 tools/build_atos2.py. W Hatari z naszym BIOS-em i profilem atos2.cfg wykonaj dłuższy test przełączania trzech sesji, dwóch Commanderów i benchmarków SYSINFO, wpisywania poleceń oraz ruchów myszy. Porównaj INPUTSTAT i pamięć przed/po. Końcowy krótki test miał wszystkie liczniki strat zerowe; nie uznawaj tego za pełną stabilność. Jeżeli błąd wróci, zlokalizuj konkretną przerwę w obsłudze ACIA zamiast dodawać drugi parser IKBD lub globalnie zmieniać IPL.
+
+Nie zapisuj obrazu HDD przy uruchomionym Hatari. Zmiany wprowadzaj małymi krokami, zachowuj testy i przygotuj raport po polsku: reprodukcja, przyczyna, zmiana, wyniki, ograniczenia. Nie zaczynaj nowego desktopu ani portu innego systemu. Dalszą kolejność prac i granice B3/B4 opisuje przekazanie.
+
+AKTUALIZACJA 24.09.2026: kwalifikacja wykonana. Dłuższy stress obalił zera z krótkich prób; przyczyną
+był wyciek IPL6 z kernel_user_pause_recover. Poprawka punktowa (move.w #0x2500,%sr przed RTS) jest
+zainstalowana w work/atos-v2.img. Czytaj docs/RAPORT-POPRAWKA-WEJSCIA-SR_2026-09-24_PL.md oraz addendum
+w docs/PRZEKAZANIE_DEEPSEEK_2026_09_24_PL.md. Pozostaje dłuższy stress i test fizycznej myszy.
+

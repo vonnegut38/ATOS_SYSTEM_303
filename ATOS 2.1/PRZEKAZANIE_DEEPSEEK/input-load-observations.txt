@@ -1,0 +1,21 @@
+2026-09-24, Hatari STE/030 16 MHz mono, own BIOS.
+Diagnostic baseline: INPUTSTAT all 0.
+SYSINFO tts2 F5, Shift+Alt+F10 -> tts1, type inputstat:
+first i lost (nputstat); subsequent INPUTSTAT:
+RAW=0 ACIA=1 KEY=0 MOUSE=0 QUAR=2 PARTIAL=0.
+Adding atomic capture to ACSI read/write wait loops alone: SAME FAILURE.
+ACSI-only is NOT sufficient evidence of fixing the reproduced bug.
+Added bounded raw capture during text rendering: first trial PASS, second FAIL: first i lost, ACIA=1 QUAR=3.
+Added atomic raw capture to each of 32 event-pump iterations in kernel_main.c.
+Final kernel 101556 bytes: three consecutive SYSINFO F5 / switch / INPUTSTAT trials PASS, all loss counters zero. One transient EVENTS PENDING=1 is queue occupancy, not loss.
+Then Commander tts1 + SYSINFO tts2: two benchmark/switch cycles; active panel and two marks retained. Commander F10 -> EXIT 0; INPUTSTAT all losses 0.
+Then shell tts1 + SYSINFO tts2 + Commander tts3: full session cycle and another F5; Commander cursor retained; final INPUTSTAT RAW=0 ACIA=0 KEY=0 MOUSE=0 QUAR=0 PARTIAL=0, EVENTS PENDING=0.
+These are short functional checks, not a long stress test or proof for real hardware.
+
+2026-09-24 (diagnoza DeepSeek, dłuższy stress):
+Dłuższy stress (12 i 16 cykli: shell + SYSINFO F5 + Commander) obalił wcześniejszy wniosek o zerach.
+Liczniki znów rosły (po 16 cyklach ACIA=1, QUAR=9, PARTIAL=1). Przyczyna: po wywłaszczeniu Timer-C
+kernel_user_pause_recover wracał przez RTS bez RTE, zostawiając SR=0x2600 (IPL6) i maskując IRQ6
+w pętli głównej (ok. 24% próbek przy IPL6). Poprawka punktowa: move.w #0x2500,%sr przed RTS (IPL5).
+Po poprawce 20 cykli bez strat. Szczegóły: docs/RAPORT-POPRAWKA-WEJSCIA-SR_2026-09-24_PL.md.
+

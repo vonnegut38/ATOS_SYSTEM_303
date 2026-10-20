@@ -1,0 +1,234 @@
+AUDYT CODEX — AUDIO, ETAP 5 — UWAGI DLA DEEPSEEKA
+Analiza rozpoczęta 2026-10-10, zakończona 2026-10-11.
+Projekt: /Users/xxx/Documents/Deepseek_test/ATOS 2.1
+
+DECYZJA
+Nie wdrażać jeszcze etapu 5 do głównego obrazu. Kierunek (sterownik PSG,
+właściciel dźwięku, zegar niezależny od renderowania, adapter XBIOS) jest dobry,
+ale obecny kod ma błędy kontraktów, synchronizacji i czasu życia zasobów.
+Nie trzeba wymieniać architektury. Najpierw poprawić poniższe punkty, następnie
+testować na kopii obrazu. Projektowanie interfejsu PCM może trwać, lecz integrację
+odtwarzania Flashbacka rozpocząć po ustabilizowaniu fundamentu.
+
+ZAKRES I DOWODY
+Przeczytałem kod PSG/audio, adapter XBIOS, launcher i sprzątanie TOS, ISR,
+testy i dokument AUDIO-PACZKA-ETAPY-1-4.md. Porównałem ze źródłem:
+ /Users/xxx/Documents/Deepseek_test/work/emutos-build/bios/sound.c
+ /Users/xxx/Documents/Deepseek_test/work/emutos-build/bios/vectors.S
+ /Users/xxx/Documents/Deepseek_test/atari-030-port/hatari-src/src/psg.c
+Uwaga: katalog EmuTOS leży obok ATOS 2.1, nie wewnątrz niego.
+
+Uruchomiłem istniejące testy PSG i audio, kompilując je do osobnego katalogu:
+oba PASS. Niezależna sonda kontraktów na tych samych źródłach wykazała 6 FAIL.
+Nie zmieniałem kodu produkcyjnego, BIOS-u ani obrazów dysku. Nie przeprowadzałem
+w tej rundzie nowego testu słuchowego ani przebiegu Hatari. Poniższe błędy są
+potwierdzone kodem/sondą; odtworzenie konkretnego ekranowego ongibit FAIL pozostaje
+osobnym zadaniem. Wyników starego emulatora nie traktuję jako własnego pomiaru.
+
+1. PILNE: ODWROTNY KONTRAKT DOSOUND
+system/kernel_audio.c:306–320; tests/test_kernel_audio.c, sekcja 13.
+
+Lokalny EmuTOS sound.c:145–158 robi:
+ oldtable = sndtable;
+ if ((LONG)table >= 0) { sndtable = table; snddelay = 0; }
+ return oldtable;
+
+To znaczy:
+ Dosound(-1): zapytanie, bez zatrzymywania i bez resetowania opóźnienia;
+ Dosound(NULL): zatrzymanie interpretacji tabeli;
+ Dosound(p): ustawienie tabeli, wykonanie od następnego taktu;
+ wynik: poprzedni bieżący wskaźnik interpretera, nie zawsze początek tabeli.
+
+ATOS robi odwrotnie dla -1 i NULL. Test 13 utrwala błędny kontrakt, więc jego PASS
+nie dowodzi zgodności. Moja sonda potwierdza oba błędy. Poprawić kod, test, opis
+API i raport. Nie utożsamiać zatrzymania tabeli z wyciszeniem PSG: rejestry mogą
+podtrzymywać dźwięk. Wyciszenie przy końcu sesji to osobna polityka ATOS.
+
+2. PILNE: BŁĘDNY ADRES ODCZYTU PSG, BŁĘDNE ZAŁOŻENIE O WRITE-ONLY
+hw/psg.c:61–63, 103–139, 144–151; include/psg.h; opis wcześniejszych etapów.
+
+psg_bus_read() czyta 0xffff8802. To adres zapisu danych. Odczyt wybranego rejestru
+odbywa się przez 0xffff8800. EmuTOS używa PSG->control zarówno do wyboru rejestru,
+jak i odczytu. Lokalny Hatari opisuje to wprost (src/psg.c:103–104): odczyt
+0xff8802 zwraca 0xff. Twierdzenie, że rejestry 0–13 YM2149 są tylko do zapisu,
+jest błędne. Cień może być użyteczny, ale nie z tego powodu.
+
+Naprawić niskopoziomowy odczyt. Wpływa także na read-modify-write portu A/FDC:
+gdy zamiast poprzedniej wartości czytamy FF, zmieniamy niezamierzone bity.
+Test hostowy abstrahuje adresy i zwraca właściwy rejestr, więc tej usterki nie
+wykrywa. Dodać test modelujący asymetrię odczytu/zapisu oraz próbę na emulatorze.
+Jeżeli przebudowany BIOS też zawiera ten plik, przetestować również jego FDC;
+samo podmienienie KERNEL.SYS nie aktualizuje kodu PSG już znajdującego się w BIOS.
+
+To NIE jest jeszcze dowód przyczyny konkretnego ongibit FAIL. W bieżącym kodzie
+OR 0x20 nawet do błędnie odczytanego FF nadal daje ustawiony bit, a helper zapisuje
+cień. Trzeba ustalić dokładnie uruchomioną binarkę i ślad wywołania, zamiast
+przypisać ekranowy FAIL pierwszemu znalezionemu błędowi.
+
+3. PILNE: DWÓCH KONSUMENTÓW KOLEJKI I BRAK SYNCHRONIZACJI Z ISR
+system/kernel_audio.c:143–184, 210–218, 306–320;
+system/kernel_main.c:671; system/kernel_entry.S:349.
+
+kaudio_pump() działa z pętli jądra ORAZ z kaudio_timer_tick(). Brak zabezpieczenia
+q_head/q_tail/q_count/q_deadline. Przykładowo: pętla zaczyna audio_apply(), Timer C
+przerywa ją, obsługuje to samo zdarzenie i zmniejsza q_count; po powrocie pętla
+jeszcze raz przesuwa indeks i zmniejsza licznik. Możliwe podwójne wykonanie,
+pominięcie zdarzeń, a nawet 0 -> 255 w uint8_t q_count. Producent i release także
+nie są zsynchronizowani. Blokada pojedynczego zapisu PSG nie chroni kolejki.
+
+Zalecenie: jeden konsument (dla obecnego PSG najprościej Timer C), publikacja
+zdarzeń i przejścia właściciela w krótkich sekcjach krytycznych. Stan tabeli
+Dosound/pointer/delay publikować atomowo względem ISR. volatile samo nie naprawi
+tego problemu. Nie stosować blokującego mutexa/spinlocka w przerwaniu.
+Zachować limit pracy na takt; mierzyć najgorszy czas, nie tylko średni FPS.
+
+4. PILNE: TOS NIE ZWALNIA AUDIO, A OWNER=1 KOLIDUJE Z PID APLIKACJI
+include/kernel_audio.h:76; system/kernel_audio.c:197–218, 315;
+system/tos_prg.c:3688–3717; system/kernel_exception.c:133, 782, 1241.
+
+KAUDIO_TOS_OWNER=1, a natywne PID zaczynają się od 1. kaudio_claim() rozpoznaje
+wyłącznie liczbę PID; native PID 1 i TOS są zatem tym samym właścicielem. Sonda:
+natywne claim(1), potem Dosound(seq) zostaje przyjęte — FAIL izolacji właścicieli.
+Użyć odrębnej przestrzeni identyfikatorów/domeny + generacji sesji. Można rozważyć
+istniejący zarezerwowany identyfikator domeny TOS, z kontrolą braku kolizji.
+
+kaudio_release() jest w kończeniu procesów ATOS, ale nie w końcu uruchomienia TOS.
+Launcher przywraca wektory, zwalnia alokacje i oddaje TPA bez odpięcia snd_table.
+Aktywna tabela może dalej być czytana z ISR z pamięci zwolnionej/reużytej.
+Nawet tabela zakończona pozostawia owner=1, blokując następny program audio.
+To realna luka w ścieżce sprzątania, nie problem, który rozwiązuje test samej
+funkcji release(pid).
+
+Dodać wspólne sprzątanie normalnego wyjścia, błędu i zamknięcia okna TOS:
+atomowo odpiąć tabelę/kolejkę, wyciszyć odpowiednie kanały i zwolnić właściciela,
+ZANIM pamięć programu może zostać użyta ponownie. Uwzględnić Mfree aktywnej tabeli.
+
+5. GIACCESS OMIJA WŁAŚCICIELA; PORTY SPRZĘTOWE TO NIE KANAŁY AUDIO
+system/tos_prg.c:1738–1743; hw/psg.c:188–214.
+
+Giaccess zapisuje bez kaudio_claim()/kontroli właściciela. Program TOS może więc
+zmienić dźwięk Arkanoida pomimo zajętego PSG. Kontrola tylko w Dosound nie wystarcza.
+Do tego raw write dopuszcza porty 14/15; Ongibit/Offgibit zmieniają dowolny bit
+portu A. Ochrona kierunków w rejestrze 7 nie chroni wyboru napędu/strony, RTS/DTR,
+strobe drukarki ani funkcji zależnych od modelu Atari.
+
+Rozdzielić dostęp do dźwięku 0–13 od uprawnień do portów 14/15. Dla TOS w oknie
+stosować wirtualny stan portów lub jawne udostępnianie konkretnej funkcji przez
+jej sterownik. Te same reguły muszą obejmować tabelę Dosound. Dla legacy API bez
+kanału błędu nie wymyślać wyniku oznaczającego coś innego: ustalić politykę
+odmowy/wirtualizacji i raportować ją poza standardowym wynikiem. Profile zgodności
+nie zapewniają izolacji przed bezpośrednim dostępem do sprzętu w supervisorze.
+
+6. GIACCESS: WYNIK ZAPISU I ODCZYT CIENIA NIE ODPOWIADAJĄ KONTRAKTOWI
+system/tos_prg.c:1738–1741; hw/psg.c:115–124, 215–218.
+
+EmuTOS zwraca odczyt rejestru także po zapisie; ATOS zwraca wtedy zawsze 0.
+psg_write() nie aktualizuje reg_shadow. Sonda: raw(8,3), write(8,12) daje model
+sprzętu=12, shadow=3. Zwykły odczyt Giaccess nie odzwierciedla natywnych zapisów
+ani wyciszenia. Początkowy cień też nie stanowi odczytu rzeczywistego układu.
+
+Naprawić wspólny accessor i semantykę wyniku. Rozróżnić stan sprzętu od wirtualnego
+PSG persony. Uwzględnić maski szerokości rejestrów. Przykład: rejestr 1 ma cztery
+bity; po ponownym wyborze rejestru odczyt zapisanych AA/55 daje 0A/05 w lokalnym
+Hatari. Test wymagający zawsze AA/55 nie testuje właściwego readbacku.
+
+7. KOLEJKA CZASOWA GUBI TERMINY — DWA DETERMINISTYCZNE FAIL
+system/kernel_audio.c:156, 181.
+
+Dopisanie zdarzenia do niepustej kolejki ustawia q_deadline=now, przyspieszając
+jej dotychczasową głowę. Sonda: zdarzenie na t=100, dopisanie na t=10; pierwsze
+wykonuje się już przy t=10. Deadline ustalać tylko przy przejściu pustej kolejki
+w niepustą; append nie może go zmieniać.
+
+Po obsłudze ustawiane jest now+next.wait zamiast poprzedni_deadline+next.wait.
+Sonda: zdarzenia należne na t=100 i 200, obsługa t=250; drugie przesuwa się na
+350. Opóźnienia kumulują się zamiast nadrabiania według osi czasu. Jeśli zamiarem
+był minimalny odstęp od faktycznego wykonania, trzeba tak jawnie zdefiniować ABI;
+do sekwencji efektów/muzyki zalecam kumulowane terminy, z limitem nadrabiania.
+
+8. TOSAUDIO.PRG NIE JEST JESZCZE TESTEM ODBIORU
+system/tos_audio.c:77–114.
+
+- Dosound tylko ustawia tabelę. Natychmiastowy odczyt przed pierwszym IRQ może
+  legalnie pokazać poprzednią wartość. Nie wymagać synchronicznego pierwszego kroku.
+- Przenieść znaczniki AA/55 do rejestru o pełnych 8 bitach albo użyć prawidłowych
+  masek. Testować osobno zapisany bajt i odczyt sprzętu.
+- Sama tabela zmienia okres, ale nie ustawia kompletnego słyszalnego tonu
+  (mikser + głośność + okres); pierwszy claim może dodatkowo wykonać audio_init.
+  Liczniki starts/ends potwierdzają pracę interpretera, nie słyszalny dźwięk.
+- Pętla 20 mln iteracji nie daje przenośnego czasu na różnych CPU/emulatorach.
+  Zachować test bez trapów, ale oprzeć długość na dostępnej pamięciowej zmiennej
+  czasu i zewnętrznym watchdogu. Osobno sprawdzić start i końcowy stan.
+- Próbę portu A ograniczyć do kontrolowanego środowiska, odtworzyć stan; 0x20
+  to strobe drukarki, nie abstrakcyjny wolny bit.
+- Dopisać test 0x80/0x81 z przepełnieniem bajtu, zapytanie -1 w trakcie opóźnienia,
+  NULL stop, zmianę tabeli, exit/fault oraz odmowę dla każdego wejścia audio.
+
+9. DODATKOWE RYZYKA DO ZAMKNIĘCIA
+
+a) snd_step() czyta bezpośrednio pamięć wskazaną przez program. Limit 256 instrukcji
+   ogranicza pętlę, ale nie chroni przed Bus Error, końcem alokacji ani niepoprawnym
+   adresem. Zdefiniować walidację zakresów i czas życia; ewentualne kopiowanie
+   tabeli opisać jako świadome ograniczenie kompatybilności tabel modyfikowanych
+   podczas odtwarzania. Nie robić alokacji ani ciężkiego parsowania w IRQ.
+b) kaudio_irq_attach() nie zwraca błędu. Pełne 4 sloty IRQ pozwalają zgłosić claim
+   mimo braku napędu Dosound. Rejestrować raz podczas inicjalizacji i sprawdzać
+   rezultat albo zwrócić jawny stan niedostępności wewnętrznego backendu.
+c) Stos TOS IRQ 8 KB jest używany tylko przy tos_async_in_guest oraz aktywnej
+   personie. Gdy TOS jest zaparkowany lub działa ścieżka synchroniczna, to nie
+   jest ten sam stos. Nie wyciągać z jego obecności wniosku o bezpieczeństwie
+   dowolnego callbacku audio. Sprawdzić zużycie stosu i limit czasu ISR.
+d) EmuTOS uruchamia sndirq przy 50 Hz, co czwarty takt swojego Timer C 200 Hz.
+   W ATOS należy użyć rzeczywistej częstotliwości jego timera — nie kopiować
+   dzielnika 4 bez sprawdzenia. Pomiar 55,3 Hz przez 3 s nie potwierdza dokładnego
+   tempa. Zmierzyć dłuższy okres zegarem monotonicznym, bez fast-forward, porównać
+   czas emulowany i ścienny, obciążenie pulpitu oraz zajęty TOS.
+e) Xbtimer: -32 jest lepsze diagnostycznie od zera, ale klasyczne wywołanie ma
+   interfejs void; aplikacja może nie sprawdzać D0. Nie reklamować zgodności.
+   W następnym etapie wybrać wirtualny timer i bezpieczne callbacki TOS; nie
+   oddawać programowi systemowego Timer C.
+f) Zmiana SHA całego obrazu ani sam rozmiar jądra nie identyfikują wdrożonego kodu.
+   Zapisywać manifest SHA poszczególnych KERNEL.SYS/TOSAUDIO.PRG/BIOS, ścieżkę
+   obrazu, komendę startu i odpowiadający ELF. Dopiero tak odróżniać stary cień
+   od regresji. Wcześniejszy raport zawiera też nieaktualne stwierdzenia o braku
+   IRQ w jądrze; oznaczyć historyczny zakres tych sekcji.
+
+KOLEJNOŚĆ DALSZEJ PRACY
+1) Naprawić odczyt PSG i Dosound, rozszerzyć testy o kontrakty upstream.
+2) Jeden konsument kolejki, synchronizacja ISR, właściwe deadline'y.
+3) Właściciel domeny TOS + generacja, pełne sprzątanie, wspólna kontrola Giaccess
+   i Dosound, polityka portów sprzętowych, walidacja tabel.
+4) Powtórzyć TOSAUDIO na świeżej kopii ze sprawdzonym manifestem. Zalogować dla
+   ongibit: numer trapu, argument WORD, rejestr, cień przed/po i fizyczny readback.
+   Nie uznawać testu hostowego za dowód poprawności całej ścieżki.
+5) Testy integracyjne: start/exit/fault/zamknięcie okna 20 razy; owner zwolniony,
+   cisza po końcu, brak odczytów starej tabeli; native -> TOS -> native; konflikt
+   równoległy; dźwięk z obciążeniem GUI; kontrolowana próba portu A/FDC.
+6) Dopiero wtedy małe wdrożenie etapu 5 z kopią bezpieczeństwa i manifestem.
+7) PCM/Flashback: ustalić faktyczny backend sprzętu (wykrywane DMA, opcjonalny
+   backend PSG, przyszłe ISA/USB), format PCM, ring buffer, watermark/underrun,
+   ownership i zegar konsumpcji. Miksowanie/dekodowanie poza IRQ, IRQ tylko
+   ograniczona obsługa buforów. Te same reguły zasobów dla aplikacji ATOS i TOS.
+   Nie obiecywać PCM tylko dlatego, że istnieje zegar 50 Hz.
+
+ARTEFAKTY TESTÓW
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/audio-audit-20261010/
+ existing-audio.log: istniejący test audio PASS
+ existing-psg.log: istniejący test PSG PASS
+ probe_contracts.c: niezależne reprodukcje przez publiczne API
+ probe-contracts.log: 6 FAIL opisanych wyżej
+ run-tests.sh: kompilacja i powtórzenie testów (sonda ma obecnie zwrócić kod 1)
+
+SHA256 AUDYTOWANYCH ŹRÓDEŁ (dla rozróżnienia od dalszych zmian)
+hw/psg.c
+ 5c37eabbfbabb82cc602a674296b14ebdd19fb7d894db43dd7bebac0d1006be9
+system/kernel_audio.c
+ db81465e4eb4bc1315a5fed50e432dc8903c4938070599490f1e3c0c20d88fb3
+system/tos_prg.c
+ a3eac5c64ffaf28525e9fc18dc6eb213104ed9c69004bb70a90b6e5b123b4205
+system/tos_audio.c
+ c92dfc3fb006c6c93f28e63034747537fd405f6d964ac4d42cef0d9fce2eef6a
+
+Wniosek dla Deepseeka: napęd z Timer C jest właściwym krokiem, ale "testy są
+zielone, więc rdzeń jest poprawny" jest tu nieuprawnione. Część testów kopiuje
+błędną semantykę implementacji, a model PSG pomija krytyczną właściwość magistrali.

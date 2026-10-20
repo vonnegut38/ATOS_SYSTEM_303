@@ -1,0 +1,18 @@
+{
+  "system/kernel_block.c": {
+    "before_sha256": "3d8c68c1a80c0e429521dd9416fd86c6f11537111fbe54e804d46ce9340ab5ce",
+    "after_sha256": "77e5f33b1ed508f049d288a3571f4ba5f5844e39b88d362d9c4767a68a67af84"
+  },
+  "system/wm_blit.c": {
+    "before_sha256": "c254c8a0a150ff299a525a78c12b0f7a76380948df9b042c1cd6b84417c52151",
+    "after_sha256": "c1bf579fde5d13a0b4506252d5d1395a0eff6f839db4a39b44ea757c9602b0ef"
+  },
+  "tests/test_block_cache.c": {
+    "before_sha256": "2e764a1072e9ffc895bc38b0b3d05e4ea647c7f07f471a98479d800f30431505",
+    "after_sha256": "d1a923af93b4f8cb9bdc32e4cd8c80f403e54a2dcc032fe1c04679c6e45fa76b"
+  },
+  "tests/test_wm_blit.c": {
+    "before_sha256": "2c15047e5e3115579f15682500c9c2ac7e917bcaf1576c7eda731d447ebfd30e",
+    "after_sha256": "a72b24a9e32c62ca2febd83f6a9a7e045bbed52a1a504ae821818b06bb610a50"
+  }
+}

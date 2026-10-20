@@ -1,0 +1,85 @@
+ARKANOID / ATOS — optymalizacja 2026-10-10
+
+WDROŻONE: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-v2.img
+Podmienione wyłącznie SYSTEM/KERNEL.SYS (453272 B) i SYSTEM/APP/ARKANOID.APP (18058 B).
+FAT: 394 pliki, obie kopie zgodne, zero skrzyżowanych łańcuchów.
+Kopia obrazu bezpośrednio sprzed wdrożenia: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-20261010/before-deploy.img
+Źródła sprzed zmian: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-20261010/before
+Patch tylko tej rundy: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-20261010/arkanoid-performance.patch
+
+WYNIK
+37,94 ukończonych prezentacji klatki/s średnio, próbki dwusekundowe 34,29–39,92.
+Pomiar 32,13 sekundy czasu rzeczywistego, bez nagrywania AVI, bez fast-forward.
+Hatari: Mega ST, 68030 32 MHz, 8 MB ST + 64 MB TT, ET4000/VOFA,
+pulpit 800x600x8, klient gry 448x536. Aktywne widoczne okno w renderowanym
+teście SDL dummy. Licznik ukończonych GUI_FRAME; nie jest to pomiar fizycznego
+scanoutu ani gwarancja szybkości na prawdziwym sprzęcie. Dane: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-20261010/performance.json
+
+ZMIANY
+1. Opcjonalne ABI 1.4, GUI_FRAME=81. Jedna walidowana lista rysowania i jedna
+   kompozycja na klatkę, osobne małe prostokąty uszkodzeń. Limit 2048 poleceń,
+   32 grupy po maks. 80. Tylko własne okno procesu, bez dostępu do framebufferu.
+   Starsza ścieżka IPC pozostaje jako fallback.
+2. WM nie unieważnia całego okna przy zmianie małego fragmentu dekoracji.
+   Kompozycja na żądanie nie ginie na bramce tego samego ticka.
+3. Zegar wysokiej rozdzielczości oparty na liczniku IRQ Timer C i fazie MFP,
+   zamiast zliczania przepełnień wyłącznie podczas odczytów. Uwzględnia pending IRQ.
+4. Terminy klatek zachowują fazę; cel 40 Hz. HUD tylko przy zmianie pól,
+   FPS raz na sekundę razem z klatką, bez osobnego wymuszanego odrysowania.
+5. Fokus klawiatury ustawiany po utworzeniu okna; dopuszczone aktywowanie
+   własnego okna. Automatyczna gra jest opcjonalna (D).
+
+TESTY
+Build TOS=1 i odpowiednie cele make check zaliczone. Pierwszy pełny przebieg
+ujawnił niezainicjalizowany wzorzec w test_kernel_console; naprawiono inicjalizację
+struktury w teście i powtórzono ten cel. Pozostałe cele zaliczono osobno.
+Nowe testy: walidacja GUI_FRAME, zegar/IRQ/wrap, porównanie incremental vs full
+rendering przez 600 kroków fizyki (piłka, paletka, HUD, pauza, bonusy, restart).
+Testy focus/input/sleep: 3 PASS. Próba sterowania: Space, strzałki, P, Esc;
+wyjście status=0, fault=0. Flashback: około 30 FPS (27,36–31,06 w próbkach),
+wyjście zwalnia własność ekranu, fault=0; potem ponowny start i wyjście Arkanoida.
+Nie używać FPS z AVI jako wyniku: nagrywanie obciąża emulator.
+
+STEROWANIE
+Spacja/klik: start; strzałki: paletka; P: pauza; R: nowa gra;
+D: przełącznik demonstracji/autopilota; Esc: wyjście.
+
+UWAGI DLA DALSZEJ PRACY
+GUI_FRAME to wspólna ścieżka dla małych gier okienkowych; nie omija widoczności
+ani klipowania WM. Nie łączyć odległych pól HUD w jeden szeroki prostokąt.
+Nie przywracać pełnego kvideo_damage(clip) w przebiegu dekoracji.
+Nie profilować przez stałe adresy 0x800/0x804 ani kosztowne odrysowanie tekstu
+co kilka klatek. Debug statystyki kdbg_gui_frame_stats są pasywnymi licznikami.
+Nie zmieniono renderera globalnie, trybu pulpitu ani BIOS-u.
+
+WERYFIKACJA WIDOCZNA
+Po wdrożeniu uruchomiono główny obraz w widocznym Hatari. Arkanoid uruchamia
+się z zaznaczonej ikony pulpitu (Enter), tryb demonstracji D działa. Emulator
+został otwarty dla użytkownika. Uruchomiono przez istniejący Start-ATOS.command,
+ponieważ pakiet ATOS Start.app zawiesił się przed otwarciem okna.
+
+AKTUALIZACJA TŁA
+Na prośbę użytkownika C_BG zmieniono z 177 na 0 (systemowa czerń).
+Przebudowano i zainstalowano wyłącznie ARKANOID.APP (18054 B). FAT sprawdzony.
+Sterowanie pozostaje: lewo/prawo i spacja; domyślnie bez demonstracji.
+Kopia obrazu: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-black-20261010/before.img
+
+AKTUALIZACJA RUCHU PO WYPUSZCZENIU PIŁKI
+Fizyka 50 Hz i prezentacja około 40 Hz dawały naprzemienne przesunięcia
+12/24 px przy stałym ruchu strzałką. Dodano interpolację pozycji piłki i paletki
+między dwoma ostatnimi krokami fizyki. Kolizje i stan gry nie są interpolowane.
+Koszt: standardowe opóźnienie wyświetlanej pozycji o jeden krok fizyki (20 ms).
+Restart/stany/nowa plansza resetują poprzednią pozycję, więc nie ma przelotu
+ze starej sceny. Pakiet myszy nie przestawia paletki przy trzymanej strzałce.
+Próba częstszego sleep nie poprawiła odstępów klatek; NIE wdrożono tej próby.
+Test host ASan/UBSan: pełne i częściowe odrysowanie zgodne; 50/40 Hz daje
+równe 15 px przesunięcia; rysowanie nie zmienia fizyki; restart i wejście PASS.
+Próba instrumentowana w Hatari: podczas lotu ~38,13 klatki/s zegara gościa,
+mediana 24,98 ms, p95 40,28 ms, maks. 40,45 ms w krótkiej próbce 61 odstępów.
+Przed zmianą ~39,62 klatki/s, mediana 23,60 ms, p95 41,67 ms, maks. 50,13 ms.
+To diagnostyka krótkiej sekwencji wejścia, nie długi pomiar wall-clock.
+Średni błąd przesunięcia wobec czasu pomiędzy początkami rysowania w próbkach
+stałego kierunku spadł z 3,21 px do 0,82 px (37 i 29 próbek).
+Produkcja nie zawiera pierścienia diagnostycznego. Zainstalowano wyłącznie
+ARKANOID.APP (18432 B); kernel i pozostałe pliki obrazu bez zmian, FAT poprawny.
+Logi, patch i kopia obrazu: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/arkanoid-input-20261010

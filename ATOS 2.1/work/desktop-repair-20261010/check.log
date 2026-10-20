@@ -1,0 +1,264 @@
+cc -O2 -std=c11 -Wall -Wextra -Werror -Wno-unused-variable -Wno-unused-function -fsanitize=address,undefined -Iinclude tests/test_arkanoid_render.c system/game.c -o build/tests/test_arkanoid_render
+build/tests/test_arkanoid_render
+PASS: incremental pixels equal full repaint; ball-only average 80 pixels, 4 commands/frame
+PASS: uniform interpolated motion, unchanged physics, clean pixels and input ownership
+python3 tests/test_gui_frame.py
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.419s
+
+OK
+python3 tests/test_hires_clock.py
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.401s
+
+OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_kernel_game.c -o build/tests/test_kernel_game
+build/tests/test_kernel_game
+KERNEL GAME PASS: ET4000 gate, mode switch/restore, 2x/1x copy, rect lists, clipping, damage, palette cache, session switch, ownership
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_st_raster.c -o build/tests/test_st_raster
+build/tests/test_st_raster
+320x200x4: OK (stride 160, 32000 bytes)
+640x200x2: OK (stride 160, 32000 bytes)
+640x400x1: OK (stride 80, 32000 bytes)
+st_raster: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_tos_ext.c -o build/tests/test_tos_ext
+build/tests/test_tos_ext
+tos_ext: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_machine_detect.c -o build/tests/test_machine_detect
+build/tests/test_machine_detect
+MACHINE_DETECT: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_lang.c ui/lang.c -o build/tests/test_lang
+build/tests/test_lang
+LANG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_config.c -o build/tests/test_config
+build/tests/test_config
+CONFIG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_exception.c -o build/tests/test_exception
+build/tests/test_exception
+EXCEPTION: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_irq.c system/irq.c -o build/tests/test_irq
+build/tests/test_irq
+IRQ: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_driver.c system/video_driver.c -o build/tests/test_video_driver
+build/tests/test_video_driver
+VIDEO_DRIVER: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_backends.c system/video_driver.c video/shifter.c video/et4000.c -o build/tests/test_video_backends
+build/tests/test_video_backends
+VIDEO_BACKENDS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_vofa.c -o build/tests/test_vofa
+build/tests/test_vofa
+VOFA PASS: absent/no writes, VGA mode, VOFA 8-bit IO, divider, timer/stuck sync, VRAM lanes, injected bus faults, generic and wide-store aperture clear
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_video_output.c -o build/tests/test_video_output
+build/tests/test_video_output
+Video output PASS: Shifter selection, allocation fallback, big-endian pixels, changed words, idle, clipping, edges and session buffer switches
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_video_boot.c -o build/tests/test_video_boot
+build/tests/test_video_boot
+Video boot PASS: explicit opt-in, invalid config, no CPU gate, RAM/mode/timer guards and every fallback
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_cpu_ops.c system/cpu_ops.c -o build/tests/test_cpu_ops
+build/tests/test_cpu_ops
+CPU_OPS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_desktop_module.c system/desktop_module.c -o build/tests/test_desktop_module
+build/tests/test_desktop_module
+DESKTOP_MODULE: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_mod_clock.c system/mod_clock.c system/video_driver.c -o build/tests/test_mod_clock
+build/tests/test_mod_clock
+MOD_CLOCK: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_app_abi.c -o build/tests/test_app_abi
+build/tests/test_app_abi
+APP_ABI: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sessions.c -o build/tests/test_sessions
+build/tests/test_sessions
+Sessions PASS: active-only menu, create/close, busy guard, deferred switching, both Shifts, autorepeat, Escape, outside click, GUI input isolation and graphics badge
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_text_terminal.c system/text_terminal.c -o build/tests/test_text_terminal
+build/tests/test_text_terminal
+Terminal PASS: semigraphics, attributes, raster reference, bounds, scroll/wrap, isolated buffers; initial 32000 bytes / unchanged 0 / single cell 32 bytes
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_kernel_console.c system/text_terminal.c -o build/tests/test_kernel_console
+build/tests/test_kernel_console
+Kernel console PASS: batched writes, bounded flush, CR/Tab/Backspace, scroll, desktop isolation, restore, legacy invalidation, panic and non-mono fallback
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_mono_font.c system/emutos_vdi_mono.c -o build/tests/test_mono_font
+build/tests/test_mono_font
+Mono glyph: 32768 combinations vs pixel reference, guards/offsets/transparent PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_gui_damage.c -o build/tests/test_gui_damage
+build/tests/test_gui_damage
+Damage PASS: clipping, text newlines, bounded window rects, word copy for 1/2/4 planes and edge guards
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -DFAT_TEST_CACHE -Iinclude tests/test_trash.c system/kernel_fat.c system/kernel_block.c -o build/tests/test_trash
+build/tests/test_trash
+Trash PASS: subtree metadata move, restore, collisions, cycle/root guards, recursive purge, read-only preflight, every failed write/rollback with partial DMA
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_fat_write.c system/kernel_fat.c -o build/tests/test_fat_write
+build/tests/test_fat_write
+FAT writes: copy/mkdir/delete, both FATs, 512/1024-byte BPB, full disk, cycles, every write failure rollback, session transport contract PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -Iinclude tests/test_block_cache.c system/kernel_block.c -o build/tests/test_block_cache
+build/tests/test_block_cache
+All-hit read: 3 searches for 3 sectors (expected 3) PASS
+Block cache cached: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS
+build/tests/test_block_cache low-memory
+Block cache low-memory bypass: LRU, ranges, write-through, partial failures, device reset, 10000 mixed transfers PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -DKBLOCK_TEST -DFAT_TEST_CACHE -Iinclude tests/test_fat_write.c system/kernel_fat.c system/kernel_block.c -o build/tests/test_fat_cached
+build/tests/test_fat_cached
+FAT writes: copy/mkdir/delete, both FATs, 512/1024-byte BPB, full disk, cycles, every write failure rollback, session transport contract PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_emutos_planar.c system/emutos_vdi_mono.c -o build/tests/test_emutos_planar
+build/tests/test_emutos_planar
+EmuTOS planar: 30000 differential fills + 30000 vertical lines, guards OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_emutos_copy.c system/emutos_vdi_mono.c -o build/tests/test_emutos_copy
+build/tests/test_emutos_copy
+EmuTOS mono copy: 20000 differential aligned+shifted cases, guards OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_wm_core.c system/wm_core.c -o build/tests/test_wm_core
+build/tests/test_wm_core
+WM_CORE: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_wm_blit.c system/wm_blit.c -o build/tests/test_wm_blit
+build/tests/test_wm_blit
+WM_BLIT: ALL PASS
+python3 tools/check_gui_apps.py
+SYSINFO: 13916 bytes, memory 32753, stack 8192; checksum/policy/PIC calls OK
+MONODESK: 5286 bytes, memory 9348, stack 8192; checksum/policy/PIC calls OK
+COUNT: 570 bytes, memory 574, stack 2048; checksum/policy/PIC calls OK
+NOTE: 624 bytes, memory 664, stack 2048; checksum/policy/PIC calls OK
+COMMAND: 20396 bytes, memory 42831, stack 8192; checksum/policy/PIC calls OK
+FATWRITE: 706 bytes, memory 1730, stack 8192; checksum/policy/PIC calls OK
+COMTEST: 20550 bytes, memory 42993, stack 8192; checksum/policy/PIC calls OK
+CACHETST: 742 bytes, memory 1406, stack 8192; checksum/policy/PIC calls OK
+TRASHTST: 1748 bytes, memory 2772, stack 8192; checksum/policy/PIC calls OK
+TERMTST: 2558 bytes, memory 10586, stack 8192; checksum/policy/PIC calls OK
+cc -std=c11 -Wall -Wextra -Werror -DPSG_HOST_TEST -Iinclude tests/test_psg.c hw/psg.c -o build/tests/test_psg
+build/tests/test_psg
+ok:   vol A: register latch selected
+ok:   vol A: value reached the data port
+ok:   vol A: counted as one write
+ok:   vol A: write ran inside one locked section
+ok:   register 7: refused and counted
+ok:   register 7: data port untouched
+ok:   register 7: not counted as a write
+ok:   registers 14/15: refused and counted
+ok:   port A: select+read+write in one locked section
+ok:   port A: latch selected register 14
+ok:   port A: upper bits kept, low bits replaced
+ok:   port A: data port carried the new value
+ok:   port A: counted as two modifies
+ok:   port A: second modify keeps upper bits
+ok:   read: returns the selected register's byte
+ok:   read: latch left on the read register
+ok:   read: counted
+ok:   interleave: audio and floppy keep each other's bits
+ok:   interleave: all sources off at the end
+ok:   interleave: port A upper bits survive 256 accesses
+PSG: all checks passed
+cc -std=c11 -Wall -Wextra -Werror -DPSG_HOST_TEST -Iinclude tests/test_kernel_audio.c system/kernel_audio.c hw/psg.c -o build/tests/test_kernel_audio
+build/tests/test_kernel_audio
+ok:   caps: tone advertised
+ok:   caps: noise advertised
+ok:   caps: effect queue advertised
+ok:   caps: PCM NOT advertised (no such hardware)
+ok:   caps: envelope NOT advertised (not implemented)
+ok:   claim: first process owns audio
+ok:   claim: the same process may claim again
+ok:   claim: a second process is refused
+ok:   claim: owner is pid 1
+ok:   tone: accepted from the owner
+ok:   tone: period low written
+ok:   tone: period high written
+ok:   tone: volume written
+ok:   tone: mixer updated last
+ok:   tone: channel A tone enabled (bit is active low)
+ok:   tone: channel A noise disabled
+ok:   tone: port direction bits kept from the boot shadow (A out, B in)
+ok:   tone: refused for a non-owner
+ok:   stop: refused for a non-owner
+ok:   noise: accepted
+ok:   noise: period written
+ok:   noise: channel C volume written
+ok:   noise: channel C noise enabled
+ok:   noise: channel C tone disabled
+ok:   stop: accepted from the owner
+ok:   stop: channel A tone disabled
+ok:   stop: channel C noise untouched
+ok:   queue: two events accepted
+ok:   queue: first event applied immediately
+ok:   queue: second event not applied before its time
+ok:   queue: second event applied when due
+ok:   queue: fills completely
+ok:   queue: overflow refused
+ok:   release: channel A sounding before release
+ok:   release: owner cleared
+ok:   release: all sources disabled
+ok:   release: port directions untouched
+ok:   release: another process can take over
+ok:   release: unrelated pid ignored
+AUDIO: all checks passed
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_terminal_chunky.c system/text_terminal.c -o build/tests/test_terminal_chunky
+build/tests/test_terminal_chunky
+CHUNKY cells rendered: first=2000 unchanged=0 one-change=1
+Chunky terminal cache PASS
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_tos_damage.c -o build/tests/test_tos_damage
+build/tests/test_tos_damage
+tos_damage: PASS (lost bands, mixed writers, clipping, spans, colour, alignment, deadlines)
+python3 -m unittest discover -s tests -v
+AES objects + form_button + clip + child offsets + ABI: PASS
+VT52 screen output/scroll/erase and AES keyboard/button/timer/mouse/output bounds: PASS
+TOS BPB / free clusters: 512/1024-byte sectors, FAT12/16, one/two FATs, overflow and I/O errors: PASS
+GDOS parsers: ASSIGN.SYS (8 fonts, path, devices) and .FNT header: PASS
+Blocking TOS key wait: presentation, close and queued key PASS
+TOS Malloc/Mxalloc: separate pools, preference fallback, query, owner checks, shrink/free, slot limit: PASS
+Kernel user pool query agrees with reserve/alignment allocation boundaries: PASS
+Kernel shrink: bounds, owner, exact pointer, split and adjacent-free coalescing: PASS
+VDI raster: span lines (200x120 outline = 4 fills), glyph pixel clip (1x1 clip = 1 pixel, 0 outside) and word-mask glyphs: PASS
+test_config_allocation_updates_both_copies (test_bios_fat_mirrors.BiosFatMirrors.test_config_allocation_updates_both_copies) ... ok
+test_on_screen_gets_16_ticks_per_background_tick (test_cpu_weight.CpuWeight.test_on_screen_gets_16_ticks_per_background_tick) ... ok
+test_all_planes_offsets_and_edges (test_cursor_words.CursorWordsTest.test_all_planes_offsets_and_edges) ... ok
+test_pagination_and_guards (test_directory_page.DirectoryPageTest.test_pagination_and_guards) ... ok
+test_capture_during_wait_and_timeout (test_disk_input_poll.DiskInputPoll.test_capture_during_wait_and_timeout) ... ok
+test_cpu_type_is_stored_at_install (test_exception_frame_68000.ExceptionFrame68000.test_cpu_type_is_stored_at_install) ... ok
+test_group1_handlers_use_the_group1_macro (test_exception_frame_68000.ExceptionFrame68000.test_group1_handlers_use_the_group1_macro) ... ok
+test_group1_macro_reads_sr_from_plus8 (test_exception_frame_68000.ExceptionFrame68000.test_group1_macro_reads_sr_from_plus8) ... ok
+test_standard_macro_still_reads_sr_from_plus0 (test_exception_frame_68000.ExceptionFrame68000.test_standard_macro_still_reads_sr_from_plus0) ... ok
+test_user_test_reads_group1_sr_at_plus12 (test_exception_frame_68000.ExceptionFrame68000.test_user_test_reads_group1_sr_at_plus12) ... ok
+test_chunked_read_is_linear_with_a_cursor (test_fat_read_cursor.FatReadCursorTest.test_chunked_read_is_linear_with_a_cursor) ... ok
+test_foreground_gui_does_not_lose_keys_to_console (test_foreground_input.ForegroundInput.test_foreground_gui_does_not_lose_keys_to_console) ... ok
+test_keys_follow_focus_mouse_follows_window (test_gui_focus_routing.GuiFocusRouting.test_keys_follow_focus_mouse_follows_window) ... ok
+test_validated_atomic_submission (test_gui_frame.GuiFrame.test_validated_atomic_submission) ... ok
+test_full_mailbox_keeps_click (test_gui_input_backpressure.GuiBackpressure.test_full_mailbox_keeps_click) ... ok
+test_background_lifecycle (test_gui_session_owners.GuiOwners.test_background_lifecycle) ... ok
+test_irq_snapshot (test_hires_clock.HiresClock.test_irq_snapshot) ... ok
+test_conversion_fits_the_contract (test_icon_png_buffers.IconPngBufferTest.test_conversion_fits_the_contract) ... ok
+test_kernel_entry_header (test_kernel_load_addr.KernelLoadAddress.test_kernel_entry_header) ... ok
+test_linker_script (test_kernel_load_addr.KernelLoadAddress.test_linker_script) ... ok
+test_loader_uses_macro_and_not_stale_address (test_kernel_load_addr.KernelLoadAddress.test_loader_uses_macro_and_not_stale_address) ... ok
+test_shared_macro (test_kernel_load_addr.KernelLoadAddress.test_shared_macro) ... ok
+test_mouse_coordinates_are_not_keys (test_keyboard_framing.KeyboardFraming.test_mouse_coordinates_are_not_keys) ... ok
+test_edges (test_mouse_edges.MouseEdgeTest.test_edges) ... ok
+test_mste (test_rom_checksum.RomChecksumTest.test_mste) ... ok
+test_st (test_rom_checksum.RomChecksumTest.test_st) ... ok
+test_padding (test_rom_tools.RomToolsTest.test_padding) ... ok
+test_split_join_roundtrip (test_rom_tools.RomToolsTest.test_split_join_roundtrip) ... ok
+test_overlay_pixels_and_restore (test_session_overlay.SessionOverlayTest.test_overlay_pixels_and_restore) ... ok
+test_retained_frames_and_exit (test_session_redraw.SessionRedrawTest.test_retained_frames_and_exit) ... ok
+test_background_routing (test_session_routing.Routing.test_background_routing) ... ok
+test_builtins_exist (test_shell_fs.ShellFs.test_builtins_exist) ... ok
+test_command_table_has_no_stored_pointers (test_shell_fs.ShellFs.test_command_table_has_no_stored_pointers) ... ok
+test_dispatched_from_shell_module (test_shell_fs.ShellFs.test_dispatched_from_shell_module) ... ok
+test_module_api_exposes_mutations (test_shell_fs.ShellFs.test_module_api_exposes_mutations) ... ok
+test_shell_c_sources_are_pcrel (test_shell_fs.ShellFs.test_shell_c_sources_are_pcrel) ... ok
+test_tos_dispatch_hook (test_shell_fs.ShellFs.test_tos_dispatch_hook) ... ok
+test_tos_dispatch_uses_shared_matcher (test_shell_fs.ShellFs.test_tos_dispatch_uses_shared_matcher) ... ok
+test_readonly_bounds (test_sysinfo_api.SysinfoApiTest.test_readonly_bounds) ... ok
+test_kernel_main_stubs_runner_when_tos_disabled (test_tos_profile.TosProfile.test_kernel_main_stubs_runner_when_tos_disabled) ... ok
+test_makefile_default_is_native (test_tos_profile.TosProfile.test_makefile_default_is_native) ... ok
+test_makefile_drops_persona_objects (test_tos_profile.TosProfile.test_makefile_drops_persona_objects) ... ok
+test_shell_reports_missing_persona (test_tos_profile.TosProfile.test_shell_reports_missing_persona) ... ok
+test_tos_hooks_are_gated (test_tos_profile.TosProfile.test_tos_hooks_are_gated) ... ok
+test_idle_dispatch_wakes_sleepers (test_user_sleep_wakeup.UserSleepWakeup.test_idle_dispatch_wakes_sleepers) ... ok
+test_yield_and_sleep_context (test_user_yield.UserYield.test_yield_and_sleep_context) ... ok
+test_character_damage (test_video_damage.VideoDamage.test_character_damage) ... ok
+test_detect_families_and_scale_palette (test_vofa_dac.VofaDacTest.test_detect_families_and_scale_palette) ... ok
+test_extra_modes_are_selected_at_runtime (test_vofa_reference.VofaReference.test_extra_modes_are_selected_at_runtime)
+VOFA.SYS is loaded without relocation, so the mode table must not store ... ok
+test_register_tables (test_vofa_reference.VofaReference.test_register_tables) ... ok
+
+----------------------------------------------------------------------
+Ran 50 tests in 10.532s
+
+OK
+z kursorem:  63 krokow lancucha na 64 porcji 512 B
+bez kursora: 2016 krokow lancucha na 64 porcji 512 B
+stosunek: 2016 vs 63

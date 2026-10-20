@@ -1,0 +1,45 @@
+ATOS — przyspieszenie startu pulpitu, 2026-10-12
+
+Przyczyna: pulpit wczytuje dynamiczne PNG przed przejęciem ekranu. Dwie ikony
+SYSINFO.PNG (natywna i TOS) były przeliczane do 216 kolorów palety. Każdy piksel
+porównywano z każdym kolorem, z trzema programowymi mnożeniami różnic na kolor
+(-m68000). Próbkowanie PC w fazie STARTING DESKTOP wskazało png_icon_convert oraz
+__mulsi3/__udivsi3, nie oczekiwanie dysku ani celowy timeout. TOSTA=0: preload TOS
+nie odpowiada za ten postój.
+
+Zmiana: dokładny cache najbliższego koloru dla 4096 wejść RGB444, wspólny między
+ikonami, unieważniany po zmianie liczby lub treści palety. Przy nietrafieniu
+kwadraty różnic pochodzą z tabeli zamiast programowych mnożeń. Zachowano regułę
+pierwszego koloru przy remisie, alpha, skalowanie i identyczne indeksy palety.
+Stały koszt danych statycznych ok. 5,8 KiB; brak alokacji, zmian rozdzielczości,
+kompilowania całego jądra wyłącznie dla 030 lub przesuwania pracy na później.
+SYSTEM.GFX serializuje wywołania, tak jak istniejące wspólne bufory PNG.
+
+Pomiary na kopiach tego samego obrazu, Hatari 68030/32 MHz, TF536, 8+64 MB,
+ET4000, 800x600, bez fast-forward, SDL dummy video/audio, zrzuty co ok. 0,5 s:
+  przed: 27.008 s i 27.577 s
+  po:    13.282 s i 13.864 s
+  średnio: 27.29 -> 13.57 s, zysk 13.72 s (50.3%).
+To czas od uruchomienia procesu do pierwszego stabilnego pulpitu, nie benchmark
+fizycznego Atari. Zapas BIOS i ładowanie jądra pozostają; zmiana usuwa większość
+postoju na STARTING DESKTOP. Nie dodawano sztucznego ruchu paska postępu.
+
+Testy: ASan/UBSan, istniejące granice buforów ikon, wszystkie 4096 kolorów RGB444
+przy kilku paletach (także zmiana zawartości tego samego wskaźnika, zmiana liczby,
+remisy i powtórne użycie cache). Obie PNG z obrazu: piksele i maski dokładnie
+zgodne ze starą implementacją. Build KERNEL.SYS + checksum PASS. Pulpit i wszystkie
+ikony widoczne; kernel_fault_vector=0, kdbg_uf_count=0 w drugim przebiegu.
+FAT: 452 plików, obie kopie zgodne, brak crosslinków.
+
+Wdrożenie: wyłącznie SYSTEM/KERNEL.SYS w ATOS_AKTUALNY/ATOS.img. DESKTOP.APP,
+BIOS, konfiguracje, gry i audio bez zmian. Źródło system/png_icon.c i test
+ tests/test_icon_quantizer.py przekazane do drzewa ATOS 2.1. Jego build/ nie jest
+przebudowywany ani kopiowany — build sprawdzonego wydania znajduje się poniżej.
+
+Kopia obrazu sprzed zmiany: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/boot-audit-20261012/baseline.img
+Sprawdzone źródła i build: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/boot-audit-20261012/src
+Pomiary/logi/zrzuty/test zgodności ikon: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/boot-audit-20261012
+Aktualny kernel SHA256: e2d1f36bee1610c4377eed3587c06b8c9810a23de773bbf4b18fdcbdf5ca5772
+Nie uruchamiaj kopii zapasowej do normalnej pracy. Przy odtwarzaniu zamknij Hatari
+przed zastąpieniem ATOS.img; metadane poprzedniego wydania: before-MANIFEST.json,
+before-SHA256.txt, before-CZYTAJ.txt w katalogu pomiarów.

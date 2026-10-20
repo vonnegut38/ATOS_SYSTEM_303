@@ -1,0 +1,11 @@
+control: drain after each edge
+delivered buttons=13 dx=100 dy=100
+delivered buttons=0 dx=100 dy=100
+control events=2 (expected 2)
+two clicks before drain
+delivered buttons=13 dx=100 dy=100
+delivered buttons=0 dx=100 dy=100
+delivered buttons=13 dx=100 dy=100
+delivered buttons=0 dx=100 dy=100
+burst events=4 (expected 4)
+exit=0

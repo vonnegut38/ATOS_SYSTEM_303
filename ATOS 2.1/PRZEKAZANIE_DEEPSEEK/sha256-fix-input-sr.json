@@ -1,0 +1,12 @@
+{
+  "checkpoint": "atos2-fix-input-sr-2026-09-24",
+  "note": "Stan po punktowej poprawce SR w kernel_user_pause_recover; work/atos-v2.img zawiera poprawkę. Suma archiwum jest w pliku .tar.gz.sha256.",
+  "build/bios_mste.bin": "798d254bf37f5b44752579dc6779a548f55a48c47f1c8fdf9899e5563f6af100",
+  "build/system/KERNEL.SYS": "15c986f8d77a51f85416977b0abc13ce935788793294c3925cc00799e3779ef5",
+  "build/system/INPUT.SYS": "771e9ef39335f573e205dc7af29f165ff8b9b2988e3c3c71c54f81f632a2419b",
+  "build/system/ACSI.SYS": "8adf896a19c296682ccf9525a538fab9e2db5019ea1fbd1ff039138661a4fb9b",
+  "build/system/SHELL.SYS": "244d112d59576ffb6b0df456ca8bd5d96607cc3a99c87cb3373c9c0f84a42ec4",
+  "work/atos-v2.img": "403b7a1e0273ac558a57fc0ac7ad990961f7a95b91b5b6ebf0b59275e563d0ab",
+  "system/kernel_entry.S": "d67e9ff6827a2340d1e90ff1150e3b8079c14a4f6b892b9d8171b21ffe5725ef",
+  "work/fix-input-sr.patch": "b9d7f74c5bf03460d6cb63577e82845424ade4724d20bd76c80dc7a6baba6163"
+}

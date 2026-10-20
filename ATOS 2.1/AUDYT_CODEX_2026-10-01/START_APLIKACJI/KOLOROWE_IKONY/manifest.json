@@ -1,0 +1,6 @@
+{
+  "source": "system/gfx_service_app.S",
+  "before_sha256": "a25334eed091d9ef99fc348c79780015def127d4984a203c78f04b62f115ea0d",
+  "after_sha256": "d2db11773c27499c40ef2740d052d081fb88ee73a38f267792c290b1aee66aaa",
+  "built_gfx_sha256": "3be3c63193bf185c3f46699fe26e4a933eaa75f659a15f704239ca82ceee9e9c"
+}

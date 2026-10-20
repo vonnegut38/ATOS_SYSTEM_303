@@ -1,0 +1,106 @@
+SYSINFO — niezamierzone zamykanie po kliknięciu, 11.10.2026
+
+Odtworzony błąd: natywne SYSINFO.APP 13916 B, SHA256
+46d813644ff2eefebf323e95492829ae312fe8289f0322120e28648f2ea39548.
+Na obrazie HYDRA okno ma ramkę (140,120,520,360). Klik (645,467) znajduje
+się na uchwycie zmiany rozmiaru, a pod nim w powierzchni aplikacji leży QUIT.
+Router wysyłał tę samą lewą mysz zarówno do WM, jak i do aplikacji.
+Aplikacja poprawnie według własnej mapy przycisków kończyła pracę:
+kdbg_end_name=0x53595349 (SYSI), pid=5, status=0, bez wyjątku procesora.
+Dowód: resize-proof/02-resize-gadget.json i odpowiadający zrzut ekranu.
+Zwykłe kliknięcia w treści, zakładkach i REFRESH nie odtworzyły zamykania.
+Nie jest to dowód na wszystkie możliwe przypadki znikania SysInfo.
+
+Poprawka: kernel_wm_chrome_at rozpoznaje elementy WM (ramkę, tytuł,
+przyciski okna, uchwyt rozmiaru i aktywny scrollbar). Router zatrzymuje całą
+sekwencję DOWN/MOVE/UP rozpoczętą na takim elemencie, zamiast przesyłać ją
+również do programu. Zapisana pozycja kliknięcia dla kompozytora pozostaje.
+Sekwencja rozpoczęta w treści nadal należy do aplikacji, również po wyjściu
+myszy poza okno. Tryb gry z wyłącznym ekranem zachowuje własną obsługę.
+Nie dodano ponownego otwierania okna po WCLS ani maskowania zamknięcia.
+
+Zmiana wdrożeniowa: tylko SYSTEM/KERNEL.SYS, 458988 B, SHA256
+c6e09c70f52f52b5d0ba2c0a61c5c5852fea346e7d1a56bf7177034a11d4615b.
+Dotychczasowy SYSINFO.APP, DESKTOP.APP, BIOS, gry i konfiguracja bez zmian.
+Audio odziedziczone z poprzedniej HYDRA; nie jest przedmiotem tej poprawki.
+
+Źródła: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/sysinfo-click-fix/src
+Patch na źródła zoptymalizowanej HYDRA: sysinfo-click.patch.
+Test regresji routingu nie przechodzi na starym jądrze; na nowym PASS.
+Testy geometrii chrome, kolejkowania myszy przy pełnej skrzynce i routingu
+fokusu: PASS (ASan/UBSan). check-wm-core/blit/glyph: PASS, 5000 porównań
+pikseli. Build TOS=1: PASS. Końcowy test emulatora: verified/PASS.json.
+Manifest wdrożenia z kopiami poprzednich obrazów: deployment.json.
+ATOS_KOPIA z wersją sprzed HYDRA pozostaje niezmieniona.
+
+Poprawka źródłowa została także przeniesiona do ATOS 2.1: tylko powyższy
+routing, helper ramki i trzy testy. Te testy przechodzą również w tamtym drzewie.
+
+OSOBNY, WCZEŚNIEJSZY PROBLEM SYSTOS — NIE NAPRAWIONY W TYM PATCHU
+Menu wywołane Spacją ma uszkodzone napisy i zatrzymuje obsługę myszy także
+na poprzednim jądrze HYDRA (7bdf4af4...). Dowód: menu-baseline.log i zrzuty.
+Przed/po ruchu myszy: kernel_tos_async_yields=326, mouse=(350,250),
+tos_input_busy=0; brak wyjątków. Zapis CPU wskazuje wykonywanie vdi_cpyfm
+(PC=0x3DCEA) i __mulsi3 (PC=0x4DC9C), SR=0x2500. Nie jest to dowód pętli
+w oczekiwaniu na klawiaturę. Istotny trop: pixelowy fallback vdi_cpyfm
+iteruje po całym prostokącie żądania, a obcina tylko pojedyncze zapisy;
+duże/nietypowe wymiary mogą bardzo długo zajmować kooperacyjną sesję TOS.
+Do osobnego audytu: parametry ptsin/MFDB przy wejściu w menu, wstępne
+przycinanie iteracji do powierzchni i klipu, prawidłowe metryki/fonty.
+Nie zmieniano VDI ani polityki przełączania TOS w ramach naprawy kliknięć.
+Końcowa regresja verified sprawdza SYSTOS w ekranie głównym i jego X;
+przebieg after pokazuje także opisany problem menu, nie stanowi pełnego PASS.
+
+
+UZUPEŁNIENIE: POZYCJA KLIKNIĘCIA
+SYSINFO: zachowanie pozycji naciśnięcia myszy — 11.10.2026
+
+Doprecyzowanie użytkownika: okno znikało po kliknięciu w treść, być może HARDWARE.
+Wcześniejsza poprawka przepuszczania kliknięcia resize do QUIT nie wyjaśnia sama
+w sobie tego opisu. Nie zgłaszamy, że odtworzono dokładny gest użytkownika.
+
+Potwierdzony drugi błąd:
+kernel_user_gui_keyboard_wake scalał ogon KMOU z nowym zdarzeniem o tej samej
+masce przycisków. Ogon mógł jednak być jeszcze nieodebranym naciśnięciem DOWN.
+W teście na rzeczywistej funkcji kernela DOWN (200,168), HARDWARE, zastąpiony
+został ruchem (600,466), QUIT. SYSINFO reaguje na pierwsze odebrane DOWN,
+więc taki błąd może wywołać normalne zakończenie programu, bez CPU faultu.
+Test przed poprawką kończył się SIGABRT na kontroli współrzędnych DOWN.
+
+Poprawka:
+Scalanie tylko gdy dwa ostatnie sąsiednie komunikaty KMOU mają ten sam stan
+przycisków — poprzednik dowodzi, że ogon jest ruchem, a nie zmianą stanu.
+W przeciwnym razie nowy komunikat zostaje dopisany. DOWN i UP zachowują
+współrzędne oraz znacznik czasu; prawdziwy ruch nadal jest scalany.
+ABI wiadomości pozostaje bez zmian.
+
+Weryfikacja hostowa: pięć testów test_gui_*.py PASS z ASAN/UBSAN;
+nowy test test_gui_click_position.py obejmuje DOWN, kolejne ruchy, UP i ruch
+bez przycisku. Dwa istniejące testy dostosowane do zachowania osobnego DOWN.
+Build TOS=1: PASS, KERNEL.SYS 459064 bajtów.
+
+Test starego jądra (już z poprawką ramki): 14 zwykłych kliknięć w zakładki
+i treść, przed i po przesunięciu okna — nie odtworzyły zamknięcia.
+Dowody: body-repro/PASS.json i body-repro.log. To ogranicza wniosek: wykryliśmy
+realną lukę kolejki, lecz sam raport użytkownika nie identyfikuje jej jednoznacznie.
+
+Test nowego jądra: patrz position-verified-r2/PASS.json i position-verify-r2.log.
+Skrypt wdrożenia wymaga ich pozytywnego wyniku przed podmianą obrazów.
+Weryfikuje FAT oraz to, że jedynym zmienionym plikiem obrazu jest KERNEL.SYS.
+Kopie przed wdrożeniem: ATOS_AKTUALNY-before-position.img,
+ATOS_HYDRA_PROBA-before-position.img (w katalogu tego raportu).
+
+To nie jest naprawa wcześniej zgłaszanego menu SYSTOS/VDI ani akceptacja audio.
+
+Pierwsza próba nowego jądra przerwana przez brak odpowiedzi od debuggera
+(read_u32 zwróciło None), przed startem SYSINFO. Nie jest wynikiem aplikacji.
+Próba r2 ma ponawianie odczytu i działa bez drugiej widocznej instancji Hatari.
+
+Dowody: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/sysinfo-click-fix
+
+WYNIK KOŃCOWY: position-verified-r2/PASS.json — PASS. Zakładki, treść,
+ruch z przyciskiem nad QUIT, przeniesienie okna, ponowne zakładki, zamknięcie X.
+Brak faultów; jedyne zakończenie SYSI to celowe X (status 0).
+Wdrożono do ATOS_AKTUALNY/ATOS.img i ATOS_HYDRA_PROBA/ATOS_OPT.img.
+Tylko KERNEL.SYS zmieniony; oba FAT: 396 plików, kopie zgodne, brak crosslinków.
+SHA256 KERNEL.SYS: 2cccd13486e4609b6c5d2c91aae1bb8db63c1f6f772021ca210554d3123a98db

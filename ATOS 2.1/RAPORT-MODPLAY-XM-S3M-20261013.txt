@@ -1,0 +1,67 @@
+ATOS TRACKER / MODPLAY — 2026-10-13
+
+Wdrożone w źródłach Deepseek_test, na osobnym obrazie demonstracyjnym.
+MOD/XM/S3M dekoduje libxmp-lite 4.7.4 po stronie akceleratora (Hatari).
+Atari wysyła oryginalny moduł zamiast renderować cały utwór do PCM.
+Yamaha pozostaje dotychczasową ścieżką czterokanałowego MOD-a.
+XM/S3M wymagają rozszerzenia AS_CAP_TRACKER; stary backend daje jawny błąd.
+
+INTERFEJS
+Okno w stylu ProTrackera: szare panele, czarno-cyjanowe wyświetlacze,
+przewijana historia nut pierwszych czterech kanałów i 32 słupki aktywności.
+Słupki pokazują głośności kanałów dekodera, nie widmo FFT ani zmierzony peak.
+Historia jest próbkowana 8 razy/s; to odtwarzacz, nie edytor patternów.
+Biblioteka ma obecnie cztery dostarczone utwory (brak ogólnego selektora plików).
+Lewo/Prawo lub klik w bibliotece: utwór. Spacja: pauza/wznów.
+F1: Yamaha; F2: ESP32 Sound Accelerator; F3: stop; ESC: zamknij.
+
+POMIARY HATARI, 68030 / 32 MHz, bez fast-forward
+Start liczony od rozpoczęcia odczytu pliku do gotowości PLAY:
+HYMN.MOD: 4 kanały, 112590 B, 1.90 s.
+SIREN.XM: 30 kanałów, 1327890 B, 11.27 s.
+REFLECTR.XM: 12 kanałów, 740554 B, 7.46 s.
+ADVENT.S3M: 16 kanałów, 869259 B, 8.60 s.
+Ograniczenie odmalowywania podczas uploadu do 20 aktualizacji i paczki
+4 x 4084 B usunęły dużą część narzutu GUI. Duże pliki nadal wymagają transferu.
+Czasy nie są pomiarem NetUSBee ani fizycznego ESP32.
+
+WERYFIKACJA
+Pełna stara suita PCM: PASS (regression.log).
+ASan/UBSan libxmp i silnik: PASS (tracker-sanitized.log).
+Aplikacja + Yamaha + upload/pause/resume/busy/lost-reply: PASS.
+Runtime: cztery pliki, poprawne formaty/kanały, pauza/wznów i zmiana utworu.
+kernel_fault_vector=0, kdbg_uf_count=0. Nagrania stereo 44100 Hz:
+każdy utwór ma sygnał, brak próbek nasyconych; po wyjściu cyfrowa cisza.
+Nie zastępuje to subiektywnego odsłuchu użytkownika.
+Finalny MODPLAY.APP: 15872 B, stos 8192 B; PIC/checksum/APW2 PASS.
+Manifest porównuje faktyczną zawartość FAT z buildem.
+
+PLIKI / START
+Źródła playera: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/system/modplay.c i modplay_sound.c
+Silnik/protokół: /Users/xxx/Documents/Deepseek_test/ATOS-SOUND/reference-v1/docs/TRACKER-v1.txt
+Start demonstracji: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-player/ATOS Tracker.app
+Obraz: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-player/live/test.img
+Po ponownym uruchomieniu: RUN -> M (alias MODPLAY.APP).
+Obraz główny ATOS_AKTUALNY nie był modyfikowany.
+Końcowy emulator zawiera rozszerzenie tracker; starszy Hatari go nie odtworzy.
+Patch: tracker-changes.patch (zależność libxmp i kopia klienta poza patchem;
+pełne źródła są w Deepseek_test). Kopie przed zmianami: before/.
+
+OGRANICZENIA I DALSZA PRACA
+Jednocześnie 1 tracker do 32 kanałów + istniejące 16 głosów PCM silnika.
+Maks. plik 2 MiB. Osobne aplikacje nadal podlegają blokadzie właściciela ASND.
+Upload/commit i kontrola są serializowane; brak obietnicy gapless crossfade.
+Dekoder używa standardowego heap poza sample_budget PCM. Na ESP32 trzeba
+wyznaczyć łączny limit pamięci, alokator PSRAM i budżet czasu renderowania.
+Domyślny ESP-IDF nie reklamuje trackera. Sprzęt ESP32/NetUSBee/ES8388
+nie był testowany; Hatari nie emuluje jego wydajności CPU/PSRAM.
+Rozszerzenie jest opcjonalne, stary protokół PCM i Yamaha pozostają zgodne.
+libxmp-lite: commit 5d4f6aa2c7dcdf8e9cd8129fe579d45b36a302da,
+licencja i noty zachowane w third_party/libxmp.
+
+ODTWORZENIE TESTÓW
+W ATOS-SOUND/reference-v1: gmake test; gmake check-tracker TRACKER_FILES=...
+W ATOS 2.1: gmake modplay check-modplay-pcm
+Przy ręcznym przełączaniu konfiguracji TRACKER=1/0 wykonać gmake clean;
+tryb TRACKER=1 wymaga zbudowanej biblioteki XMP_LIB.
+Build demonstracyjnego Hatari: work/tracker-player/build_host.py.

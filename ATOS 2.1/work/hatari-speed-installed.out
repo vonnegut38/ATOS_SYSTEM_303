@@ -1,0 +1,5 @@
+2026-10-04 18:41:33.475 hatari[9953:3771617] Failure on line 688 in function id scheduleApplicationNotification(LSNotificationCode, NSWorkspaceNotificationCenter *): noErr == _LSModifyNotification(notificationID, 1, &code, 0, NULL, NULL, NULL)
+2026-10-04 18:41:33.635 hatari[9953:3771617] Error received in message reply handler: Connection invalid
+2026-10-04 18:41:33.635 hatari[9953:3771618] Connection Invalid error for service com.apple.hiservices-xpcservice.
+ERROR: Could not initialize the SDL library:
+	The video driver did not add any displays

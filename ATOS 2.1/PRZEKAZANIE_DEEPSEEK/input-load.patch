@@ -1,0 +1,433 @@
+--- a/system/acsi_module.S
++++ b/system/acsi_module.S
+@@ -19,7 +19,12 @@
+     bne.s 1f
+     cmpi.w #24,6(%a0)
+     blo.s 1f
+-    pea acsi_read_blocks(%pc)
++    /* Optional tail: preserve v3 compatibility with smaller kernel APIs. */
++    cmpi.w #176,6(%a0)
++    blo.s 2f
++    lea acsi_input_capture(%pc),%a1
++    move.l 172(%a0),(%a1)
++2:  pea acsi_read_blocks(%pc)
+     move.l 20(%a0),%a1
+     jsr (%a1)
+     addq.l #4,%sp
+@@ -180,10 +185,26 @@
+     move.w #0x008a,0xffff8606
+     move.l #50000,%d0
+ acsi_wait_irq:
+-4:  btst #5,0xfffffa01
++4:  /* DMA wait may run with IRQs masked. Atomically drain ACIA
++       into the same raw ring as the IRQ; INPUT.SYS alone parses packets. */
++    btst #0,0xfffffc00
++    beq.s 6f
++    movem.l %d0-%d1/%a0-%a1,-(%sp)
++    lea acsi_input_capture(%pc),%a0
++    move.l (%a0),%d0
++    beq.s 7f
++    move.l %d0,%a0
++    jsr (%a0)
++7:  movem.l (%sp)+,%d0-%d1/%a0-%a1
++6:  btst #5,0xfffffa01
+     beq.s 5f
+     subq.l #1,%d0
+     bne.s 4b
+     rts
+ 5:  moveq #1,%d0
+     rts
++
++    .section .bss
++    .align 2
++acsi_input_capture:
++    .space 4
+--- a/system/input_module.S
++++ b/system/input_module.S
+@@ -83,13 +83,15 @@
+     lea input_service(%pc),%a1
+     move.l #0x494e5054,(%a1)
+     move.w #1,4(%a1)
+-    move.w #20,6(%a1)
++    move.w #24,6(%a1)
+     lea input_poll(%pc),%a0
+     move.l %a0,8(%a1)
+     lea input_classify(%pc),%a0
+     move.l %a0,12(%a1)
+     lea input_dropped(%pc),%a0
+     move.l %a0,16(%a1)
++    lea input_statistic(%pc),%a0
++    move.l %a0,20(%a1)
+     move.l %a1,-(%sp)
+     move.l #1,-(%sp)
+     move.l #0x494e5054,-(%sp)
+@@ -163,7 +165,11 @@
+     sub.l 8(%a0),%d0
+     cmpi.l #2,%d0
+     blo input_filtered
+-    clr.b (%a0)
++    tst.b (%a0)
++    beq.s 1f
++    lea input_stats(%pc),%a1
++    addq.l #1,16(%a1)
++1:  clr.b (%a0)
+     clr.b 1(%a0)
+     bra input_filtered
+ input_data_ready:
+@@ -181,6 +187,8 @@
+     clr.b (%a0)
+     move.b #1,1(%a0)
+     addq.l #1,4(%a0)
++    lea input_stats(%pc),%a1
++    addq.l #1,(%a1)
+     bsr input_clear_pressed
+     lea input_timer(%pc),%a1
+     move.l (%a1),%a1
+@@ -219,11 +227,15 @@
+     bne input_sent
+     lea input_state(%pc),%a0
+     addq.l #1,4(%a0)
++    lea input_stats(%pc),%a1
++    addq.l #1,8(%a1)
+     moveq #0,%d0
+     rts
+ input_packet_start:
+     tst.b 1(%a0)
+     beq.s input_packet_header
++    lea input_stats(%pc),%a1
++    addq.l #1,12(%a1)
+     /* Still inside an overrun burst: drop this byte and restart the quiet
+        interval. Empty polling clears the flag after two timer ticks. */
+     lea input_timer(%pc),%a1
+@@ -311,6 +323,8 @@
+     bne.s input_sent
+     lea input_state(%pc),%a0
+     addq.l #1,4(%a0)
++    lea input_stats(%pc),%a1
++    addq.l #1,4(%a1)
+     moveq #0,%d0
+ input_sent:
+     rts
+@@ -327,6 +341,23 @@
+     move.l 152(%a0),%a0
+     jsr (%a0)
+     add.l (%sp)+,%d0
++    rts
++
++input_statistic:
++    move.l 4(%sp),%d0
++    beq.s 1f
++    cmpi.l #5,%d0
++    bhi.s 2f
++    subq.l #1,%d0
++    lsl.l #2,%d0
++    lea input_stats(%pc),%a0
++    move.l 0(%a0,%d0.w),%d0
++    rts
++1:  lea input_api(%pc),%a0
++    move.l (%a0),%a0
++    move.l 152(%a0),%a0
++    jmp (%a0)
++2:  moveq #0,%d0
+     rts
+ 
+ input_clear_pressed:
+@@ -355,5 +386,7 @@
+     .space 16
+ input_raw_dropped_seen:
+     .space 4
++input_stats:
++    .space 20
+ input_service:
+-    .space 20
++    .space 24
+--- a/system/kernel_block.c
++++ b/system/kernel_block.c
+@@ -95,8 +95,12 @@
+ #define DISK_REG16(a) (*(volatile uint16_t *)(uintptr_t)(a))
+ static void disk_delay(void)
+ {volatile unsigned n;for(n=0;n<96;n++)__asm__ volatile("nop");}
++extern void kernel_ikbd_poll_capture(void);
+ static int disk_irq(unsigned limit)
+-{while(limit--)if(!(DISK_REG8(0xfffffa01u)&32u))return 1;return 0;}
++{while(limit--){
++ if(DISK_REG8(0xfffffc00u)&1u)kernel_ikbd_poll_capture();
++ if(!(DISK_REG8(0xfffffa01u)&32u))return 1;
++ }return 0;}
+ static int disk_write(uint32_t sector,uint16_t count,const void *source)
+ {
+     uint8_t cmd[11];unsigned n,i;uint32_t address=(uint32_t)(uintptr_t)dma_buffer;int ok=0;
+--- a/system/kernel_entry.S
++++ b/system/kernel_entry.S
+@@ -91,6 +91,15 @@
+     move.b #0x60,0xfffffa15
+     moveq #1,%d0
+     rts
++    .globl kernel_ikbd_poll_capture
++kernel_ikbd_poll_capture:
++    /* A disk syscall may inherit IPL5. Serialize status/data/ring writes
++       against the level-6 ACIA IRQ, then restore the original mask. */
++    move.w %sr,-(%sp)
++    ori.w #0x0700,%sr
++    jsr kernel_ikbd_irq_capture
++    move.w (%sp)+,%sr
++    rts
+ kernel_ikbd_acia:
+     movem.l %d0-%d1/%a0-%a1,-(%sp)
+     bclr #6,0xfffffa11
+--- a/system/kernel_graphics.c
++++ b/system/kernel_graphics.c
+@@ -1,3 +1,4 @@
++extern void kernel_ikbd_poll_capture(void);
+ #include "text_terminal.h"
+ #include "kernel_sessions.h"
+ #include "kernel_console.h"
+@@ -401,7 +402,7 @@
+                 if(y>maxy)maxy=y;
+                 any=1;}
+     }else{any=1;minx=0;miny=0;maxx=TERM_COLS-1;maxy=TERM_ROWS-1;}
+-    term_render_mono(&terminal_display,c,(volatile uint16_t *)target,terminal_font);
++    term_render_mono_polled(&terminal_display,c,(volatile uint16_t *)target,terminal_font,kernel_ikbd_poll_capture);
+     if(any){
+         if(dx)*dx=(uint16_t)(minx*8u);
+         if(dy)*dy=(uint16_t)(miny*16u);
+@@ -868,7 +869,7 @@
+  if(kgfx_desktop_active())terminal_video_damage(&terminal_display,cells);
+  /* Render into the CURRENT target: kgfx_set_target() points this at an
+     application's window surface while its draw list is being processed. */
+- pairs=term_render_mono(&terminal_display,cells,(volatile uint16_t *)graphics.framebuffer,terminal_font);
++ pairs=term_render_mono_polled(&terminal_display,cells,(volatile uint16_t *)graphics.framebuffer,terminal_font,kernel_ikbd_poll_capture);
+  if(visible)kgfx_cursor_show(x,y);
+  return (int)pairs;
+ }
+@@ -881,7 +882,7 @@
+  kgfx_overlay_hide();visible=kgfx_cursor_visible();x=cursor_x;y=cursor_y;
+  if(visible)kgfx_cursor_hide();
+  terminal_video_damage(cache,cells);
+- pairs=term_render_mono(cache,cells,(volatile uint16_t *)(uintptr_t)SCREEN_BASE,terminal_font);
++ pairs=term_render_mono_polled(cache,cells,(volatile uint16_t *)(uintptr_t)SCREEN_BASE,terminal_font,kernel_ikbd_poll_capture);
+  if(visible)kgfx_cursor_show(x,y);
+  kvideo_flush();return (int)pairs;
+ }
+--- a/include/kernel_input.h
++++ b/include/kernel_input.h
+@@ -13,6 +13,9 @@
+     int (*poll)(uint32_t target_task);
+     uint32_t (*classify)(uint32_t raw_byte);
+     uint32_t (*dropped_events)(void);
++    /* Optional extension, size >= 24: raw overflow, ACIA overrun, key event,
++       mouse event, quarantine bytes, expired partial packets. */
++    uint32_t (*statistic)(uint32_t index);
+ } kernel_input_service_t;
+ 
+ #endif
+--- a/system/kernel_main.c
++++ b/system/kernel_main.c
+@@ -55,6 +55,7 @@
+ extern void kconsole_puts(const char *);
+ extern void kconsole_put_u32(uint32_t);
+ extern void kconsole_flush(void);
++extern void kernel_ikbd_poll_capture(void);
+ extern void kconsole_set_grid(unsigned cols,unsigned rows);
+ extern unsigned ksessions_current(void);
+ extern int32_t ksessions_control(uint32_t op,uint32_t value);
+@@ -279,6 +280,10 @@
+             for(i=0;i<64u;++i)input_service->poll(0u);
+             ksessions_pump();
+             for(i=0;i<32u;++i){
++                /* Supervisor work can retain IPL6 after a user quantum.
++                   Keep raw serial capture alive between event consumers;
++                   INPUT.SYS alone continues to parse the captured bytes. */
++                kernel_ikbd_poll_capture();
+                 /* A foreground process can also capture GUI input. Deliver
+                    its events to the GUI mailbox, not the console getchar path. */
+                 if(kernel_user_gui_keyboard_active()){
+--- a/system/kernel_module.c
++++ b/system/kernel_module.c
+@@ -61,6 +61,7 @@
+ static uint8_t user_mouse_buttons;
+ static const uint8_t user_key_plain[64]={0,27,'1','2','3','4','5','6','7','8','9','0','-','=',8,0,'q','w','e','r','t','y','u','i','o','p','[',']','\n',0,'a','s','d','f','g','h','j','k','l',';',39,'`',0,'\\','z','x','c','v','b','n','m',',','.','/',0,'*',0,' ',0,0,0,0,0,0};
+ static const uint8_t user_key_shifted[64]={0,27,'!','@','#','$','%','^','&','*','(',')','_','+',8,0,'Q','W','E','R','T','Y','U','I','O','P','{','}','\n',0,'A','S','D','F','G','H','J','K','L',':','"','~',0,'|','Z','X','C','V','B','N','M','<','>','?',0,'*',0,' ',0,0,0,0,0,0};
++extern void kernel_ikbd_poll_capture(void);
+ static volatile uint8_t ikbd_raw_data[256],ikbd_raw_status[256];
+ static volatile uint8_t ikbd_raw_head,ikbd_raw_tail;
+ static volatile uint32_t ikbd_irq_dropped;
+@@ -387,6 +388,7 @@
+     module_api.get_exec_path=kernel_exec_path_get;
+     module_api.terminal_control=ksessions_control;
+     module_api.terminal_key=ksessions_key;
++    module_api.ikbd_capture=kernel_ikbd_poll_capture;
+ }
+ 
+ static uint16_t be16(const uint8_t *p){return ((uint16_t)p[0]<<8)|p[1];}
+--- a/include/kernel_module.h
++++ b/include/kernel_module.h
+@@ -68,6 +68,8 @@
+     int (*get_exec_path)(uint32_t index,char destination[64]);
+     int32_t (*terminal_control)(uint32_t,uint32_t);
+     int (*terminal_key)(uint32_t,uint32_t);
++    /* Optional v3 tail, size >= 176; supervisor polling, no parsing. */
++    void (*ikbd_capture)(void);
+ } kernel_module_api_t;
+ enum module_state {MODULE_NOT_FOUND,MODULE_INVALID,MODULE_NO_MEMORY,MODULE_INIT_FAILED,MODULE_IO_FAILED,MODULE_READY};
+ enum module_state kernel_load_acsi(const boot_handoff_t *handoff);
+--- a/system/shell_module.S
++++ b/system/shell_module.S
+@@ -1585,7 +1585,35 @@
+     pea shell_newline(%pc)
+     bsr shell_puts
+     addq.l #4,%sp
+-    rts
++    lea shell_input(%pc),%a0
++    move.l (%a0),%a0
++    cmpi.w #24,6(%a0)
++    blo.s 2f
++    movem.l %d2/%a2,-(%sp)
++    lea shell_input_stats_labels(%pc),%a2
++    moveq #0,%d2
++1:  move.l %a2,-(%sp)
++    bsr shell_puts
++    addq.l #4,%sp
++3:  tst.b (%a2)+
++    bne.s 3b
++    move.l %d2,-(%sp)
++    lea shell_input(%pc),%a0
++    move.l (%a0),%a0
++    move.l 20(%a0),%a0
++    jsr (%a0)
++    addq.l #4,%sp
++    move.l %d0,-(%sp)
++    bsr shell_put_u32
++    addq.l #4,%sp
++    addq.l #1,%d2
++    cmpi.l #6,%d2
++    blo.s 1b
++    pea shell_newline(%pc)
++    bsr shell_puts
++    addq.l #4,%sp
++    movem.l (%sp)+,%d2/%a2
++2:  rts
+ shell_do_memory:
+     pea shell_st_label(%pc)
+     bsr shell_puts
+@@ -2382,3 +2410,12 @@
+     .balign 4
+ shell_context_end:
+ shell_contexts: .space 3*(shell_context_end-shell_context_begin)
++
++    .section .rodata
++shell_input_stats_labels:
++    .asciz "RAW="
++    .asciz " ACIA="
++    .asciz " KEY="
++    .asciz " MOUSE="
++    .asciz " QUAR="
++    .asciz " PARTIAL="
+--- a/tests/test_session_redraw.py
++++ b/tests/test_session_redraw.py
+@@ -37,6 +37,7 @@
+ static int kvideo_is_vofa(void){return 0;}
+ static void kvideo_select(const volatile uint8_t *p){assert(p==(void *)(pixels+1));}
+ static void terminal_video_damage(const term_display_t *d,const term_cell_t *c){(void)d;(void)c;}
++static void kernel_ikbd_poll_capture(void){}
+ int kgfx_terminal_present(const term_cell_t *cells);
+ '''
+         main=r'''
+--- a/tests/test_text_terminal.c
++++ b/tests/test_text_terminal.c
+@@ -11,6 +11,8 @@
+   unsigned bits=font[c&255][r];if((c&0x200)&&r==14)bits=255;if(c&0x100)bits^=255;
+   unsigned actual=screen[1+(y*16+r)*40+x/2];actual=(x&1)?(actual&255):(actual>>8);assert(actual==bits);
+  }}assert(screen[0]==0xbeef&&screen[16001]==0xbeef);}
++static unsigned polls;
++static void capture(void){polls++;}
+ int main(void){unsigned c,r,x,n;uint32_t rng=7193;
+  for(c=0;c<256;c++)for(r=0;r<16;r++)source[c][r]=(uint8_t)(c*19+r*13);
+  memset(source[' '],0,16);term_font_prepare(font,source);
+@@ -26,6 +28,7 @@
+  for(n=0;n<400;n++){rng=rng*1664525u+1013904223u;x=(rng>>8)%2000;a.cells[x]=(uint16_t)rng;assert(term_render_mono(&display,a.cells,screen+1,font)<=1);reference();}
+  term_display_invalidate(&display);assert(term_render_mono(&display,a.cells,screen+1,font)==1000);reference();
+  /* Updating a background terminal never touches the displayed bitmap. */
++ term_display_invalidate(&display);polls=0;assert(term_render_mono_polled(&display,a.cells,screen+1,font,capture)==1000&&polls==125);reference();
+  term_text(&b,0,0,"BACKGROUND",0,10);assert(!term_render_mono(&display,a.cells,screen+1,font));
+  assert(term_render_mono(&display,b.cells,screen+1,font)>0);assert(!term_render_mono(&display,b.cells,screen+1,font));
+  term_clear(&a,0);term_write(&a,"abc\bD\rZ\nnext\t!");assert(a.cells[0]=='Z'&&a.cells[1]=='b'&&a.cells[2]=='D');assert(a.cells[80]=='n'&&a.cells[88]=='!');
+--- a/system/text_terminal.c
++++ b/system/text_terminal.c
+@@ -105,11 +105,12 @@
+  }
+  d->valid=1;return changed;
+ }
+-unsigned term_render_mono(term_display_t *d,const term_cell_t *cells,
+-                          volatile uint16_t *screen,const uint8_t font[256][16])
++unsigned term_render_mono_polled(term_display_t *d,const term_cell_t *cells,
++                          volatile uint16_t *screen,const uint8_t font[256][16],void (*poll)(void))
+ {
+  unsigned y,x,row,changed=0;
+  for(y=0;y<TERM_ROWS;y++)for(x=0;x<TERM_COLS;x+=2){unsigned i=y*80+x;
++  if(poll&&!(x&15u))poll();
+   term_cell_t a=cells[i]&0x03ffu,b=cells[i+1]&0x03ffu;
+   if(d->valid&&d->cells[i]==a&&d->cells[i+1]==b)continue;
+   {const uint8_t *ga=font[a&255u],*gb=font[b&255u];
+@@ -125,3 +126,7 @@
+  }
+  d->valid=1;return changed;
+ }
++
++unsigned term_render_mono(term_display_t *d,const term_cell_t *cells,
++                          volatile uint16_t *screen,const uint8_t font[256][16])
++{return term_render_mono_polled(d,cells,screen,font,0);}
+--- a/include/text_terminal.h
++++ b/include/text_terminal.h
+@@ -33,6 +33,10 @@
+ void term_display_invalidate(term_display_t *);
+ unsigned term_render_mono(term_display_t *,const term_cell_t *,volatile uint16_t *,
+                           const uint8_t font[256][16]);
++/* Optional bounded polling hook for supervisor rendering. It must not
++   render, schedule or parse input; the kernel only captures serial bytes. */
++unsigned term_render_mono_polled(term_display_t *,const term_cell_t *,volatile uint16_t *,
++                                 const uint8_t font[256][16],void (*poll)(void));
+ /* 8x8 variant: 80x25 cells occupy 640x200 pixels, so a whole text screen
+    fits a window with a frame on a 640x400 display. */
+ unsigned term_render_mono8(term_display_t *,const term_cell_t *,volatile uint16_t *,
+--- /dev/null
++++ b/tests/test_disk_input_poll.py
+@@ -0,0 +1,38 @@
++"""Real disk wait and raw-ring capture preserve bytes while supervisor IRQs wait."""
++from pathlib import Path
++import subprocess,tempfile,unittest
++class DiskInputPoll(unittest.TestCase):
++ def test_capture_during_wait_and_timeout(self):
++  module=Path('system/kernel_module.c').read_text();raw=module[module.index('static volatile uint8_t ikbd_raw_data'):module.index('void kernel_user_terminal_reset_modifiers')]
++  block=Path('system/kernel_block.c').read_text();wait=block[block.index('static int disk_irq('):block.index('static int disk_write(',block.index('static int disk_irq('))]
++  code=r'''
++#include <stdint.h>
++#include <assert.h>
++static unsigned pos,total,busy,timeout_mode;
++static uint8_t bytes[64];
++static unsigned reg8(uint32_t a){
++ if(a==0xfffffc00u)return pos<total?1:0;
++ if(a==0xfffffc02u){assert(pos<total);return bytes[pos++];}
++ assert(a==0xfffffa01u);busy++;return timeout_mode||pos<total?32:0;
++}
++#define IKBD_ACIA_CTRL 0xfffffc00u
++#define IKBD_ACIA_DATA 0xfffffc02u
++#define REG8(a) reg8(a)
++#define DISK_REG8(a) reg8(a)
++'''+raw+'\nstatic void kernel_ikbd_poll_capture(void){kernel_ikbd_irq_capture();}\n'+wait+r'''
++int main(void){for(unsigned round=0;round<8;round++){
++ kernel_ikbd_irq_reset();pos=busy=0;total=64;
++ for(unsigned i=0;i<total;i++)bytes[i]=(uint8_t)(i+round*32);
++ assert(disk_irq(128)&&pos==total&&busy==64&&!ikbd_raw_dropped());
++ for(unsigned i=0;i<total;i++)assert(ikbd_raw_pop()==(0x100|bytes[i]));
++ assert(ikbd_raw_pop()==-1);
++ }
++ kernel_ikbd_irq_reset();pos=0;total=4;timeout_mode=1;
++ assert(!disk_irq(10)&&pos==4&&!ikbd_raw_dropped());
++ for(unsigned i=0;i<4;i++)assert(ikbd_raw_pop()==(0x100|bytes[i]));
++ assert(ikbd_raw_pop()==-1);return 0;}
++'''
++  with tempfile.TemporaryDirectory() as d:
++   p=Path(d);(p/'t.c').write_text(code)
++   subprocess.run(['cc','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(p/'t.c'),'-o',str(p/'t')],check=True)
++   subprocess.run([str(p/'t')],check=True)

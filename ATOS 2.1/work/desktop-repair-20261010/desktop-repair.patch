@@ -1,0 +1,733 @@
+--- a/system/kernel_graphics.c
++++ b/system/kernel_graphics.c
+@@ -1088,7 +1088,9 @@
+                        int32_t ix,int32_t iy,const uint16_t *mask,const uint16_t *data,
+                        uint8_t ink,uint8_t paper,const char *label,int invert)
+ {
+-    int32_t x,y,k;uint16_t bit;const uint8_t *glyph;
++    int32_t x,y,k,label_x;unsigned len=0;uint16_t bit;const uint8_t *glyph;
++    while(label[len]&&len<12u)++len;
++    label_x=ix+(GUI_ICON_MONO_SIZE-(int32_t)len*8)/2;
+     for(y=0;y<32;y++)for(x=0;x<32;x++){
+         int32_t px=ix+x,py=iy+y;
+         if(px<cx||py<cy||px>=cx+cw||py>=cy+ch)continue;
+@@ -1097,10 +1099,10 @@
+             surface_pixel_set(s,(uint16_t)px,(uint16_t)py,
+                 (data[y*2+(x>>4)]&bit)?(invert?paper:ink):(invert?ink:paper));
+     }
+-    for(k=0;label[k];k++){
++    for(k=0;k<(int32_t)len;k++){
+         glyph=emutos_system_font[(uint8_t)label[k]];
+         for(y=0;y<16;y++)for(x=0;x<8;x++){
+-            int32_t px=ix-8+k*8+x,py=iy+32+y;
++            int32_t px=label_x+k*8+x,py=iy+32+y;
+             if(px<cx||py<cy||px>=cx+cw||py>=cy+ch)continue;
+             if(s->chunky){
+                 /* Colour desktop: white label glyphs on the transparent teal;
+@@ -1120,10 +1122,10 @@
+     surface_t s;cursor_guard_t guard;unsigned len=0;int32_t w,cx,cy,cw,ch;
+     if(icon>3u||!label)return;
+     while(label[len]&&len<12u)++len;
+-    w=(int32_t)(16+len*8u);            /* label spans ix-8 .. ix-8+len*8 */
++    w=(int32_t)(len*8u);
+     s=active_surface();
+-    if(w<(int32_t)(ICON_SIZE+8u))w=(int32_t)(ICON_SIZE+8u);
+-    cx=x-8;cy=y;cw=w;ch=GUI_ICON_MONO_H;   /* ROM mono icons stay 32x32 */
++    if(w<GUI_ICON_MONO_SIZE)w=GUI_ICON_MONO_SIZE;
++    cx=x+(GUI_ICON_MONO_SIZE-w)/2;cy=y;cw=w;ch=GUI_ICON_MONO_H;   /* ROM mono icons stay 32x32 */
+     if(!clip_rect(&cx,&cy,&cw,&ch))return;
+     guard=cursor_guard_begin(cx,cy,cw,ch);
+     theme_icon(&s,cx,cy,cw,ch,x,y,masks[icon],datas[icon],ink,paper,label,invert);
+@@ -1188,11 +1190,11 @@
+     }else
+         ic=&icon_color_table[id];
+     if(label){while(label[len]&&len<12u)++len;}
+-    w=(int32_t)(16+len*8u);
++    w=(int32_t)(len*8u);
+     s=active_surface();
+     if(!s.chunky)return;              /* mono: the ink/paper path still applies */
+-    if(w<(int32_t)(ICON_SIZE+8u))w=(int32_t)(ICON_SIZE+8u);
+-    cx=x-8;cy=y;cw=w;ch=(int32_t)(ICON_SIZE+16u);
++    if(w<(int32_t)ICON_SIZE)w=(int32_t)ICON_SIZE;
++    cx=x+((int32_t)ICON_SIZE-w)/2;cy=y;cw=w;ch=(int32_t)(ICON_SIZE+16u);
+     if(!clip_rect(&cx,&cy,&cw,&ch))return;
+     guard=cursor_guard_begin(cx,cy,cw,ch);
+     for(py=0;py<ICON_SIZE;py++)for(px=0;px<ICON_SIZE;px++){
+@@ -1202,10 +1204,10 @@
+                 (uint8_t)(ICON_PAL_BASE+ic->pixels[py*ICON_SIZE+px]));
+     }
+     /* label: white glyphs on the transparent desktop, same as theme_icon */
+-    for(k=0;label&&label[k];k++){
++    for(k=0;label&&k<(int32_t)len;k++){
+         glyph=emutos_system_font[(uint8_t)label[k]];
+         for(py=0;py<16u;py++)for(px=0;px<8u;px++){
+-            int32_t tx=x-8+(int32_t)k*8+(int32_t)px,ty=y+(int32_t)ICON_SIZE+(int32_t)py;
++            int32_t tx=x+((int32_t)ICON_SIZE-(int32_t)len*8)/2+k*8+(int32_t)px,ty=y+(int32_t)ICON_SIZE+(int32_t)py;
+             if(tx<cx||ty<cy||tx>=cx+cw||ty>=cy+ch)continue;
+             if(glyph[py]&(uint8_t)(0x80u>>px))
+                 surface_pixel_set(&s,(uint16_t)tx,(uint16_t)ty,1u);
+--- a/system/desktop_wm.c
++++ b/system/desktop_wm.c
+@@ -197,13 +197,11 @@
+    renderer, damage, cleanup, picker and hit tests cannot drift apart again. */
+ #define CELL_W (GUI_ICON_COLOR_SIZE+52)   /* icon + centred label */
+ #define CELL_H (GUI_ICON_COLOR_SIZE+20)   /* icon + 16px label + margin */
+-/* One cell only: the label starts 8px left of the icon and fits inside the
+-   cell, so erasing exactly one cell never notches a neighbour's icon. */
++/* One cell centred on the bitmap; includes up to twelve label characters. */
++#define CELL_LEFT ((int)((chunky?GUI_ICON_COLOR_SIZE:GUI_ICON_MONO_SIZE)-CELL_W)/2)
+ #define CELL_ERASE_W CELL_W
+ #define CELL_ERASE_H GUI_ICON_COLOR_H
+-/* The 48x48 label is drawn from (icon x - 8), so GRID_X is the left margin of the
+-   TEXT, not of the icon: 16 left the first column starting 8 px from the screen
+-   edge.  28 gives the column a readable margin and still fits 7 columns. */
++/* Bitmap origin; a twelve-character colour label extends 24 pixels left. */
+ #define GRID_X 28
+ #define GRID_Y 28
+ #define ICON_MAX (3u+LBAR_MAX)   /* DISK C/D + up to LBAR_MAX shortcuts */
+@@ -498,7 +496,7 @@
+        shortcut or a file-manager double-click.  run_buf is NUL-terminated and
+        is used as the path as-is (full or relative), not under \SYSTEM\APP. */
+     if(tos_program_path(run_buf)){
+-        int32_t rc=gui_call(ATOS_CALL_TOS_RUN,0,0,(void *)(uintptr_t)run_buf,0);
++        int32_t rc=gui_call(ATOS_CALL_TOS_RUN,1,0,(void *)(uintptr_t)run_buf,0);
+         show_notice(rc<0?"RUN FAILED":"STARTED");
+         paint();
+         return;
+@@ -594,7 +592,7 @@
+     for(i=0;i<icon_count;++i){
+         int16_t x=(int16_t)(GRID_X+(int)icons[i].gx*CELL_W);
+         int16_t y=(int16_t)(GRID_Y+(int)icons[i].gy*CELL_H);
+-        if(mx>=x-8&&mx<x+CELL_W-8&&my>=y&&my<y+CELL_H)return (int)i;
++        if(mx>=x+CELL_LEFT&&mx<x+CELL_LEFT+CELL_W&&my>=y&&my<y+CELL_H)return (int)i;
+     }
+     return -1;
+ }
+@@ -1068,7 +1066,7 @@
+     if(i&&sp.path[i-1]!='\\')sp.path[i++]='\\';
+     for(j=0;name[j]&&i<62u;++j)sp.path[i++]=(char)name[j];
+     sp.path[i]=0;
+-    if(tos_program_path(sp.path))r=gui_call(ATOS_CALL_TOS_RUN,0,0,(void *)(uintptr_t)sp.path,0);
++    if(tos_program_path(sp.path))r=gui_call(ATOS_CALL_TOS_RUN,1,0,(void *)(uintptr_t)sp.path,0);
+     else r=gui_call(SYS_SPAWN_ASYNC,0,0,&sp,0);
+     show_notice(r<0?"RUN FAILED":"STARTED");
+ }
+@@ -1974,13 +1972,14 @@
+         copytext(status,"TERMINAL",sizeof(status));paint();return;
+     }
+     if(launch[index].builtin==2u){tr_open_it();return;}
+-    /* TOS program: run it in its own window and report the exit code, so the
+-       return path is visible on the status line. */
++    /* Queue the TOS domain; the desktop must keep serving native windows.
++       The immediate result reports whether the launch request was accepted. */
+     if(tos_program_path(launch[index].path)){
+         int32_t rc;
+         show_notice("TOS WINDOW");
+-        rc=gui_call(ATOS_CALL_TOS_RUN,0,0,(void *)(uintptr_t)launch[index].path,0);
+-        tos_rc_notice(launch[index].path,rc);
++        rc=gui_call(ATOS_CALL_TOS_RUN,1,0,(void *)(uintptr_t)launch[index].path,0);
++        if(rc<0)tos_rc_notice(launch[index].path,rc);
++        else show_notice("TOS STARTED");
+         return;
+     }
+     /* One instance per desktop: if the application is already running, only
+@@ -2023,8 +2022,9 @@
+            "I cannot start TOSCOL" report.  Retry through the TOS personality:
+            its loader checks the 0x601A magic itself, so a native .APP simply
+            fails there with a readable code instead of a dead end. */
+-        int32_t rc=gui_call(ATOS_CALL_TOS_RUN,0,0,(void *)(uintptr_t)launch[index].path,0);
+-        tos_rc_notice(launch[index].path,rc);
++        int32_t rc=gui_call(ATOS_CALL_TOS_RUN,1,0,(void *)(uintptr_t)launch[index].path,0);
++        if(rc<0)tos_rc_notice(launch[index].path,rc);
++        else show_notice("TOS STARTED");
+         return;
+     }
+     show_notice("STARTED");
+@@ -2089,7 +2089,7 @@
+ {
+     int16_t x=(int16_t)(GRID_X+(int)icons[i].gx*CELL_W);
+     int16_t y=(int16_t)(GRID_Y+(int)icons[i].gy*CELL_H);
+-    add(GUI_BG,(int16_t)(x-8),y,CELL_ERASE_W,CELL_ERASE_H,0,0);
++    add(GUI_BG,(int16_t)(x+CELL_LEFT),y,CELL_ERASE_W,CELL_ERASE_H,0,0);
+ }
+ /* Hover repaint: clear and redraw ONLY the old and new cells.  Redrawing every
+    icon made the batch damage span the whole icon area on every pointer move,
+@@ -2110,7 +2110,7 @@
+     for(i=0;clear_cells&&i<dirty_count;++i){
+         int16_t dx=(int16_t)(GRID_X+(int)dirty_gx[i]*CELL_W);
+         int16_t dy=(int16_t)(GRID_Y+(int)dirty_gy[i]*CELL_H);
+-        add(GUI_BG,(int16_t)(dx-8),dy,CELL_ERASE_W,CELL_ERASE_H,0,0);
++        add(GUI_BG,(int16_t)(dx+CELL_LEFT),dy,CELL_ERASE_W,CELL_ERASE_H,0,0);
+     }
+     dirty_count=0;
+     /* Clear ALL cells first: a long label can cross the grid cell boundary. */
+--- a/system/plasma.c
++++ b/system/plasma.c
+@@ -1,5 +1,6 @@
+ /* PLASMA: timer-driven animation; no input required to advance frames. */
+ #include "gui_app.h"
++#include "app_abi.h"
+ #include "icons_color.h"
+ #define FRAME_COUNTS 246u /* ~50 fps ceiling at 12288 counts/s; skip missed deadlines */
+ /* The ripple advances with REAL time, not with the frame rate: 15 palette steps
+@@ -152,10 +153,11 @@
+          if(elapsed>=FRAME_COUNTS){
+              uint32_t steps=elapsed/FRAME_COUNTS;
+              last+=steps*FRAME_COUNTS;
+-             phase_acc+=elapsed;
++             phase_acc+=steps*FRAME_COUNTS;
+              while(phase_acc>=PHASE_COUNTS){phase_acc-=PHASE_COUNTS;
+                  phase=(phase+PHASE_STEP)%ICON_PAL_COLORS;}
+              frame(phase);
++             (void)gui_call(ATOS_CALL_SLEEP,0u,0u,0,0); /* input and peer apps between frames */
+          }else pause_tick();}
+     }
+     if(fullscreen){(void)gui_op(GUI_END_KEYS);(void)gfx(GFX_RESTORE,0,0,0);}
+--- a/system/tos_prg.c
++++ b/system/tos_prg.c
+@@ -13,6 +13,8 @@
+ #include <stdint.h>
+ #include "tos_damage.h"
+ #include "kernel_memory.h"
++#include "tos_async.h"
++#include "kernel_game.h"
+ #include "kernel_fat.h"
+ #include "kernel_block.h"
+ #include "kernel_graphics.h"
+@@ -491,6 +493,69 @@
+ static uint8_t tos_kb_shift,tos_kb_alt;
+ uint32_t tos_window_mouse_buttons(void){return tos_mouse_buttons;}
+ 
++/* The desktop queues a cooperative TOS domain instead of waiting on trap 0.
++ * Only explicit OS-call boundaries yield; no native code executes with guest
++ * vectors, low memory, USP or the VDI blit target installed. */
++static uint8_t tos_async_state;
++volatile uint8_t tos_async_in_guest;
++static uint32_t tos_async_session,tos_async_slice;
++static uint32_t tos_async_native_cacr,tos_async_guest_cacr;
++static uint32_t tos_async_native_vbr,tos_async_guest_vbr;
++extern uint32_t tos_async_read_vbr(void);
++extern void asf_tos_set_vbr(uint32_t);
++extern uint32_t tos_async_read_cacr(void);
++extern void tos_async_write_cacr(uint32_t);
++static char tos_async_path[64];
++static uint8_t *tos_async_stack;
++static uint32_t tos_async_native_low[512],tos_async_guest_low[512];
++static void *tos_async_native_sp,*tos_async_guest_sp;
++static uint8_t *tos_async_target;
++static uint16_t tos_async_pitch;
++volatile int32_t kernel_tos_async_result;
++volatile uint32_t kernel_tos_async_yields,kernel_tos_async_first_sp;
++extern void tos_async_switch(void **save,void *restore);
++extern uint32_t kernel_user_hires_clock(void);
++extern uint32_t kernel_gui_focus_pid(void);
++extern void kernel_gui_focus_set(uint32_t);
++extern uint32_t ksessions_mouse_buttons(void);
++extern unsigned ksessions_current(void);
++static void tos_async_yield(void);
++#define TOS_ASYNC_EVENTS 32u
++static struct {uint32_t type,scan,mods,ch;} tos_async_keys[TOS_ASYNC_EVENTS];
++static unsigned tos_async_key_head,tos_async_key_tail;
++static struct {uint32_t buttons;int32_t x,y;} tos_async_mice[TOS_ASYNC_EVENTS];
++static unsigned tos_async_mouse_head,tos_async_mouse_tail;
++static int32_t tos_async_mouse_x,tos_async_mouse_y;
++int kernel_tos_async_owns(uint32_t pid)
++{return tos_async_state&&pid==TOS_ASYNC_PID;}
++unsigned kernel_tos_async_session(void){return tos_async_session;}
++int kernel_tos_async_keyboard(void)
++{
++    uint32_t t,s,m,c;unsigned i;
++    if(tos_async_key_tail-tos_async_key_head>=TOS_ASYNC_EVENTS)return 0;
++    if(!kernel_user_keyboard_event(&t,&s,&m,&c))return 0;
++    i=tos_async_key_tail++%TOS_ASYNC_EVENTS;
++    tos_async_keys[i].type=t;tos_async_keys[i].scan=s;
++    tos_async_keys[i].mods=m;tos_async_keys[i].ch=c;
++    return 1;
++}
++int kernel_tos_async_mouse(uint32_t buttons,int32_t x,int32_t y)
++{
++    unsigned i;
++    if(tos_async_mouse_tail-tos_async_mouse_head>=TOS_ASYNC_EVENTS)return 0;
++    i=tos_async_mouse_tail++%TOS_ASYNC_EVENTS;
++    tos_async_mice[i].buttons=buttons&3u;tos_async_mice[i].x=x;tos_async_mice[i].y=y;
++    return 1;
++}
++static int tos_async_key_pop(uint32_t *t,uint32_t *s,uint32_t *m,uint32_t *c)
++{
++    unsigned i;
++    if(tos_async_key_head==tos_async_key_tail)return 0;
++    i=tos_async_key_head++%TOS_ASYNC_EVENTS;
++    *t=tos_async_keys[i].type;*s=tos_async_keys[i].scan;
++    *m=tos_async_keys[i].mods;*c=tos_async_keys[i].ch;return 1;
++}
++
+ void tos_poll_input(void)
+ {
+     int guard=64;
+@@ -508,7 +573,8 @@
+            lost function keys and release events and could change characters.
+            kernel_user_keyboard_event() hands over type/scancode/modifiers/ASCII
+            already separated, from the same queue the old hook used. */
+-        if(kernel_user_keyboard_event(&type,&scan,&mods,&ch)){
++        if(tos_async_state?tos_async_key_pop(&type,&scan,&mods,&ch):
++           kernel_user_keyboard_event(&type,&scan,&mods,&ch)){
+             (void)mods;
+             sc=(int32_t)(scan&0x7fu);
+             if(type==KERNEL_INPUT_KEY_UP){
+@@ -533,6 +599,7 @@
+             /* Fallback for input that only the terminal hook can see (text
+                profile console).  The event queue is the same source, so this
+                normally finds nothing and the poll ends. */
++            if(tos_async_state)break; /* native input belongs to the focused window */
+             sc=tos_next_scancode();
+             if(sc<0)break;
+             if(sc==0x2a||sc==0x36)tos_kb_shift=1u;
+@@ -2897,16 +2964,22 @@
+        ask the run to unwind at the next OS call instead of blitting into a
+        surface the compositor released. */
+     if(tos_surface_installed&&!tos_client_surface)tos_exit_request=1u;
+-    for(guard=0;guard<64&&kernel_raw_mouse_event(&buttons,&dx,&dy);++guard){
++    for(guard=0;guard<64;++guard){
++        if(tos_async_state){
++            unsigned q;
++            if(tos_async_mouse_head==tos_async_mouse_tail)break;
++            q=tos_async_mouse_head++%TOS_ASYNC_EVENTS;
++            buttons=tos_async_mice[q].buttons;
++            dx=tos_async_mice[q].x-tos_async_mouse_x;dy=tos_async_mice[q].y-tos_async_mouse_y;
++            tos_async_mouse_x=tos_async_mice[q].x;tos_async_mouse_y=tos_async_mice[q].y;
++        }else if(!kernel_raw_mouse_event(&buttons,&dx,&dy))break;
+         ++kdbg_tos_mouse_packets;
+         kdbg_tos_mouse_dxdy=((uint32_t)(uint16_t)dx<<16)|(uint16_t)dy;
+-        ksessions_pointer_track(dx,dy);
++        if(!tos_async_state)ksessions_pointer_track(dx,dy);
+         if(dx||dy||((buttons^tos_mouse_buttons)&3u))tos_wm_input_pending=1u;
+-        /* Hand the button edges to the compositor so window chrome stays
+-           usable during the run (close / zoom / minimise / title drag / task
+-           list).  App events are NOT queued: the desktop is blocked and any
+-           replayed click would fire after the program returns. */
+-        if((buttons&3u)!=(tos_mouse_buttons&3u))
++        /* The blocking compatibility path handles chrome here. In cooperative
++           mode the native input loop has already delivered these edges to WM. */
++        if(!tos_async_state&&(buttons&3u)!=(tos_mouse_buttons&3u))
+             ksessions_pointer_button(buttons,ksessions_mouse_x(),ksessions_mouse_y());
+         tos_mouse_buttons=buttons;                  /* for evnt_mouse/graf_mouse */
+         /* Deliver the packet to the program's mousevec, the way TOS does it:
+@@ -2960,6 +3033,8 @@
+ {
+     uint32_t now;int input=0,changed=0;
+     tos_damage_rect_t r;
++    if(tos_async_state&&!tos_async_in_guest)return;
++    tos_async_yield();
+     if(tos_desktop_repaint&&!tos_client_surface){
+         tos_desktop_repaint=0u;kernel_wm_compose_now();return;
+     }
+@@ -3175,7 +3250,7 @@
+        draws the frame and composes the client (occlusion).  Fall back to the
+        direct overlay only when the WM cannot provide a surface. */
+     {
+-        uint32_t wpid=kernel_user_current_pid();
++        uint32_t wpid=tos_async_state?TOS_ASYNC_PID:kernel_user_current_pid();
+         uint16_t wh=(uint16_t)(TOS_WM_HANDLE_BASE+(uint16_t)tos_window_seq);
+         tos_wm_pid=wpid;tos_wm_handle=wh;
+         kernel_wm_set_window(wpid,wh,(int16_t)tos_win_x,(int16_t)tos_win_y,
+@@ -3183,6 +3258,7 @@
+         /* Name the window after the program: without this the WM chrome said
+            "APPLICATION" for every TOS program. */
+         kernel_wm_set_title(wpid,wh,name);
++        if(tos_async_state)kernel_gui_focus_set(TOS_ASYNC_PID);
+         tos_client_surface=kernel_wm_app_surface(wpid,wh);
+         tos_surface_installed=tos_client_surface?1u:0u;
+         /* A GEM program waits for WM_REDRAW right after opening its window and
+@@ -3336,6 +3412,7 @@
+     int32_t rc;
+     int slot;
+ 
++    if(tos_async_state&&!tos_async_in_guest)return -0x2b1;
+     if(!path||!*path)return -1;
+     /* The TOS compatibility module is loaded on first use, which is what keeps
+        the boot short.  When the SETTINGS option ticked TT RAM, boot already
+@@ -3636,3 +3713,92 @@
+ /* --- link restores (definitions only) --- */
+ volatile uint32_t kernel_wall_ticks = 0u;
+ uint32_t kernel_linef_pc = 0u, kernel_linef_op = 0u, kernel_linef_frame[6] = {0,0,0,0,0,0};
++
++static void tos_async_low_copy(uint32_t *dst,const uint32_t *src)
++/* Addresses 0..7 are reset vectors, write-protected by Atari hardware. */
++{unsigned i;for(i=2u;i<512u;++i)((volatile uint32_t *)dst)[i]=((const volatile uint32_t *)src)[i];}
++static uint16_t tos_async_lock(void)
++{uint16_t sr;__asm__ volatile("move.w %%sr,%0\n\tori.w #0x0700,%%sr":"=d"(sr)::"memory");return sr;}
++static void tos_async_unlock(uint16_t sr)
++{__asm__ volatile("move.w %0,%%sr"::"d"(sr):"memory");}
++static void tos_async_park(void)
++{
++    uint16_t sr=tos_async_lock();
++    if(tos_cpu_type)tos_async_guest_vbr=tos_async_read_vbr();
++    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_guest_cacr=tos_async_read_cacr();
++    tos_async_low_copy(tos_async_guest_low,(const uint32_t *)0);
++    tos_async_low_copy((uint32_t *)0,tos_async_native_low);
++    tos_async_target=kgfx_planar_surface_override;
++    tos_async_pitch=kgfx_planar_surface_pitch;
++    kgfx_planar_surface_override=0;kgfx_planar_surface_pitch=0;
++    kernel_tos_runtime_enabled=0u;tos_async_in_guest=0u;
++    if(tos_cpu_type)asf_tos_set_vbr(tos_async_native_vbr);
++    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_write_cacr(tos_async_native_cacr|8u);
++    tos_async_switch(&tos_async_guest_sp,tos_async_native_sp);
++    tos_async_unlock(sr);
++}
++static void tos_async_yield(void)
++{
++    uint16_t sr;
++    if(tos_async_state!=2u||!tos_async_in_guest||tos_input_busy)return;
++    __asm__ volatile("move.w %%sr,%0":"=d"(sr));
++    if((sr&0x0700u)>0x0500u)return; /* never suspend an interrupt callback */
++    if((uint32_t)(kernel_user_hires_clock()-tos_async_slice)<246u)return;
++    if(!kernel_tos_async_yields)__asm__ volatile("move.l %%sp,%0":"=m"(kernel_tos_async_first_sp));
++    ++kernel_tos_async_yields;
++    tos_async_park();
++}
++static void tos_async_entry(void)
++{
++    tos_async_unlock(0x2500u);
++    kernel_tos_async_result=kernel_tos_run_program(tos_async_path);
++    tos_async_state=3u;
++    tos_async_park();
++    for(;;){} /* completion is collected by the supervisor, never resumed */
++}
++int32_t kernel_tos_start_async(const char *path)
++{
++    unsigned i;uint32_t size=0u;uint8_t attr=0;
++    if(tos_async_state||tos_active)return -0x2b1;
++    if(tos_cpu_type>3u)return -0x2ff; /* cache/FPU context for 040+ is not implemented */
++    if(!path||!*path)return -1;
++    for(i=0;i<63u&&path[i];++i)tos_async_path[i]=path[i];
++    if(path[i])return -0x2b0;
++    tos_async_path[i]=0;
++    if(kfat_stat_path(path,&size,&attr)!=FAT_FILE_FOUND||size<28u)return -2;
++    tos_async_stack=(uint8_t *)kmem_alloc(32768u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
++    if(!tos_async_stack)return -3;
++    /* switch restores USP + eleven callee-saved registers + return PC. */
++    tos_async_guest_sp=tos_async_stack+32768u-52u;
++    for(i=0;i<52u;++i)((uint8_t *)tos_async_guest_sp)[i]=0;
++    ((uint32_t *)tos_async_guest_sp)[12]=(uint32_t)(uintptr_t)tos_async_entry;
++    tos_async_key_head=tos_async_key_tail=tos_async_mouse_head=tos_async_mouse_tail=0;
++    tos_async_mouse_x=ksessions_mouse_x();tos_async_mouse_y=ksessions_mouse_y();
++    tos_async_session=ksessions_current();kernel_tos_async_result=0;kernel_tos_async_yields=0;kernel_tos_async_first_sp=0;
++    tos_async_state=1u;return 0;
++}
++void kernel_tos_async_pump(void)
++{
++    uint16_t sr;
++    if(!tos_async_state||tos_async_in_guest||ksessions_current()!=tos_async_session||kgame_owns_screen())return;
++    sr=tos_async_lock();
++    if(tos_cpu_type)tos_async_native_vbr=tos_async_read_vbr();
++    if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_native_cacr=tos_async_read_cacr();
++    tos_async_low_copy(tos_async_native_low,(const uint32_t *)0);
++    if(tos_async_state==2u){
++        tos_async_low_copy((uint32_t *)0,tos_async_guest_low);
++        kgfx_planar_surface_override=tos_async_target;
++        kgfx_planar_surface_pitch=tos_async_pitch;
++        kernel_tos_runtime_enabled=1u;
++        if(tos_cpu_type)asf_tos_set_vbr(tos_async_guest_vbr);
++        if(tos_cpu_type>=2u&&tos_cpu_type<=3u)tos_async_write_cacr(tos_async_guest_cacr|8u);
++    }else tos_async_state=2u;
++    tos_async_in_guest=1u;tos_async_slice=kernel_user_hires_clock();
++    tos_async_switch(&tos_async_native_sp,tos_async_guest_sp);
++    tos_async_unlock(sr);
++    if(tos_async_state==3u){
++        kmem_free(tos_async_stack,KMEM_OWNER_KERNEL);tos_async_stack=0;
++        tos_async_state=0u;
++        if(kernel_gui_focus_pid()==TOS_ASYNC_PID)kernel_gui_focus_set(0u);
++    }
++}
+--- a/system/tos_entry.S
++++ b/system/tos_entry.S
+@@ -417,3 +417,35 @@
+     .globl asf_tos_kernel_sp
+ asf_tos_kernel_sp:
+     .space 4
++
++/* Swap supervisor stacks at an explicit cooperative boundary. Interrupts are
++ * masked by C. USP and callee-saved registers belong to each domain. */
++    .section .text,"ax"
++    .globl tos_async_switch
++tos_async_switch:
++    movem.l %d2-%d7/%a2-%a6,-(%sp)
++    move.l %usp,%a0
++    move.l %a0,-(%sp)
++    move.l 52(%sp),%a0
++    move.l 56(%sp),%a1
++    move.l %sp,(%a0)
++    move.l %a1,%sp
++    move.l (%sp)+,%a0
++    move.l %a0,%usp
++    movem.l (%sp)+,%d2-%d7/%a2-%a6
++    rts
++
++    .globl tos_async_read_cacr
++tos_async_read_cacr:
++    .word 0x4e7a,0x0002
++    rts
++    .globl tos_async_write_cacr
++tos_async_write_cacr:
++    move.l 4(%sp),%d0
++    .word 0x4e7b,0x0002
++    rts
++
++    .globl tos_async_read_vbr
++tos_async_read_vbr:
++    .word 0x4e7a,0x0801
++    rts
+--- a/system/kernel_entry.S
++++ b/system/kernel_entry.S
+@@ -113,6 +113,20 @@
+     move.w 6(%sp),%sr
+     rts
+ kernel_ikbd_acia:
++#if CONFIG_TOS
++    /* The compatibility guest currently shares USP/SSP. Do not put the ISR
++       register save and C call frames under its SP: packers keep a small
++       trampoline there. Only the CPU exception frame stays on that stack.
++       Both sources are level 6, so this bounded IRQ stack cannot nest. */
++    clr.l tos_irq_saved_sp
++    tst.b tos_async_in_guest
++    beq.s 7f
++    tst.b kernel_tos_runtime_enabled
++    beq.s 7f
++    move.l %sp,tos_irq_saved_sp
++    lea tos_irq_stack_end,%sp
++7:
++#endif
+     movem.l %d0-%d1/%a0-%a1,-(%sp)
+     bclr #6,0xfffffa11
+     jsr kernel_ikbd_irq_capture
+@@ -121,6 +135,13 @@
+     jsr     irq_dispatch
+     addq.l  #4,%sp
+     movem.l (%sp)+,%d0-%d1/%a0-%a1
++#if CONFIG_TOS
++    tst.l tos_irq_saved_sp
++    beq.s 7f
++    move.l tos_irq_saved_sp,%sp
++    clr.l tos_irq_saved_sp
++7:
++#endif
+     rte
+ 
+     .extern kernel_fault_vector,kernel_fault_pc,kernel_fault_sr,kernel_fault_frame,kernel_fault_usp
+@@ -307,6 +328,20 @@
+     rts
+ 
+ kernel_timer_c:
++#if CONFIG_TOS
++    /* The compatibility guest currently shares USP/SSP. Do not put the ISR
++       register save and C call frames under its SP: packers keep a small
++       trampoline there. Only the CPU exception frame stays on that stack.
++       Both sources are level 6, so this bounded IRQ stack cannot nest. */
++    clr.l tos_irq_saved_sp
++    tst.b tos_async_in_guest
++    beq.s 7f
++    tst.b kernel_tos_runtime_enabled
++    beq.s 7f
++    move.l %sp,tos_irq_saved_sp
++    lea tos_irq_stack_end,%sp
++7:
++#endif
+     movem.l %d0-%d7/%a0-%a6,-(%sp)
+     addq.l #1,kernel_timer_ticks
+     /* v10: central IRQ layer (IRQ_SRC_MFP_C = 4). */
+@@ -319,6 +354,10 @@
+     tst.b kernel_tos_runtime_enabled
+     beq.s 8f
+     jsr tos_composite_tick
++    /* The cooperative domain has one guest; its continuation is not a
++       legacy preemptive tos_task frame. */
++    tst.b tos_async_in_guest
++    bne.s 9f
+     /* G1.3b: preemptive TOS task switch.  Returns 0 while a single task
+        exists, so this is a no-op until the scheduler is enabled. */
+     move.l %sp,-(%sp)
+@@ -332,6 +371,11 @@
+        (the persona owns its vectors and its USP). */
+     bclr #5,0xfffffa11
+     movem.l (%sp)+,%d0-%d7/%a0-%a6
++    tst.l tos_irq_saved_sp
++    beq.s 7f
++    move.l tos_irq_saved_sp,%sp
++    clr.l tos_irq_saved_sp
++7:
+     rte
+ 8:
+ #endif
+@@ -387,6 +431,13 @@
+     move.l %a0,%usp
+ kernel_timer_return:
+     movem.l (%sp)+,%d0-%d7/%a0-%a6
++#if CONFIG_TOS
++    tst.l tos_irq_saved_sp
++    beq.s 7f
++    move.l tos_irq_saved_sp,%sp
++    clr.l tos_irq_saved_sp
++7:
++#endif
+     rte
+ 
+ kernel_trap0:
+@@ -795,3 +846,13 @@
+ kernel_cpu_type:
+     .space 1
+     .align 2
++
++#if CONFIG_TOS
++    .section .bss
++    .align 4
++tos_irq_saved_sp:
++    .space 4
++tos_irq_stack:
++    .space 8192
++tos_irq_stack_end:
++#endif
+--- a/system/kernel_main.c
++++ b/system/kernel_main.c
+@@ -1,5 +1,6 @@
+ #include "boot_protocol.h"
+ #include "kernel_memory.h"
++#include "tos_async.h"
+ #include "kernel_audio.h"
+ #include "kernel_module.h"
+ #include "kernel_block.h"
+@@ -671,6 +672,7 @@
+ #if CONFIG_TOS
+             /* Deferred TOS window composite: the heavy planar conversion runs
+                here, never in the Timer C interrupt handler. */
++            kernel_tos_async_pump();
+             tos_composite_work();
+ #endif
+             /* Text profile: console or retained app frame, then session overlay. */
+--- a/system/kernel_exception.c
++++ b/system/kernel_exception.c
+@@ -11,6 +11,7 @@
+ #include "kernel_fat.h"
+ #include "kernel_language.h"
+ #include "kernel_memory.h"
++#include "tos_async.h"
+ #include "kernel_graphics.h"
+ #include "kernel_surface.h"
+ #include "kernel_module.h"
+@@ -653,7 +654,16 @@
+ int32_t kernel_user_session_getchar(void)
+ {if(current_process->terminal!=ksessions_current())return -1;return kernel_user_terminal_getchar();}
+ unsigned kernel_user_pid_terminal(uint32_t pid)
+-{unsigned i;for(i=0;i<USER_PROCESS_SLOTS;i++)if(process_table[i].pid==pid&&process_table[i].state!=USER_PROCESS_FREE)return process_table[i].terminal;return 0;}
++{unsigned i;
++#if CONFIG_TOS
++ if(kernel_tos_async_owns(pid))return kernel_tos_async_session();
++#endif
++ for(i=0;i<USER_PROCESS_SLOTS;i++) {
++  if(process_table[i].pid==pid&&process_table[i].state!=USER_PROCESS_FREE)
++   return process_table[i].terminal;
++ }
++ return 0;
++}
+ unsigned kernel_user_last_terminal(void){return current_process->terminal;}
+ unsigned kernel_user_birth_terminal(void)
+ {return user_active?current_process->terminal:ksessions_current();}
+@@ -969,6 +979,14 @@
+                  want=mouse_capture_pid;
+              }else want=mouse_capture_pid?mouse_capture_pid:kernel_wm_pid_at(ev_x,ev_y);
+              if(!want)want=(uint32_t)pid;
++#if CONFIG_TOS
++             if(kernel_tos_async_owns(want)){
++                 if(!kernel_tos_async_mouse(ev_buttons,ev_x,ev_y))return 0;
++                 ksessions_mouse_consume();
++                 if(!(ev_buttons&1u))mouse_capture_pid=0;
++                 return 1;
++             }
++#endif
+             {unsigned d=kernel_user_pid_terminal(want);
+              if(d<SESSION_COUNT)++kdbg_mouse_routed[d];}
+              if(want!=(uint32_t)pid){uint8_t k;int found=0;
+@@ -1024,6 +1042,9 @@
+        owner (desktop/shell) keeps it.  Resolved before the backpressure check so
+        a busy owner cannot swallow a key that belongs to the focused app. */
+     {uint32_t want=kgame_owns_screen()?(uint32_t)kgame_owner():(uint32_t)kernel_gui_focus_pid();
++#if CONFIG_TOS
++     if(kernel_tos_async_owns(want))return kernel_tos_async_keyboard();
++#endif
+      if(want&&want!=(uint32_t)pid){uint8_t k;
+          for(k=0;k<USER_PROCESS_SLOTS;++k)if(process_table[k].pid==want&&
+              process_table[k].state!=USER_PROCESS_FREE&&
+@@ -2009,11 +2030,12 @@
+         user_syscall_result=kfat_save_path(path,pointer1,argument0);return 0;
+     }
+     if(call==65u){
+-        /* TOS personality launcher (shell/Commander): run a 0x601A .PRG in the
+-           TOS domain. kernel_tos_run_program() runs synchronously, swaps the
+-           exception vectors and restores them before returning, so the caller
+-           resumes as if it had made a blocking call. */
++        /* ABI-compatible blocking call for existing clients; d1=1 queues a
++           cooperative domain so the desktop can keep serving other windows. */
+         if(!user_path((const char *)pointer0,path)){user_syscall_result=-0x2b0;return 0;}
++#if CONFIG_TOS
++        if(argument0==1u){user_syscall_result=kernel_tos_start_async(path);return 0;}
++#endif
+         user_syscall_result=kernel_tos_run_program(path);return 0;
+     }
+     if(call==52u){user_dir_page_t page;enum fat_file_state state;
+--- a/include/app_abi.h
++++ b/include/app_abi.h
+@@ -100,7 +100,7 @@
+     ATOS_CALL_SHELL_STATE = 62,
+     ATOS_CALL_FLOPPY_DIR = 63,      /* d1=capacity a0=buffer */
+     ATOS_CALL_FLOPPY_READ = 64,     /* d1=capacity a0=name a1=buffer */
+-    ATOS_CALL_TOS_RUN = 65,         /* a0=path (.PRG/.TOS/.TTP/.GTP) */
++    ATOS_CALL_TOS_RUN = 65,         /* a0=path; d1=0 blocking, 1 queue cooperative TOS */
+     ATOS_CALL_ABI_VERSION = 66,
+     ATOS_CALL_HIRES_CLOCK = 67,     /* -> monotonic Timer C counts (~81 us) */
+     ATOS_CALL_APP_ACTIVATE = 74,    /* a0=path a1=uint32[2]{pid,status}: activate
+--- a/include/gui_damage.h
++++ b/include/gui_damage.h
+@@ -19,14 +19,11 @@
+       reason dragging felt far too slow. */
+    x-=4;y-=4;r+=4;b+=4;
+   }else if(c->kind==GUI_ICON||c->kind==GUI_ICON_RGB){
+-   /* Both renderers draw the bitmap at (x,y), start the centred label at x-8
+-      and put the label 16px under the icon.  Use the shared geometry contract
+-      instead of the old hard-coded 32x32/48 so a 48x48 colour icon is neither
+-      clipped nor overlapped by a neighbour that still thinks it is 32 wide. */
++   /* Union of the bitmap and its horizontally centred label. */
+    int isz=(c->kind==GUI_ICON_RGB)?GUI_ICON_COLOR_SIZE:GUI_ICON_MONO_SIZE;
+    int ih =(c->kind==GUI_ICON_RGB)?GUI_ICON_COLOR_H:GUI_ICON_MONO_H;
+    unsigned len=0;while(len<12u&&c->text[len])++len;
+-   x-=8;r=x+(int)(16u+len*8u);if(r<c->x+isz)r=c->x+isz;
++   {int w=(int)len*8;if(w<isz)w=isz;x+=(isz-w)/2;r=x+w;}
+    b=y+ih;
+   }else if(c->kind<GUI_BG||c->kind>GUI_BEVEL)continue;
+   if(x<0)x=0;
+--- a/tests/test_gui_damage.c
++++ b/tests/test_gui_damage.c
+@@ -18,4 +18,10 @@
+  memset(c,0,sizeof(c));c[0].kind=GUI_TEXT;c[0].x=631;c[0].y=391;strcpy(c[0].text,"a\nbc");assert(gui_damage(c,1,640,400,&l,&t,&r,&b)&&l==631&&t==391&&r==640&&b==400);
+  c[0].x=-32768;c[0].y=-32768;assert(!gui_damage(c,1,640,400,&l,&t,&r,&b));
+  c[0].kind=GUI_WINDOW;c[0].x=100;c[0].y=100;c[0].w=64;c[0].h=40;assert(gui_damage(c,1,640,400,&l,&t,&r,&b)&&l==96&&t==96&&r==168&&b==144);
++ /* Short/long centred labels, both bitmap sizes, and screen-edge clipping. */
++ memset(c,0,sizeof(c));c[0].kind=GUI_ICON_RGB;c[0].x=100;c[0].y=20;
++ strcpy(c[0].text,"TRASH");assert(gui_damage(c,1,800,600,&l,&t,&r,&b)&&l==100&&r==148&&b==84);
++ strcpy(c[0].text,"COMMANDER");assert(gui_damage(c,1,800,600,&l,&t,&r,&b)&&l==88&&r==160);
++ c[0].kind=GUI_ICON;assert(gui_damage(c,1,800,600,&l,&t,&r,&b)&&l==80&&r==152&&b==68);
++ strcpy(c[0].text,"ABCDEFGHIJKL");c[0].x=4;assert(gui_damage(c,1,800,600,&l,&t,&r,&b)&&l==0&&r==68);
+  puts("Damage PASS: clipping, text newlines, bounded window rects, word copy for 1/2/4 planes and edge guards");return 0;}
+--- /dev/null
++++ b/include/tos_async.h
+@@ -0,0 +1,12 @@
++#ifndef TOS_ASYNC_H
++#define TOS_ASYNC_H
++#include <stdint.h>
++/* One cooperative TOS domain; native ATOS processes remain independently scheduled. */
++#define TOS_ASYNC_PID 0x7fff0001UL
++int32_t kernel_tos_start_async(const char *path);
++void kernel_tos_async_pump(void);
++int kernel_tos_async_owns(uint32_t pid);
++unsigned kernel_tos_async_session(void);
++int kernel_tos_async_mouse(uint32_t buttons,int32_t x,int32_t y);
++int kernel_tos_async_keyboard(void);
++#endif

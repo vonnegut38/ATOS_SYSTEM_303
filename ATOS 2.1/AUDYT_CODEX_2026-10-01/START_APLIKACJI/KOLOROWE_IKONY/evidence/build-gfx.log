@@ -1,0 +1,7 @@
+gmake: Entering directory '/Users/xxx/Documents/Codex/2026-10-01/prz/work/atos-icons'
+m68k-elf-gcc -m68000 -ffreestanding -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -MMD -MP -c system/gfx_service_app.S -o build/system/gfx_service_app.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -DCONFIG_TOS=0 -DCONFIG_WM=1 -nostdlib -nostartfiles -Wl,-T,linker/app-sys.ld -Wl,--gc-sections -o build/system/gfx_service_app.elf build/system/gfx_service_app.o
+/opt/homebrew/opt/m68k-elf-binutils/bin/m68k-elf-ld: warning: build/system/gfx_service_app.elf has a LOAD segment with RWX permissions
+m68k-elf-objcopy -O binary build/system/gfx_service_app.elf build/system/GFX.APP
+python3 tools/patch_boot_checksum.py build/system/GFX.APP
+gmake: Leaving directory '/Users/xxx/Documents/Codex/2026-10-01/prz/work/atos-icons'

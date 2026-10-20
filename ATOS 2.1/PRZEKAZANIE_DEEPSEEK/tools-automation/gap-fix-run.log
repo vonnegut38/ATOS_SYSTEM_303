@@ -1,0 +1,10 @@
+--- baseline: total_overrun=0 total_pending=0 irq_dropped=[0] ---
+setup done
+--- after cycle 8: total_overrun=0 total_pending=6 irq_dropped=[0] ---
+    id 14 14 Timer-C handler   overrun=   0 pending=   6
+--- after cycle 16: total_overrun=0 total_pending=8 irq_dropped=[0] ---
+    id 14 14 Timer-C handler   overrun=   0 pending=   8
+--- final: total_overrun=0 total_pending=8 irq_dropped=[0] ---
+    id 14 14 Timer-C handler   overrun=   0 pending=   8
+closing
+hatari rc= 0

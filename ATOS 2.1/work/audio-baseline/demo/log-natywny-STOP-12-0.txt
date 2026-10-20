@@ -1,0 +1,16 @@
+pulpit po ~24 s
+start      owner=0   volG(przed)=0/0/0 volG(po)=0/0/0 | rej=0  ref=0  faults=0  teardown=0  xb32=0  isr_max=2  | res=0x00 run=0 mark=0x0 q=0
+po ATEST   owner=5   volG(przed)=0/0/0 volG(po)=0/0/0 | rej=0  ref=0  faults=0  teardown=0  xb32=0  isr_max=3  | res=0x00 run=0 mark=0x0 q=0
+t+8s       owner=5   volG(przed)=0/0/0 volG(po)=0/0/0 | rej=0  ref=0  faults=0  teardown=0  xb32=0  isr_max=3  | res=0x00 run=0 mark=0x0 q=1
+t+16s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=0
+t+24s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+32s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+40s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=0
+t+48s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+56s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+64s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+72s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+80s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=0
+t+88s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+t+96s      owner=5   volG(przed)=12/0/0 volG(po)=0/0/0 | rej=2  ref=4  faults=0  teardown=1  xb32=4  isr_max=3  | res=0x42 run=1 mark=0x0 q=1
+rc 0

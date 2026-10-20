@@ -1,0 +1,171 @@
+/*
+ * Minimal MC68000 Shifter rectangle backend adapted from EmuTOS
+ * vdi/vdi_line.c draw_rect_setup() and swblit_rect_common().
+ *
+ * Upstream revision: e0f0c2333d39a487e73d8b17f62b70a95441cd32
+ * Copyright 2001-2026 The EmuTOS development team
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+#include "emutos_vdi_mono.h"
+
+void emutos_vdi_mono_fill(volatile uint16_t *words,uint16_t line_words,
+                          uint16_t x,uint16_t y,uint16_t width,uint16_t height,
+                          uint8_t color)
+{
+    uint16_t leftmask=(uint16_t)(0xffffu>>(x&15u));
+    uint16_t x2=(uint16_t)(x+width-1u);
+    uint16_t rightmask=(uint16_t)(0xffffu<<(15u-(x2&15u)));
+    uint16_t groups=(uint16_t)((x2>>4)-(x>>4)+1u),row,n;
+    uint16_t pattern=color?0xffffu:0u;
+    volatile uint16_t *work=words+(uint32_t)y*line_words+(x>>4);
+
+    if(groups==1u){leftmask&=rightmask;rightmask=0u;}
+    for(row=0;row<height;++row,work+=line_words){
+        volatile uint16_t *destination=work;
+        *destination=(uint16_t)((*destination&~leftmask)|(pattern&leftmask));
+        ++destination;
+        for(n=2u;n<groups;++n)*destination++=pattern;
+        if(rightmask)
+            *destination=(uint16_t)((*destination&~rightmask)|(pattern&rightmask));
+    }
+}
+
+/* Aligned one-plane source-only blit.  EmuTOS bit_blt() selects reverse
+ * traversal when an overlapping destination follows the source in screen
+ * memory; this reduced form needs no skew or end masks because all bounds are
+ * complete 16-pixel words. */
+void emutos_vdi_mono_copy_words(volatile uint16_t *words,uint16_t line_words,
+                                uint16_t source_x,uint16_t source_y,
+                                uint16_t width,uint16_t height,
+                                uint16_t destination_x,uint16_t destination_y)
+{
+    uint16_t groups=(uint16_t)(width>>4),row,group;
+    volatile uint16_t *source=words+(uint32_t)source_y*line_words+(source_x>>4);
+    volatile uint16_t *destination=words+(uint32_t)destination_y*line_words+
+                                   (destination_x>>4);
+    if(source==destination)return;
+    if(source<destination){
+        source+=(uint32_t)(height-1u)*line_words+groups-1u;
+        destination+=(uint32_t)(height-1u)*line_words+groups-1u;
+        for(row=0;row<height;++row){
+            volatile uint16_t *s=source,*d=destination;
+            for(group=0;group<groups;++group)*d--=*s--;
+            source-=line_words;destination-=line_words;
+        }
+    }else{
+        for(row=0;row<height;++row){
+            volatile uint16_t *s=source,*d=destination;
+            for(group=0;group<groups;++group)*d++=*s++;
+            source+=line_words;destination+=line_words;
+        }
+    }
+}
+
+static uint16_t mono_word(const volatile uint16_t *words,uint16_t line_words,
+                          uint16_t row,int32_t group)
+{
+    if(group<0||group>=line_words)return 0u;
+    return words[(uint32_t)row*line_words+(uint32_t)group];
+}
+
+/* Reduced skew/end-mask form of EmuTOS vdi/vdi_raster.c bit_blt().  A whole
+ * destination row is assembled before it is stored, making horizontal
+ * overlap safe without exposing the hardware Blitter to untrusted bounds. */
+void emutos_vdi_mono_copy_shifted(volatile uint16_t *words,uint16_t line_words,
+                                  uint16_t source_x,uint16_t source_y,
+                                  uint16_t width,uint16_t height,
+                                  uint16_t destination_x,uint16_t destination_y)
+{
+    uint16_t assembled[40],first=(uint16_t)(destination_x>>4);
+    uint16_t last=(uint16_t)((destination_x+width-1u)>>4);
+    uint16_t count=(uint16_t)(last-first+1u),source_row,group,mask;
+    uint16_t left=(uint16_t)(0xffffu>>(destination_x&15u));
+    uint16_t right=(uint16_t)(0xffffu<<(15u-((destination_x+width-1u)&15u)));
+    uint16_t high,low;int32_t row,row_end,row_step,x,source_group;uint8_t shift;
+    volatile uint16_t *destination;
+    if(destination_y>source_y){row=(int32_t)height-1;row_end=-1;row_step=-1;}
+    else{row=0;row_end=height;row_step=1;}
+    for(;row!=row_end;row+=row_step){
+        source_row=(uint16_t)(source_y+row);
+        for(group=0;group<count;++group){
+            x=(int32_t)source_x+(int32_t)(first+group)*16-(int32_t)destination_x;
+            if(x<0){source_group=-1;shift=(uint8_t)(x+16);}
+            else{source_group=x>>4;shift=(uint8_t)(x&15);}
+            high=mono_word(words,line_words,source_row,source_group);
+            if(!shift)assembled[group]=high;
+            else{low=mono_word(words,line_words,source_row,source_group+1);
+                assembled[group]=(uint16_t)((uint16_t)(high<<shift)|
+                                            (uint16_t)(low>>(16u-shift)));}
+        }
+        destination=words+(uint32_t)(destination_y+row)*line_words+first;
+        for(group=0;group<count;++group){
+            mask=0xffffu;if(!group)mask&=left;if(group==count-1u)mask&=right;
+            destination[group]=(uint16_t)((destination[group]&~mask)|
+                                          (assembled[group]&mask));
+        }
+    }
+}
+
+/* WM_REPLACE path of vdi_line.c swblit_rect_common(). Keep the original
+ * plane/scanline/word traversal and MC68000 DBRA centre loop. Bounds are
+ * already clipped by the caller. Patterns are anchored to screen Y. */
+void emutos_vdi_planar_fill(volatile uint16_t *words,uint16_t stride,uint8_t planes,
+    uint16_t x,uint16_t y,uint16_t width,uint16_t height,uint8_t color,uint8_t background,
+    const uint16_t *patterns,uint8_t pattern_mask)
+{
+    uint16_t last=(uint16_t)(x+width-1u),left=(uint16_t)(0xffffu>>(x&15u));
+    uint16_t right=(uint16_t)(0xffffu<<(15u-(last&15u)));
+    uint16_t groups=(uint16_t)((last>>4)-(x>>4)+1u),row,plane;
+    if(groups==1u){left&=right;right=0;}
+    for(row=0;row<height;row++)for(plane=0;plane<planes;plane++){
+        volatile uint16_t *work=words+(uint32_t)(y+row)*stride+(x>>4)*planes+plane;
+        uint16_t bits=patterns[(y+row)&pattern_mask];
+        uint16_t pattern=(uint16_t)(((color&(1u<<plane))?bits:0)|
+            ((background&(1u<<plane))?(uint16_t)~bits:0));
+        *work=(uint16_t)((*work&~left)|(pattern&left));work+=planes;
+        if(groups>2u){
+#ifdef __m68k__
+            int16_t n=(int16_t)(groups-3u),step=(int16_t)(2u*planes);
+            __asm__ volatile("1:\n\tmove.w %2,(%1)\n\tadda.w %3,%1\n\tdbra %0,1b"
+                : "+d"(n),"+a"(work):"r"(pattern),"r"(step):"memory","cc");
+#else
+            uint16_t n;for(n=2;n<groups;n++){*work=pattern;work+=planes;}
+#endif
+        }
+        if(right)*work=(uint16_t)((*work&~right)|(pattern&right));
+    }
+}
+/* Solid WM_REPLACE specialization of EmuTOS vertical_line(). */
+void emutos_vdi_vertical(volatile uint16_t *words,uint16_t stride,uint8_t planes,
+    uint16_t x,uint16_t y,uint16_t height,uint8_t color)
+{
+    uint16_t plane,row,bit=(uint16_t)(0x8000u>>(x&15u));
+    for(plane=0;plane<planes;plane++){
+        volatile uint16_t *addr=words+(uint32_t)y*stride+(x>>4)*planes+plane;
+        if(color&(1u<<plane))for(row=0;row<height;row++){*addr|=bit;addr+=stride;}
+        else for(row=0;row<height;row++){*addr&=(uint16_t)~bit;addr+=stride;}
+    }
+}
+
+/* Original word-at-a-time glyph renderer; caller clips the full 8x16 cell. */
+void mono_glyph_h(volatile uint16_t *words,uint16_t stride,uint16_t x,uint16_t y,
+                  const uint8_t glyph[16],uint16_t height,uint8_t fg,uint8_t bg,int opaque)
+{
+    unsigned row,shift=x&15u;volatile uint16_t *p=words+(uint32_t)y*stride+(x>>4);
+    uint32_t mask=0xff000000u>>shift;
+    if(!height)return;
+    if(height>16u)height=16u;
+    for(row=0;row<height;row++,p+=stride){uint32_t ink=(uint32_t)glyph[row]<<24;
+        uint32_t m=opaque?mask:(ink>>shift),value=(fg&1)?(ink>>shift):0;
+        if(opaque&&(bg&1))value|=mask&~(ink>>shift);
+        p[0]=(uint16_t)((p[0]&~(uint16_t)(m>>16))|(uint16_t)(value>>16));
+        if(shift>8)p[1]=(uint16_t)((p[1]&~(uint16_t)m)|(uint16_t)value);
+    }
+}
+
+/* The original 8x16 entry point; the short font uses mono_glyph_h(...,8,...). */
+void mono_glyph(volatile uint16_t *words,uint16_t stride,uint16_t x,uint16_t y,
+                const uint8_t glyph[16],uint8_t fg,uint8_t bg,int opaque)
+{
+    mono_glyph_h(words,stride,x,y,glyph,16u,fg,bg,opaque);
+}

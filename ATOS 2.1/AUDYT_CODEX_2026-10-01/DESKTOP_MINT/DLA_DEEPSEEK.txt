@@ -1,0 +1,34 @@
+ATOS 2.1 — paczka do scalenia, 2026-10-01
+
+Zacznij od RAPORT.md i POMIARY.md. Główne przyczyny: I-cache 020/030
+wyłączany przy synchronizacji kodu, koszt zerowania powierzchni okna,
+pikselowe rysowanie tekstu oraz nadmierne odrysowywanie.
+
+ATOS-desktop.patch jest przygotowany dla aktualnych plików po równoległej
+zmianie surface_fill przez DeepSeek o 22:23. Hash przed/po: manifest.json.
+Nie nadpisuj nowych zmian całymi plikami z sources: są materiałem do
+porównania. Jeśli hashe nie pasują, scal ręcznie. Audyt nie zmienił aktywnego
+kernela, źródeł ani obrazu użytkownika.
+
+Na osobnej kopii projektu:
+  patch --dry-run -p1 < /pelna/sciezka/ATOS-desktop.patch
+  patch -p1 < /pelna/sciezka/ATOS-desktop.patch
+  python3 tools/build_atos2.py
+  cc -std=c11 -O2 -Wall -Wextra -Werror -fsanitize=address,undefined \
+    -Iinclude tests/test_chunky_raster.c -o /tmp/test_atos_chunky
+  /tmp/test_atos_chunky
+
+Instaluj tylko do zatrzymanej, testowej kopii obrazu i wykonaj testy z raportu.
+Paczka nie zawiera gotowego obrazu ani nie zmienia BIOS.CFG użytkownika.
+
+bench_boot.py UWAGA: modyfikuje BIOS.CFG W OBRAZIE TESTOWYM
+$ATOS_BENCH_PROJECT/work/atos-v2.img. Wymaga własnej kopii obrazu oraz
+zgodnego z nią build/system/kernel.elf. Nie używaj z aktywnym obrazem.
+  ATOS_BENCH_PROJECT=/sciezka/do/kopii ATOS_HATARI=/sciezka/hatari-tf536 \
+    CAPTURE=2 python3 bench_boot.py unikalna-nazwa 3
+Tryb 3 = 800x600x256 w badanym sterowniku; 2 = mono 640x400.
+Przy porównaniu kerneli podaj ELF jako trzeci argument. Każdy przebieg
+musi mieć nową nazwę, aby nie odczytał starych zrzutów.
+
+Pilny osobny etap: bufor pulpitu dla 1024x768x8 i backbuffer dla chunky.
+Nie traktuj paczki wydajnościowej jako naprawy tych dwóch błędów.

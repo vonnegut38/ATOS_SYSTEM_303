@@ -1,0 +1,25 @@
+[   10.5s] shot c0-baseline True
+[   28.6s] setup done
+[   39.3s] cycle 1 done
+[   50.0s] cycle 2 done
+[   60.7s] cycle 3 done
+[   71.4s] cycle 4 done
+[   82.1s] cycle 5 done
+[   92.8s] cycle 6 done
+[  103.5s] cycle 7 done
+[  107.9s] shot c8-tts1-inputstat True
+[  114.7s] cycle 8 done
+[  125.4s] cycle 9 done
+[  136.1s] cycle 10 done
+[  146.8s] cycle 11 done
+[  157.4s] cycle 12 done
+[  168.1s] cycle 13 done
+[  178.8s] cycle 14 done
+[  189.5s] cycle 15 done
+[  193.9s] shot c16-tts1-inputstat True
+[  200.7s] cycle 16 done
+[  205.4s] shot c-final-inputstat True
+[  208.1s] shot c-final-inputstat2 True
+[  210.1s] shot c-final-memory True
+[  210.1s] closing
+hatari rc= 0

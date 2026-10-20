@@ -1,0 +1,50 @@
+[    0.0s] image /Users/xxx/Documents/Deepseek_test/ATOS 2.0/work/atos-v2.img
+[   10.5s] shot L0-baseline True
+[   28.6s] setup done - mozna ruszac mysza
+[   39.6s] cycle 1/36
+[   50.7s] cycle 2/36
+[   61.7s] cycle 3/36
+[   72.7s] cycle 4/36
+[   83.8s] cycle 5/36
+[   88.4s] shot L06-inputstat True
+[   95.3s] cycle 6/36
+[  106.4s] cycle 7/36
+[  117.4s] cycle 8/36
+[  128.5s] cycle 9/36
+[  139.5s] cycle 10/36
+[  150.6s] cycle 11/36
+[  155.2s] shot L12-inputstat True
+[  162.1s] cycle 12/36
+[  173.2s] cycle 13/36
+[  184.2s] cycle 14/36
+[  195.2s] cycle 15/36
+[  206.3s] cycle 16/36
+[  217.3s] cycle 17/36
+[  221.9s] shot L18-inputstat True
+[  228.9s] cycle 18/36
+[  239.9s] cycle 19/36
+[  251.0s] cycle 20/36
+[  262.0s] cycle 21/36
+[  273.0s] cycle 22/36
+[  284.1s] cycle 23/36
+[  288.7s] shot L24-inputstat True
+[  295.6s] cycle 24/36
+[  306.7s] cycle 25/36
+[  317.7s] cycle 26/36
+[  328.7s] cycle 27/36
+[  339.8s] cycle 28/36
+[  350.8s] cycle 29/36
+[  355.4s] shot L30-inputstat True
+[  362.4s] cycle 30/36
+[  373.4s] cycle 31/36
+[  384.4s] cycle 32/36
+[  395.4s] cycle 33/36
+[  406.5s] cycle 34/36
+[  417.5s] cycle 35/36
+[  422.1s] shot L36-inputstat True
+[  429.0s] cycle 36/36
+[  433.8s] shot L-final-inputstat True
+[  436.6s] shot L-final-inputstat2 True
+[  438.5s] shot L-final-memory True
+[  438.5s] closing
+hatari rc= 0

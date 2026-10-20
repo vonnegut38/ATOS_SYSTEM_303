@@ -1,0 +1,857 @@
+[
+  {
+    "key": "CMD_ERR_DIR",
+    "pl": "Blad odczytu katalogu",
+    "en": "Cannot read directory"
+  },
+  {
+    "key": "CMD_DIRECTORY",
+    "pl": "<KATALOG>",
+    "en": "<DIR>"
+  },
+  {
+    "key": "CMD_COLUMNS",
+    "pl": "Nazwa                         Rozmiar",
+    "en": "Name                            Size"
+  },
+  {
+    "key": "CMD_TOP_HELP",
+    "pl": "F6 Przywroc    F1 Pomoc",
+    "en": "F6 Restore     F1 Help"
+  },
+  {
+    "key": "CMD_MOUSE_LEFT",
+    "pl": "Klik: wybor   2x: katalog",
+    "en": "Click: select   Double: open folder"
+  },
+  {
+    "key": "CMD_MOUSE_RIGHT",
+    "pl": "Prawy: wyzej   Tab: panel",
+    "en": "Right: parent   Tab: panel"
+  },
+  {
+    "key": "CMD_COPY",
+    "pl": "F5 Kopiuj",
+    "en": "F5 Copy"
+  },
+  {
+    "key": "CMD_MKDIR",
+    "pl": "F7 Katalog",
+    "en": "F7 New folder"
+  },
+  {
+    "key": "CMD_TRASH",
+    "pl": "F8 Kosz/Usun",
+    "en": "F8 Trash/Delete"
+  },
+  {
+    "key": "CMD_QUIT",
+    "pl": "F10 Koniec",
+    "en": "F10 Quit"
+  },
+  {
+    "key": "CMD_NEW_TITLE",
+    "pl": "Nowy katalog (nazwa 8.3)",
+    "en": "New folder (8.3 name)"
+  },
+  {
+    "key": "CMD_COPY_TITLE",
+    "pl": "Kopiowanie do drugiego panelu",
+    "en": "Copy to the other panel"
+  },
+  {
+    "key": "CMD_RESTORE_TITLE",
+    "pl": "Przywroc do drugiego panelu",
+    "en": "Restore to the other panel"
+  },
+  {
+    "key": "CMD_TRASH_TITLE",
+    "pl": "Przenies do kosza TRASH?",
+    "en": "Move to TRASH?"
+  },
+  {
+    "key": "CMD_DELETE_TITLE",
+    "pl": "TRWALE usun wraz z zawartoscia?",
+    "en": "PERMANENTLY delete including contents?"
+  },
+  {
+    "key": "CMD_CREATE_CONFIRM",
+    "pl": "Enter: Utworz",
+    "en": "Enter: Create"
+  },
+  {
+    "key": "CMD_YES",
+    "pl": "Y: Tak",
+    "en": "Y: Yes"
+  },
+  {
+    "key": "CMD_CANCEL",
+    "pl": "Esc: Anuluj",
+    "en": "Esc: Cancel"
+  },
+  {
+    "key": "CMD_DONE",
+    "pl": "Gotowe.",
+    "en": "Done."
+  },
+  {
+    "key": "CMD_ERR_EXISTS",
+    "pl": "Cel juz istnieje - bez nadpisania.",
+    "en": "Target already exists - not overwritten."
+  },
+  {
+    "key": "CMD_ERR_FULL",
+    "pl": "Brak miejsca na dysku / w katalogu.",
+    "en": "Disk or directory is full."
+  },
+  {
+    "key": "CMD_ERR_NOT_EMPTY",
+    "pl": "Katalog nie jest pusty.",
+    "en": "Directory is not empty."
+  },
+  {
+    "key": "CMD_ERR_READ_ONLY",
+    "pl": "Tylko odczyt / dysk wymaga kontroli.",
+    "en": "Read-only / disk needs checking."
+  },
+  {
+    "key": "CMD_ERR_LIMIT",
+    "pl": "Przekroczony limit operacji.",
+    "en": "Operation limit exceeded."
+  },
+  {
+    "key": "CMD_ERR_IO",
+    "pl": "Blad zapisu / odczytu dysku.",
+    "en": "Disk read/write error."
+  },
+  {
+    "key": "CMD_ERR_INVALID",
+    "pl": "Nieprawidlowa nazwa lub operacja.",
+    "en": "Invalid name or operation."
+  },
+  {
+    "key": "CMD_STARTING",
+    "pl": "Uruchamiam...",
+    "en": "Starting..."
+  },
+  {
+    "key": "CMD_ERR_START",
+    "pl": "Nie udalo sie uruchomic.",
+    "en": "Could not start the program."
+  },
+  {
+    "key": "CMD_CANCELLED",
+    "pl": "Anulowano.",
+    "en": "Cancelled."
+  },
+  {
+    "key": "CMD_CREATING",
+    "pl": "Tworzenie katalogu...",
+    "en": "Creating folder..."
+  },
+  {
+    "key": "CMD_ERR_PATH",
+    "pl": "Sciezka za dluga.",
+    "en": "Path is too long."
+  },
+  {
+    "key": "CMD_WORKING",
+    "pl": "Operacja dyskowa...",
+    "en": "Disk operation in progress..."
+  },
+  {
+    "key": "CMD_HELP",
+    "pl": "Tab panel; +/- zaznacz/odznacz; F5 kopiuj; F7 katalog; F10 wyjdz",
+    "en": "Tab panel; +/- mark/unmark; F5 copy; F7 mkdir; F10 quit"
+  },
+  {
+    "key": "CMD_RESTORE_HELP",
+    "pl": "F6: z kosza do drugiego panelu.",
+    "en": "F6: restore from trash to the other panel."
+  },
+  {
+    "key": "CMD_SELECT_ITEM",
+    "pl": "Wybierz plik lub katalog.",
+    "en": "Select a file or folder."
+  },
+  {
+    "key": "CMD_COPY_FILES",
+    "pl": "F5: kopiowanie pojedynczych plikow.",
+    "en": "F5: copies individual files only."
+  },
+  {
+    "key": "CMD_KEEP_TRASH",
+    "pl": "Nie mozna usunac katalogu TRASH.",
+    "en": "The TRASH folder cannot be deleted."
+  },
+  {
+    "key": "CMD_WELCOME",
+    "pl": "+ Zaznacz  - Odznacz  F5 Kopiuj zaznaczone",
+    "en": "+ Mark  - Unmark  F5 Copy selected files"
+  },
+  {
+    "key": "SYS_WELCOME",
+    "pl": "F1 Konfiguracja  F2 Dysk  F3 Benchmarki",
+    "en": "F1 Hardware  F2 Disk  F3 Benchmarks"
+  },
+  {
+    "key": "SYS_UNKNOWN",
+    "pl": "nieznany",
+    "en": "unknown"
+  },
+  {
+    "key": "SYS_NO_CARD",
+    "pl": "brak wykrytej karty",
+    "en": "no card detected"
+  },
+  {
+    "key": "SYS_ET4000",
+    "pl": "ET4000 / rodzina W32",
+    "en": "ET4000 / W32 family"
+  },
+  {
+    "key": "SYS_UNKNOWN_CARD",
+    "pl": "nieznana karta",
+    "en": "unknown card"
+  },
+  {
+    "key": "SYS_NONE",
+    "pl": "brak",
+    "en": "none"
+  },
+  {
+    "key": "SYS_ERR_REPORT_CONSOLE",
+    "pl": "SYSINFO: brak raportu systemowego (API 56).\n",
+    "en": "SYSINFO: system report unavailable (API 56).\n"
+  },
+  {
+    "key": "SYS_CONSOLE_MODE",
+    "pl": "SYSINFO - tryb konsolowy (desktop zajety przez inna aplikacje)\n",
+    "en": "SYSINFO - console mode (screen in use by another application)\n"
+  },
+  {
+    "key": "SYS_CONSOLE_MACHINE",
+    "pl": "  Komputer: ",
+    "en": "  Machine: "
+  },
+  {
+    "key": "SYS_FREE_KIB",
+    "pl": " KiB, wolne ",
+    "en": " KiB, free "
+  },
+  {
+    "key": "SYS_CONSOLE_OUTPUT",
+    "pl": "  Wyjscie: ",
+    "en": "  Output: "
+  },
+  {
+    "key": "SYS_CONSOLE_RESOLUTION",
+    "pl": "   Rozdzielczosc: ",
+    "en": "   Resolution: "
+  },
+  {
+    "key": "SYS_CONSOLE_COLOURS",
+    "pl": " kolorow\n",
+    "en": " colours\n"
+  },
+  {
+    "key": "SYS_CONSOLE_CARD",
+    "pl": "  Karta (BIOS): ",
+    "en": "  Card (BIOS): "
+  },
+  {
+    "key": "SYS_NO_DATA",
+    "pl": "brak danych",
+    "en": "no data"
+  },
+  {
+    "key": "SYS_UNDETERMINED",
+    "pl": "nieustalony",
+    "en": "unknown"
+  },
+  {
+    "key": "SYS_CONSOLE_FRAMES",
+    "pl": "  WM: klatek ",
+    "en": "  WM: frames "
+  },
+  {
+    "key": "SYS_DAMAGE",
+    "pl": "  pole uszkodzen ",
+    "en": "  damaged area "
+  },
+  {
+    "key": "SYS_CONSOLE_DISK",
+    "pl": "  Dysk: ",
+    "en": "  Disk: "
+  },
+  {
+    "key": "SYS_NO_MODEL",
+    "pl": "bez modelu",
+    "en": "unknown model"
+  },
+  {
+    "key": "SYS_MACHINE",
+    "pl": "Komputer",
+    "en": "Machine"
+  },
+  {
+    "key": "SYS_PROCESSOR",
+    "pl": "Procesor",
+    "en": "Processor"
+  },
+  {
+    "key": "SYS_CLOCK_NOMINAL",
+    "pl": " MHz (nominalnie; nie pomiar)",
+    "en": " MHz (nominal, not measured)"
+  },
+  {
+    "key": "SYS_CLOCK_BIOS",
+    "pl": " MHz (dane BIOS, nie pomiar)",
+    "en": " MHz (BIOS data, not measured)"
+  },
+  {
+    "key": "SYS_CLOCK_UNKNOWN",
+    "pl": "nieustalone",
+    "en": "unknown"
+  },
+  {
+    "key": "SYS_CLOCK",
+    "pl": "Taktowanie",
+    "en": "CPU clock"
+  },
+  {
+    "key": "SYS_INTEGRATED",
+    "pl": "zintegrowany",
+    "en": "integrated"
+  },
+  {
+    "key": "SYS_EXTERNAL",
+    "pl": "zewnetrzny",
+    "en": "external"
+  },
+  {
+    "key": "SYS_NOT_DETECTED",
+    "pl": "nie wykryto",
+    "en": "not detected"
+  },
+  {
+    "key": "SYS_NO_BIOS_DATA",
+    "pl": "brak danych z tego BIOS-u",
+    "en": "no data from this BIOS"
+  },
+  {
+    "key": "SYS_FREE",
+    "pl": " / wolne ",
+    "en": " / free "
+  },
+  {
+    "key": "SYS_ST_TOTAL_FREE",
+    "pl": "ST-RAM razem / wolne",
+    "en": "ST-RAM total / free"
+  },
+  {
+    "key": "SYS_TT_TOTAL_FREE",
+    "pl": "TT-RAM razem / wolne",
+    "en": "TT-RAM total / free"
+  },
+  {
+    "key": "SYS_LARGEST_BLOCK",
+    "pl": "Najwiekszy blok ST",
+    "en": "Largest ST block"
+  },
+  {
+    "key": "SYS_ACTIVE_OUTPUT",
+    "pl": "Aktywne wyjscie",
+    "en": "Active output"
+  },
+  {
+    "key": "SYS_COLOURS",
+    "pl": " kolory",
+    "en": " colours"
+  },
+  {
+    "key": "SYS_OUTPUT_RESOLUTION",
+    "pl": "Rozdzielczosc wyjscia",
+    "en": "Output resolution"
+  },
+  {
+    "key": "SYS_APP_AREA",
+    "pl": "Obszar aplikacji",
+    "en": "Application area"
+  },
+  {
+    "key": "SYS_BIOS_CARD",
+    "pl": "Karta wykryta przez BIOS",
+    "en": "Card detected by BIOS"
+  },
+  {
+    "key": "SYS_USE_NEW_BIOS",
+    "pl": "brak danych; uzyj BIOS-u v9",
+    "en": "no data; use BIOS v9"
+  },
+  {
+    "key": "SYS_ADAPTER",
+    "pl": "Adapter karty",
+    "en": "Card adapter"
+  },
+  {
+    "key": "SYS_ENABLED",
+    "pl": "aktywny",
+    "en": "enabled"
+  },
+  {
+    "key": "SYS_DISABLED",
+    "pl": "obecny, wylaczony",
+    "en": "present, disabled"
+  },
+  {
+    "key": "SYS_FRAMES",
+    "pl": "klatek ",
+    "en": "frames "
+  },
+  {
+    "key": "SYS_COMPOSITOR",
+    "pl": "Kompozytor WM",
+    "en": "WM compositor"
+  },
+  {
+    "key": "SYS_CARD_NOTE",
+    "pl": "Wykryta karta nie oznacza, ze system jej teraz uzywa.",
+    "en": "A detected card is not necessarily the active output."
+  },
+  {
+    "key": "SYS_DEVICE_NO_MODEL",
+    "pl": "urzadzenie nie podalo modelu",
+    "en": "device did not report a model"
+  },
+  {
+    "key": "SYS_CONNECTION_VALUE",
+    "pl": "ACSI / port DMA / ID ",
+    "en": "ACSI / DMA port / ID "
+  },
+  {
+    "key": "SYS_CONNECTION",
+    "pl": "Podlaczenie",
+    "en": "Connection"
+  },
+  {
+    "key": "SYS_UNKNOWN_CAPACITY",
+    "pl": "nieustalona (READ CAPACITY niedostepne)",
+    "en": "unknown (READ CAPACITY unavailable)"
+  },
+  {
+    "key": "SYS_DISK_CAPACITY",
+    "pl": "Pojemnosc calego dysku",
+    "en": "Total disk capacity"
+  },
+  {
+    "key": "SYS_SECTORS",
+    "pl": " sektorow po 512 B",
+    "en": " sectors of 512 B"
+  },
+  {
+    "key": "SYS_PARTITIONS_KNOWN",
+    "pl": "Rozmiary partycji ponizej sa znane.",
+    "en": "Partition sizes below are known."
+  },
+  {
+    "key": "SYS_ADDRESSABLE",
+    "pl": "Adresowalny dysk",
+    "en": "Addressable disk"
+  },
+  {
+    "key": "SYS_CACHE_TT",
+    "pl": " KiB w TT-RAM",
+    "en": " KiB in TT-RAM"
+  },
+  {
+    "key": "SYS_CACHE_ST",
+    "pl": " KiB w ST-RAM",
+    "en": " KiB in ST-RAM"
+  },
+  {
+    "key": "SYS_CACHE",
+    "pl": "Cache systemowy",
+    "en": "System cache"
+  },
+  {
+    "key": "SYS_PARTITION_COLUMNS",
+    "pl": "Dysk  Typ   Start LBA       Pojemnosc         Startowy",
+    "en": "Disk  Type  Start LBA       Capacity         Boot"
+  },
+  {
+    "key": "SYS_YES",
+    "pl": "TAK",
+    "en": "YES"
+  },
+  {
+    "key": "SYS_PARTITION_HELP",
+    "pl": "PgUp/PgDn: partycje. Raport dotyczy dysku startowego ACSI.",
+    "en": "PgUp/PgDn: partitions. Report covers the ACSI boot disk."
+  },
+  {
+    "key": "SYS_RUNNING",
+    "pl": "trwa...",
+    "en": "running..."
+  },
+  {
+    "key": "SYS_NOT_RUN",
+    "pl": "jeszcze nie wykonano",
+    "en": "not run yet"
+  },
+  {
+    "key": "SYS_UNAVAILABLE",
+    "pl": "niedostepny / brak odpowiedniej pamieci",
+    "en": "unavailable / required memory missing"
+  },
+  {
+    "key": "SYS_MEASUREMENT_ERROR",
+    "pl": "blad pomiaru lub odczytu",
+    "en": "measurement or read error"
+  },
+  {
+    "key": "SYS_CANCELLED",
+    "pl": "przerwany",
+    "en": "cancelled"
+  },
+  {
+    "key": "SYS_BELOW_RESOLUTION",
+    "pl": "ponizej rozdzielczosci zegara",
+    "en": "below clock resolution"
+  },
+  {
+    "key": "SYS_LOOPS",
+    "pl": " petli/s",
+    "en": " loops/s"
+  },
+  {
+    "key": "SYS_CPU_TEST",
+    "pl": "CPU / arytmetyka 32-bit",
+    "en": "CPU / 32-bit arithmetic"
+  },
+  {
+    "key": "SYS_ST_TEST",
+    "pl": "ST-RAM / odczyt+zapis",
+    "en": "ST-RAM / read+write"
+  },
+  {
+    "key": "SYS_TT_TEST",
+    "pl": "TT-RAM / odczyt+zapis",
+    "en": "TT-RAM / read+write"
+  },
+  {
+    "key": "SYS_DISK_TEST",
+    "pl": "Dysk / odczyt ACSI",
+    "en": "Disk / ACSI read"
+  },
+  {
+    "key": "SYS_RAM_NOTE",
+    "pl": "RAM: blok 32 KiB; suma bajtow odczytanych i zapisanych.",
+    "en": "RAM: 32 KiB block; total bytes read and written."
+  },
+  {
+    "key": "SYS_DISK_NOTE",
+    "pl": "Dysk: tylko odczyt, poza cache OS; adapter moze miec cache.",
+    "en": "Disk: read-only, bypasses OS cache; adapter may cache reads."
+  },
+  {
+    "key": "SYS_CLOCK_NOTE",
+    "pl": "Zegar 50 Hz / 20 ms. Inne procesy wplywaja na wyniki.",
+    "en": "Clock: 50 Hz / 20 ms. Other processes affect results."
+  },
+  {
+    "key": "SYS_CPU_NOTE",
+    "pl": "CPU: petle testowe, nie MIPS ani pomiar MHz. Esc przerywa.",
+    "en": "CPU: test loops, not MIPS or measured MHz. Esc cancels."
+  },
+  {
+    "key": "SYS_HARDWARE_TAB",
+    "pl": "F1 Konfiguracja",
+    "en": "F1 Hardware"
+  },
+  {
+    "key": "SYS_DISK_TAB",
+    "pl": "F2 Dysk i partycje",
+    "en": "F2 Disk and partitions"
+  },
+  {
+    "key": "SYS_BENCH_TAB",
+    "pl": "F3 Benchmarki",
+    "en": "F3 Benchmarks"
+  },
+  {
+    "key": "SYS_MEASURING",
+    "pl": "Pomiar trwa. Esc: przerwij. Przelaczanie tts nadal dziala.",
+    "en": "Measuring. Esc: cancel. Switching tts sessions still works."
+  },
+  {
+    "key": "SYS_RAM_DONE",
+    "pl": "Test RAM zakonczony; niedostepne obszary pominieto.",
+    "en": "RAM test complete; unavailable regions skipped."
+  },
+  {
+    "key": "SYS_DONE",
+    "pl": "Pomiar zakonczony. Wyniki czasu rzeczywistego, bez zapisu dysku.",
+    "en": "Measurement complete. Wall-clock results; no disk writes."
+  },
+  {
+    "key": "SYS_DISK_ERROR",
+    "pl": "Blad odczytu dysku; nic nie zostalo zapisane.",
+    "en": "Disk read error; nothing was written."
+  },
+  {
+    "key": "SYS_STOPPED",
+    "pl": "Pomiar przerwany.",
+    "en": "Measurement cancelled."
+  },
+  {
+    "key": "SYS_REPORT_ERROR",
+    "pl": "Blad odczytu raportu systemowego.",
+    "en": "Cannot read the system report."
+  },
+  {
+    "key": "SYS_REFRESHED",
+    "pl": "Dane odswiezone.",
+    "en": "Data refreshed."
+  },
+  {
+    "key": "SYS_API_ERROR",
+    "pl": "SYSINFO: blad API lub brak raportu.\n",
+    "en": "SYSINFO: API error or system report unavailable.\n"
+  },
+  {
+    "key": "SET_TITLE",
+    "pl": "ATOS SETUP - Jezyk",
+    "en": "ATOS SETUP - Language"
+  },
+  {
+    "key": "SET_LANGUAGE",
+    "pl": "Jezyk aplikacji:",
+    "en": "Application language:"
+  },
+  {
+    "key": "SET_HELP",
+    "pl": "Strzalki: wybierz   Enter: zapisz   Esc: anuluj",
+    "en": "Arrows: select   Enter: save   Esc: cancel"
+  },
+  {
+    "key": "SET_NOTE",
+    "pl": "Zmiana dotyczy nowo uruchamianych aplikacji.",
+    "en": "The change applies to newly started applications."
+  },
+  {
+    "key": "SET_NOTE2",
+    "pl": "Zamknij i uruchom ponownie Commander oraz SYSINFO.",
+    "en": "Close and reopen Commander and SYSINFO."
+  },
+  {
+    "key": "SET_SAVED",
+    "pl": "Zapisano. Esc lub F10: wyjdz.",
+    "en": "Saved. Esc or F10: exit."
+  },
+  {
+    "key": "SET_ERROR",
+    "pl": "Nie zapisano ustawienia. Sprawdz plik LANGUAGE.CFG i dysk.",
+    "en": "Setting not saved. Check LANGUAGE.CFG and the disk."
+  },
+  {
+    "key": "SET_PACK_ERROR",
+    "pl": "Brak lub bledny pakiet jezykowy. Nie zapisano.",
+    "en": "Language pack missing or invalid. Setting not saved."
+  },
+  {
+    "key": "SET_CURRENT",
+    "pl": "Wybierz jezyk i zatwierdz klawiszem Enter.",
+    "en": "Select a language and press Enter."
+  },
+  {
+    "key": "SET_FALLBACK",
+    "pl": "Niepelny pakiet: brakujace wpisy sa po angielsku.",
+    "en": "Incomplete pack: missing entries use English."
+  },
+  {
+    "key": "SET_SAVE",
+    "pl": "Enter: Zapisz",
+    "en": "Enter: Save"
+  },
+  {
+    "key": "SET_EXIT",
+    "pl": "Esc: Wyjdz",
+    "en": "Esc: Exit"
+  },
+  {
+    "key": "SYS_KEY_HARDWARE",
+    "pl": "F1 Sprzet",
+    "en": "F1 HW"
+  },
+  {
+    "key": "SYS_KEY_DISK",
+    "pl": "F2 Dysk",
+    "en": "F2 Disk"
+  },
+  {
+    "key": "SYS_KEY_TESTS",
+    "pl": "F3 Testy",
+    "en": "F3 Tests"
+  },
+  {
+    "key": "SYS_KEY_START",
+    "pl": "F5 Start",
+    "en": "F5 Start"
+  },
+  {
+    "key": "SYS_KEY_REFRESH",
+    "pl": "F9 Odswiez",
+    "en": "F9 Refresh"
+  },
+  {
+    "key": "SYS_KEY_QUIT",
+    "pl": "F10 Koniec",
+    "en": "F10 Quit"
+  },
+  {
+    "key": "SYS_KEY_ALL",
+    "pl": "F5 Wszystko",
+    "en": "F5 All"
+  },
+  {
+    "key": "SYS_KEY_CPU",
+    "pl": "F6 CPU",
+    "en": "F6 CPU"
+  },
+  {
+    "key": "SYS_KEY_RAM",
+    "pl": "F7 RAM",
+    "en": "F7 RAM"
+  },
+  {
+    "key": "SYS_KEY_DISK_TEST",
+    "pl": "F8 Dysk",
+    "en": "F8 Disk"
+  },
+  {
+    "key": "CMD_COPY_GROUP",
+    "en": "Copy selected files (count below)",
+    "pl": "Kopiuj zaznaczone pliki (ponizej liczba)"
+  },
+  {
+    "key": "CMD_MARK_LIMIT",
+    "en": "Selection limit: 256 files. Copy this group first.",
+    "pl": "Limit zaznaczenia: 256 plikow. Skopiuj najpierw te grupe."
+  },
+  {
+    "key": "CMD_MENU_LEFT",
+    "en": "Left",
+    "pl": "Lewy"
+  },
+  {
+    "key": "CMD_MENU_RIGHT",
+    "en": "Right",
+    "pl": "Prawy"
+  },
+  {
+    "key": "CMD_SORT",
+    "en": "Sort:",
+    "pl": "Sortuj:"
+  },
+  {
+    "key": "CMD_SORT_NAME",
+    "en": "Name",
+    "pl": "Nazwa"
+  },
+  {
+    "key": "CMD_SORT_DATE",
+    "en": "Date",
+    "pl": "Data"
+  },
+  {
+    "key": "CMD_SORT_TYPE",
+    "en": "Type",
+    "pl": "Typ"
+  },
+  {
+    "key": "CMD_MENU_FILE",
+    "en": "File",
+    "pl": "Plik"
+  },
+  {
+    "key": "CMD_MENU_VIEW",
+    "en": "View",
+    "pl": "Podglad"
+  },
+  {
+    "key": "CMD_MENU_COPY",
+    "en": "Copy",
+    "pl": "Kopiuj"
+  },
+  {
+    "key": "CMD_MENU_RENAME",
+    "en": "Rename",
+    "pl": "Zmien nazwe"
+  },
+  {
+    "key": "CMD_MENU_MKDIR",
+    "en": "New folder",
+    "pl": "Nowy katalog"
+  },
+  {
+    "key": "CMD_MENU_DELETE",
+    "en": "Delete",
+    "pl": "Usun"
+  },
+  {
+    "key": "CMD_MENU_QUIT",
+    "en": "Quit",
+    "pl": "Wyjscie"
+  },
+  {
+    "key": "CMD_VIEW_TITLE",
+    "en": "View:",
+    "pl": "Podglad:"
+  },
+  {
+    "key": "CMD_VIEW_HELP",
+    "en": "Up/Down/PgUp/PgDn scroll   Esc/F3 close",
+    "pl": "Strzalki/PgUp/PgDn przewijaja   Esc/F3 zamyka"
+  },
+  {
+    "key": "CMD_RENAME_TITLE",
+    "en": "Rename to:",
+    "pl": "Nowa nazwa:"
+  },
+  {
+    "key": "CMD_RENAMING",
+    "en": "RENAMING",
+    "pl": "ZMIANA NAZWY"
+  },
+  {
+    "key": "CMD_ERR_OPEN",
+    "en": "CANNOT OPEN FILE",
+    "pl": "NIE MOZNA OTWORZYC PLIKU"
+  },
+  {
+    "key": "CMD_MENU_EDIT",
+    "en": "Edit",
+    "pl": "Edycja"
+  },
+  {
+    "key": "CMD_EDIT_TITLE",
+    "en": "Edit:",
+    "pl": "Edycja:"
+  },
+  {
+    "key": "CMD_EDIT_HELP",
+    "en": "Arrows: move  Enter/Backspace: edit  F2: save  F10: quit",
+    "pl": "Strzalki: ruch  Enter/Backspace: edycja  F2: zapis  F10: wyjscie"
+  },
+  {
+    "key": "CMD_SAVING",
+    "en": "SAVING",
+    "pl": "ZAPIS"
+  },
+  {
+    "key": "CMD_ERR_SAVE",
+    "en": "SAVE FAILED",
+    "pl": "ZAPIS NIEUDANY"
+  }
+]

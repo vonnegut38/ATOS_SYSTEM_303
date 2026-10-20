@@ -1,0 +1,213 @@
+--- TOS=0 profil + dynamiczne bufory (kernel_fat/kernel_wm) + przelacznik Makefile ---
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/Makefile"	2026-09-24 14:25:27.538549226 +0200
++++ Makefile	2026-09-24 21:41:47.228247497 +0200
+@@ -5,6 +5,16 @@
+ SIZE := $(CROSS)size
+ CFLAGS := -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude
+ ASFLAGS := -m68000 -ffreestanding -Iinclude
++# TOS persona (tos_prg.c/tos_vdi.c/tos_entry.S/tos_start.S) is optional at build
++# time: TOS=0 produces a smaller kernel for low-memory machines.
++TOS ?= 1
++ifeq ($(TOS),1)
++TOS_OBJS := build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o
++else
++TOS_OBJS :=
++endif
++CFLAGS += -DCONFIG_TOS=$(TOS)
++ASFLAGS += -DCONFIG_TOS=$(TOS)
+ LDFLAGS := -nostdlib -nostartfiles -Wl,-T,linker/mste-rom.ld -Wl,-Map,build/bios_mste.map -Wl,--gc-sections
+ 
+ OBJ := build/boot/reset.o build/boot/memdetect.o build/boot/exception.o build/boot/ramjump.o build/boot/mmu030.o build/boot/mmu_boot.o build/hw/machine.o \
+@@ -27,7 +37,7 @@
+ 
+ DEP += build/system/sysinfo.d
+ DEP += build/system/kernel_console.d build/system/text_terminal.d build/system/kernel_sessions.d
+-DEP += build/system/kernel_video.d build/system/kernel_video_boot.d build/system/vofa_et4000.d
++DEP += build/system/kernel_video.d build/system/kernel_video_boot.d build/system/vofa_et4000.d build/system/vofa_module.d build/system/vofa_entry.d
+ -include $(DEP)
+ 
+ .PHONY: all clean check toolchain hatari hatari-st hatari-rgb hatari-mono hatari-medium
+@@ -39,6 +49,7 @@
+ all: build/system/INIT.APP
+ all: build/system/GFX.APP build/system/GFXTEST.APP build/system/SURFTEST.APP build/system/GUI.APP build/system/GUITEST.APP build/system/GUIKEY.APP build/system/GUISTRM.APP build/system/GUIMOD.APP build/system/GUIMOUSE.APP build/system/DESKTOP.APP
+ all: build/system/PATH.APP
++all: build/system/VOFA.SYS
+ 
+ build/boot/mmu030.o: boot/mmu030.S
+ 	@mkdir -p $(@D)
+@@ -97,8 +108,8 @@
+ 	@mkdir -p $(@D)
+ 	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
+ 
+-build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
+-	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
++build/system/KERNEL.SYS: build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o $(TOS_OBJS) build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o linker/kernel-sys.ld tools/patch_boot_checksum.py
++	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o $(TOS_OBJS) build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+ 	$(OBJCOPY) -O binary build/system/kernel.elf $@
+ 	python3 tools/patch_boot_checksum.py $@
+ 
+@@ -1169,7 +1180,15 @@
+ build/system/kernel_video_boot.o: system/kernel_video_boot.c
+ 	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
+ build/system/vofa_et4000.o: system/vofa_et4000.c
+-	$(CC) $(CFLAGS) -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++	$(CC) $(CFLAGS) -mpcrel -fno-tree-loop-distribute-patterns -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++build/system/vofa_entry.o: system/vofa_entry.S
++	$(CC) $(ASFLAGS) -c $< -o $@
++build/system/vofa_module.o: system/vofa_module.c include/kernel_video_service.h include/kernel_module.h
++	$(CC) $(CFLAGS) -mpcrel -fno-tree-loop-distribute-patterns -MMD -MP -ffunction-sections -fdata-sections -c $< -o $@
++build/system/VOFA.SYS: build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o linker/vofa-module-sys.ld tools/patch_boot_checksum.py
++	$(CC) -m68000 -nostdlib -nostartfiles -Wl,-T,linker/vofa-module-sys.ld -Wl,--gc-sections -o build/system/vofa_module.elf build/system/vofa_entry.o build/system/vofa_module.o build/system/vofa_et4000.o
++	$(OBJCOPY) -O binary build/system/vofa_module.elf $@
++	python3 tools/patch_boot_checksum.py $@
+ build/system/video_bus.o: system/video_bus.S
+ 	$(CC) $(ASFLAGS) -c $< -o $@
+ 
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_main.c"	2026-09-24 16:18:32.546516260 +0200
++++ system/kernel_main.c	2026-09-24 21:42:09.354315844 +0200
+@@ -83,6 +83,7 @@
+ 
+ extern void kgfx_gem_desktop_sticky(int on);
+ 
++#if CONFIG_TOS
+ /* Low-memory sysvars (TOS ABI): a constant address cast trips
+    -Werror=array-bounds, so the stores go through inline asm. */
+ static void lm_wr32(void *address,uint32_t value)
+@@ -108,6 +109,7 @@
+     kgfx_gem_desktop_sticky(1);
+     kgfx_enter_desktop();
+ }
++#endif
+ 
+ typedef struct {const char *path,*name;uint32_t timeout_ticks;} startup_service_t;
+ 
+@@ -255,19 +257,25 @@
+         {uint16_t pitch=80u;uint8_t bpp=0u;uint8_t *fb;
+          runtime_handoff.console_puts("COMPOSITOR (WM): ");
+          runtime_handoff.console_puts("DISABLED / TEXT PROFILE\n");
++#if CONFIG_TOS
+          kernel_tos_set_console(kconsole_puts);
+          kernel_tos_set_trace(runtime_handoff.console_puts);
+          kernel_tos_set_console_clear(kconsole_clear);
+          kernel_tos_set_cpu(runtime_handoff.cpu_type);
+          kernel_tos_set_input(kernel_user_terminal_getchar);
+          kernel_tos_set_video(tos_enter_screen,kgfx_restore_console,kgfx_clear,tos_fill,tos_text,0);
++#endif
+          runtime_handoff.console_puts("ATOS 2.0: NATIVE TEXT SESSIONS 80x25\n");
+          ksessions_init(shell,runtime_handoff.video_mode==2u?~0:0);
+          shell->start();
+          fb=kgfx_framebuffer(&pitch,&bpp);
++#if CONFIG_TOS
+          if(fb){tos_vdi_set_surface(fb,pitch);lm_wr32((void *)(uintptr_t)0x44Eu,(uint32_t)(uintptr_t)fb);}
+          lm_wr32((void *)(uintptr_t)0x4F2u,(uint32_t)(uintptr_t)tos_syshdr);
+          lm_wr16((void *)(uintptr_t)0x4BAu,0u);
++#else
++         (void)fb;
++#endif
+         }
+         for(;;){
+             uint32_t terminal_result;
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_entry.S"	2026-09-24 16:06:19.542991498 +0200
++++ system/kernel_entry.S	2026-09-24 21:41:34.779597061 +0200
+@@ -237,6 +237,7 @@
+     move.l  #4,-(%sp)
+     jsr     irq_dispatch
+     addq.l  #4,%sp
++#if CONFIG_TOS
+     jsr tos_composite_tick
+     /* G1.3b: preemptive TOS task switch.  Returns 0 while a single task
+        exists, so this is a no-op until the scheduler is enabled. */
+@@ -247,6 +248,7 @@
+     beq.s 8f
+     move.l %d0,%sp
+ 8:
++#endif
+     bclr #5,0xfffffa11
+     moveq #0,%d0
+     move.w 60(%sp),%d0
+@@ -589,6 +591,11 @@
+     move.l 0(%a0,%d1.w),%sp
+     moveq #0,%d0
+     movem.l (%sp)+,%d2-%d7/%a2-%a6
++    /* This path returns to the supervisor with RTS instead of RTE, so the
++       Timer-C exception's SR (IPL6, IRQ6 masked) would leak into the main
++       loop. Restore the kernel's baseline supervisor SR (S=1, IPL5): the
++       same level used when a native process is entered below (0x0500 user). */
++    move.w #0x2500,%sr
+     rts
+ 
+ kernel_user_depth_failed:
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_fat.c"	2026-09-18 23:21:46.000000000 +0200
++++ system/kernel_fat.c	2026-09-24 21:42:46.766175860 +0200
+@@ -1,5 +1,6 @@
+ #include "kernel_fat.h"
+ #include "kernel_block.h"
++#include "kernel_memory.h"
+ 
+ static uint8_t sector_buffer[512];
+ static char partition_id[4];
+@@ -292,7 +293,7 @@
+  * on-disk crash journal: interrupted writes leave the FAT dirty. */
+ #define TX_SECTORS 128u
+ #define COPY_LIMIT (1024u*1024u)
+-static struct {uint32_t lba;uint8_t old[512];} undo[TX_SECTORS];
++static struct {uint32_t lba;uint8_t old[512];} *undo; /* 66 KB, only for writes */
+ static unsigned undo_count;
+ static uint8_t chain_seen[8192],io_data[512];
+ static void put16(uint8_t *p,uint16_t v){p[0]=v;p[1]=v>>8;}
+@@ -300,7 +301,9 @@
+ static int valid_cluster(uint16_t c){return c>=2u&&c<0xfff0u&&(uint32_t)c<cluster_count+2u;}
+ static int tx_write(uint32_t lba,const uint8_t *data)
+ {
+-    unsigned i;for(i=0;i<undo_count;i++)if(undo[i].lba==lba)break;
++    unsigned i;
++    if(!undo){undo=kmem_alloc(TX_SECTORS*(uint32_t)sizeof(*undo),16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,0);if(!undo)return -FAT_WRITE_LIMIT;}
++    for(i=0;i<undo_count;i++)if(undo[i].lba==lba)break;
+     if(i==undo_count){if(i==TX_SECTORS)return -FAT_WRITE_LIMIT;
+         if(!kblock_read(lba,1,undo[i].old))return -FAT_WRITE_IO;
+         undo[i].lba=lba;undo_count++;}
+--- "/Users/xxx/Documents/Codex/ATOS 2.0/system/kernel_wm.c"	2026-09-22 17:01:43.000000000 +0200
++++ system/kernel_wm.c	2026-09-24 21:42:46.810055221 +0200
+@@ -8,6 +8,7 @@
+ #include "wm_core.h"
+ extern desktop_module_t desktop_mod_clock;
+ #include "wm_blit.h"
++#include "kernel_memory.h"
+ 
+ #define WM_SURFACE_MAX 4u
+ 
+@@ -315,7 +316,7 @@
+ 
+ /* The console as a compositor window: its grid is rendered into a private
+    surface and composed like any other window. Inset so the desktop shows. */
+-static uint8_t console_surface[32000];
++static uint8_t *console_surface; /* 32 KB, only when the WM runs */
+ /* A low strip showing the last console rows (where the prompt and the typed
+    text live) so the desktop and the application windows stay visible. */
+ /* The console is a bottom strip; the application window owns the top.
+@@ -337,7 +338,7 @@
+ #define CONSOLE_WY 96
+ #define CONSOLE_WW 640
+ #define CONSOLE_WH 288
+-static uint8_t app_surface[2][32000];
++static uint8_t *app_surface[2]; /* 2x32 KB, only for GUI windows */
+ static uint32_t app_surface_pid[2];
+ static uint8_t app_surface_used[2];
+ uint8_t *kernel_wm_app_surface(uint32_t pid)
+@@ -348,6 +349,8 @@
+     for(i=0;i<2u;++i)if(!app_surface_used[i])break;
+     if(i==2u)return 0;
+     slot=i;app_surface_used[i]=1u;app_surface_pid[i]=pid;
++    if(!app_surface[slot]){app_surface[slot]=kmem_alloc(32000u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,0);
++        if(!app_surface[slot]){app_surface_used[slot]=0u;return 0;}}
+     for(i=0;i<32000u;++i)app_surface[slot][i]=0u;
+     /* Register the application's window next to the console window. */
+     if((console_registered||console_hidden||kgfx_desktop_active())&&wm.count<WM_MAX){
+@@ -419,6 +422,7 @@
+        and the prompt only returns on the shell's own refresh, which looked
+        broken. Text wrapping comes back once prompt refresh is coordinated. */
+     kconsole_set_grid(80u,18u);   /* dopasowane do okna 480x288: pulpit widoczny */
++    if(!console_surface){console_surface=kmem_alloc(32000u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,0);if(!console_surface)return;}
+     if(!kgfx_console_render(kconsole_cells(ksessions_current()),console_surface,&dx,&dy,&dw,&dh))return;
+     if(!console_registered){                     /* register once, not per flush */
+         wm_init(&wm,640,400);

@@ -1,0 +1,2585 @@
+Archive member included to satisfy reference by file (symbol)
+
+obj/libfont.a(fnt_st_6x6.o)   obj/country.o (_fnt_st_6x6)
+obj/libfont.a(fnt_st_8x8.o)   obj/country.o (_fnt_st_8x8)
+obj/libfont.a(fnt_st_8x16.o)  obj/country.o (_fnt_st_8x16)
+/opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+                              (__mulsi3)
+/opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+                              (__udivsi3)
+
+Discarded input sections
+
+ .comment       0x00000000       0x13 obj/lowstram.o
+ .comment       0x00000000       0x13 obj/bios.o
+ .comment       0x00000000       0x13 obj/xbios.o
+ .comment       0x00000000       0x13 obj/acsi.o
+ .comment       0x00000000       0x13 obj/biosmem.o
+ .comment       0x00000000       0x13 obj/blkdev.o
+ .comment       0x00000000       0x13 obj/chardev.o
+ .comment       0x00000000       0x13 obj/clock.o
+ .comment       0x00000000       0x13 obj/conout.o
+ .comment       0x00000000       0x13 obj/country.o
+ .comment       0x00000000       0x13 obj/disk.o
+ .comment       0x00000000       0x13 obj/dma.o
+ .comment       0x00000000       0x13 obj/dmasound.o
+ .comment       0x00000000       0x13 obj/floppy.o
+ .comment       0x00000000       0x13 obj/font.o
+ .comment       0x00000000       0x13 obj/ide.o
+ .comment       0x00000000       0x13 obj/ikbd.o
+ .comment       0x00000000       0x13 obj/initinfo.o
+ .comment       0x00000000       0x13 obj/kprint.o
+ .comment       0x00000000       0x13 obj/lineainit.o
+ .comment       0x00000000       0x13 obj/machine.o
+ .comment       0x00000000       0x13 obj/mfp.o
+ .comment       0x00000000       0x13 obj/midi.o
+ .comment       0x00000000       0x13 obj/mouse.o
+ .comment       0x00000000       0x13 obj/natfeats.o
+ .comment       0x00000000       0x13 obj/nvram.o
+ .comment       0x00000000       0x13 obj/parport.o
+ .comment       0x00000000       0x13 obj/screen.o
+ .comment       0x00000000       0x13 obj/serport.o
+ .comment       0x00000000       0x13 obj/sound.o
+ .comment       0x00000000       0x13 obj/videl.o
+ .comment       0x00000000       0x13 obj/vt52.o
+ .comment       0x00000000       0x13 obj/xhdi.o
+ .comment       0x00000000       0x13 obj/pmmu030.o
+ .comment       0x00000000       0x13 obj/amiga.o
+ .comment       0x00000000       0x13 obj/spi_vamp.o
+ .comment       0x00000000       0x13 obj/lisa.o
+ .comment       0x00000000       0x13 obj/delay.o
+ .comment       0x00000000       0x13 obj/sd.o
+ .comment       0x00000000       0x13 obj/memory2.o
+ .comment       0x00000000       0x13 obj/bootparams.o
+ .comment       0x00000000       0x13 obj/scsi.o
+ .comment       0x00000000       0x13 obj/nova.o
+ .comment       0x00000000       0x13 obj/dsp.o
+ .comment       0x00000000       0x13 obj/scsidriv.o
+ .comment       0x00000000       0x13 obj/bdosmain.o
+ .comment       0x00000000       0x13 obj/console.o
+ .comment       0x00000000       0x13 obj/fsbuf.o
+ .comment       0x00000000       0x13 obj/fsdir.o
+ .comment       0x00000000       0x13 obj/fsdrive.o
+ .comment       0x00000000       0x13 obj/fsfat.o
+ .comment       0x00000000       0x13 obj/fsglob.o
+ .comment       0x00000000       0x13 obj/fshand.o
+ .comment       0x00000000       0x13 obj/fsio.o
+ .comment       0x00000000       0x13 obj/fsmain.o
+ .comment       0x00000000       0x13 obj/fsopnclo.o
+ .comment       0x00000000       0x13 obj/iumem.o
+ .comment       0x00000000       0x13 obj/kpgmld.o
+ .comment       0x00000000       0x13 obj/osmem.o
+ .comment       0x00000000       0x13 obj/proc.o
+ .comment       0x00000000       0x13 obj/time.o
+ .comment       0x00000000       0x13 obj/umem.o
+ .comment       0x00000000       0x13 obj/cookie.o
+ .comment       0x00000000       0x13 obj/doprintf.o
+ .comment       0x00000000       0x13 obj/intmath.o
+ .comment       0x00000000       0x13 obj/langs.o
+ .comment       0x00000000       0x13 obj/nls.o
+ .comment       0x00000000       0x13 obj/string.o
+ .comment       0x00000000       0x13 obj/miscutil.o
+ .comment       0x00000000       0x13 obj/gemdos.o
+ .comment       0x00000000       0x13 obj/optimize.o
+ .comment       0x00000000       0x13 obj/rectfunc.o
+ .comment       0x00000000       0x13 obj/fnt_off_6x6.o
+ .comment       0x00000000       0x13 obj/fnt_off_8x8.o
+ .comment       0x00000000       0x13 obj/libfont.a(fnt_st_6x6.o)
+ .comment       0x00000000       0x13 obj/libfont.a(fnt_st_8x8.o)
+ .comment       0x00000000       0x13 obj/libfont.a(fnt_st_8x16.o)
+ .comment       0x00000000       0x13 obj/version.o
+ .comment       0x00000000       0x13 obj/vdi_bezier.o
+ .comment       0x00000000       0x13 obj/vdi_col.o
+ .comment       0x00000000       0x13 obj/vdi_control.o
+ .comment       0x00000000       0x13 obj/vdi_esc.o
+ .comment       0x00000000       0x13 obj/vdi_fill.o
+ .comment       0x00000000       0x13 obj/vdi_gdp.o
+ .comment       0x00000000       0x13 obj/vdi_input.o
+ .comment       0x00000000       0x13 obj/vdi_line.o
+ .comment       0x00000000       0x13 obj/vdi_main.o
+ .comment       0x00000000       0x13 obj/vdi_marker.o
+ .comment       0x00000000       0x13 obj/vdi_misc.o
+ .comment       0x00000000       0x13 obj/vdi_mouse.o
+ .comment       0x00000000       0x13 obj/vdi_raster.o
+ .comment       0x00000000       0x13 obj/vdi_text.o
+ .comment       0x00000000       0x13 obj/vdi_textblit.o
+ .comment       0x00000000       0x13 obj/gemaplib.o
+ .comment       0x00000000       0x13 obj/gemasync.o
+ .comment       0x00000000       0x13 obj/gemctrl.o
+ .comment       0x00000000       0x13 obj/gemdisp.o
+ .comment       0x00000000       0x13 obj/gemevlib.o
+ .comment       0x00000000       0x13 obj/gemflag.o
+ .comment       0x00000000       0x13 obj/gemfmalt.o
+ .comment       0x00000000       0x13 obj/gemfmlib.o
+ .comment       0x00000000       0x13 obj/gemfslib.o
+ .comment       0x00000000       0x13 obj/gemgraf.o
+ .comment       0x00000000       0x13 obj/gemgrlib.o
+ .comment       0x00000000       0x13 obj/gemgsxif.o
+ .comment       0x00000000       0x13 obj/geminit.o
+ .comment       0x00000000       0x13 obj/geminput.o
+ .comment       0x00000000       0x13 obj/gemmnext.o
+ .comment       0x00000000       0x13 obj/gemmnlib.o
+ .comment       0x00000000       0x13 obj/gemobed.o
+ .comment       0x00000000       0x13 obj/gemobjop.o
+ .comment       0x00000000       0x13 obj/gemoblib.o
+ .comment       0x00000000       0x13 obj/gempd.o
+ .comment       0x00000000       0x13 obj/gemqueue.o
+ .comment       0x00000000       0x13 obj/gemrslib.o
+ .comment       0x00000000       0x13 obj/gemsclib.o
+ .comment       0x00000000       0x13 obj/gemshlib.o
+ .comment       0x00000000       0x13 obj/gemsuper.o
+ .comment       0x00000000       0x13 obj/gemwmlib.o
+ .comment       0x00000000       0x13 obj/gemwrect.o
+ .comment       0x00000000       0x13 obj/gsx2.o
+ .comment       0x00000000       0x13 obj/gem_rsc.o
+ .comment       0x00000000       0x13 obj/mforms.o
+ .comment       0x00000000       0x13 obj/deskmain.o
+ .comment       0x00000000       0x13 obj/gembind.o
+ .comment       0x00000000       0x13 obj/deskact.o
+ .comment       0x00000000       0x13 obj/deskapp.o
+ .comment       0x00000000       0x13 obj/deskdir.o
+ .comment       0x00000000       0x13 obj/deskfpd.o
+ .comment       0x00000000       0x13 obj/deskfun.o
+ .comment       0x00000000       0x13 obj/deskglob.o
+ .comment       0x00000000       0x13 obj/deskinf.o
+ .comment       0x00000000       0x13 obj/deskins.o
+ .comment       0x00000000       0x13 obj/deskobj.o
+ .comment       0x00000000       0x13 obj/deskpro.o
+ .comment       0x00000000       0x13 obj/deskrez.o
+ .comment       0x00000000       0x13 obj/deskrsrc.o
+ .comment       0x00000000       0x13 obj/desksupp.o
+ .comment       0x00000000       0x13 obj/deskwin.o
+ .comment       0x00000000       0x13 obj/desk_rsc.o
+ .comment       0x00000000       0x13 obj/icons.o
+ .comment       0x00000000       0x13 obj/cmdmain.o
+ .comment       0x00000000       0x13 obj/cmdedit.o
+ .comment       0x00000000       0x13 obj/cmdexec.o
+ .comment       0x00000000       0x13 obj/cmdint.o
+ .comment       0x00000000       0x13 obj/cmdparse.o
+ .comment       0x00000000       0x13 obj/cmdutil.o
+ .comment       0x00000000       0x13 obj/endrom.o
+ .debug_line    0x00000000       0x54 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_line_str
+                0x00000000       0x8a /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_info    0x00000000       0x24 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_abbrev  0x00000000       0x14 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_aranges
+                0x00000000       0x20 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_str     0x00000000       0x96 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .debug_line    0x00000000       0x6d /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+ .debug_line_str
+                0x00000000       0x8a /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+ .debug_info    0x00000000       0x24 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+ .debug_abbrev  0x00000000       0x14 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+ .debug_aranges
+                0x00000000       0x20 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+ .debug_str     0x00000000       0x96 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+
+Memory Configuration
+
+Name             Origin             Length             Attributes
+stram            0x00000000         0x00e00000
+*default*        0x00000000         0xffffffff
+
+Linker script and memory map
+
+LOAD obj/startup.o
+LOAD obj/lowstram.o
+LOAD obj/memory.o
+LOAD obj/processor.o
+LOAD obj/vectors.o
+LOAD obj/aciavecs.o
+LOAD obj/bios.o
+LOAD obj/xbios.o
+LOAD obj/acsi.o
+LOAD obj/biosmem.o
+LOAD obj/blkdev.o
+LOAD obj/chardev.o
+LOAD obj/clock.o
+LOAD obj/conout.o
+LOAD obj/country.o
+LOAD obj/disk.o
+LOAD obj/dma.o
+LOAD obj/dmasound.o
+LOAD obj/floppy.o
+LOAD obj/font.o
+LOAD obj/ide.o
+LOAD obj/ikbd.o
+LOAD obj/initinfo.o
+LOAD obj/kprint.o
+LOAD obj/kprintasm.o
+LOAD obj/linea.o
+LOAD obj/lineainit.o
+LOAD obj/lineavars.o
+LOAD obj/machine.o
+LOAD obj/mfp.o
+LOAD obj/midi.o
+LOAD obj/mouse.o
+LOAD obj/natfeat.o
+LOAD obj/natfeats.o
+LOAD obj/nvram.o
+LOAD obj/panicasm.o
+LOAD obj/parport.o
+LOAD obj/screen.o
+LOAD obj/serport.o
+LOAD obj/sound.o
+LOAD obj/videl.o
+LOAD obj/vt52.o
+LOAD obj/xhdi.o
+LOAD obj/pmmu030.o
+LOAD obj/68040_pmmu.o
+LOAD obj/amiga.o
+LOAD obj/amiga2.o
+LOAD obj/spi_vamp.o
+LOAD obj/lisa.o
+LOAD obj/lisa2.o
+LOAD obj/delay.o
+LOAD obj/delayasm.o
+LOAD obj/sd.o
+LOAD obj/memory2.o
+LOAD obj/bootparams.o
+LOAD obj/scsi.o
+LOAD obj/nova.o
+LOAD obj/dsp.o
+LOAD obj/dsp2.o
+LOAD obj/scsidriv.o
+LOAD obj/bdosmain.o
+LOAD obj/console.o
+LOAD obj/fsbuf.o
+LOAD obj/fsdir.o
+LOAD obj/fsdrive.o
+LOAD obj/fsfat.o
+LOAD obj/fsglob.o
+LOAD obj/fshand.o
+LOAD obj/fsio.o
+LOAD obj/fsmain.o
+LOAD obj/fsopnclo.o
+LOAD obj/iumem.o
+LOAD obj/kpgmld.o
+LOAD obj/osmem.o
+LOAD obj/proc.o
+LOAD obj/rwa.o
+LOAD obj/time.o
+LOAD obj/umem.o
+LOAD obj/cookie.o
+LOAD obj/doprintf.o
+LOAD obj/intmath.o
+LOAD obj/langs.o
+LOAD obj/memmove.o
+LOAD obj/memset.o
+LOAD obj/miscasm.o
+LOAD obj/nls.o
+LOAD obj/setjmp.o
+LOAD obj/string.o
+LOAD obj/lisautil.o
+LOAD obj/miscutil.o
+LOAD obj/gemdos.o
+LOAD obj/optimize.o
+LOAD obj/optimopt.o
+LOAD obj/rectfunc.o
+LOAD obj/stringasm.o
+LOAD obj/fnt_off_6x6.o
+LOAD obj/fnt_off_8x8.o
+LOAD obj/libfont.a
+LOAD obj/version.o
+LOAD /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a
+LOAD obj/vdi_asm.o
+LOAD obj/vdi_bezier.o
+LOAD obj/vdi_col.o
+LOAD obj/vdi_control.o
+LOAD obj/vdi_esc.o
+LOAD obj/vdi_fill.o
+LOAD obj/vdi_gdp.o
+LOAD obj/vdi_input.o
+LOAD obj/vdi_line.o
+LOAD obj/vdi_main.o
+LOAD obj/vdi_marker.o
+LOAD obj/vdi_misc.o
+LOAD obj/vdi_mouse.o
+LOAD obj/vdi_raster.o
+LOAD obj/vdi_text.o
+LOAD obj/vdi_textblit.o
+LOAD obj/vdi_blit.o
+LOAD obj/vdi_tblit.o
+LOAD obj/endvdi.o
+LOAD obj/gemasm.o
+LOAD obj/gemstart.o
+LOAD obj/gemdosif.o
+LOAD obj/gemaplib.o
+LOAD obj/gemasync.o
+LOAD obj/gemctrl.o
+LOAD obj/gemdisp.o
+LOAD obj/gemevlib.o
+LOAD obj/gemflag.o
+LOAD obj/gemfmalt.o
+LOAD obj/gemfmlib.o
+LOAD obj/gemfslib.o
+LOAD obj/gemgraf.o
+LOAD obj/gemgrlib.o
+LOAD obj/gemgsxif.o
+LOAD obj/geminit.o
+LOAD obj/geminput.o
+LOAD obj/gemmnext.o
+LOAD obj/gemmnlib.o
+LOAD obj/gemobed.o
+LOAD obj/gemobjop.o
+LOAD obj/gemoblib.o
+LOAD obj/gempd.o
+LOAD obj/gemqueue.o
+LOAD obj/gemrslib.o
+LOAD obj/gemsclib.o
+LOAD obj/gemshlib.o
+LOAD obj/gemsuper.o
+LOAD obj/gemwmlib.o
+LOAD obj/gemwrect.o
+LOAD obj/gsx2.o
+LOAD obj/gem_rsc.o
+LOAD obj/mforms.o
+LOAD obj/deskstart.o
+LOAD obj/deskmain.o
+LOAD obj/gembind.o
+LOAD obj/deskact.o
+LOAD obj/deskapp.o
+LOAD obj/deskdir.o
+LOAD obj/deskfpd.o
+LOAD obj/deskfun.o
+LOAD obj/deskglob.o
+LOAD obj/deskinf.o
+LOAD obj/deskins.o
+LOAD obj/deskobj.o
+LOAD obj/deskpro.o
+LOAD obj/deskrez.o
+LOAD obj/deskrsrc.o
+LOAD obj/desksupp.o
+LOAD obj/deskwin.o
+LOAD obj/desk_rsc.o
+LOAD obj/icons.o
+LOAD obj/cmdasm.o
+LOAD obj/cmdmain.o
+LOAD obj/cmdedit.o
+LOAD obj/cmdexec.o
+LOAD obj/cmdint.o
+LOAD obj/cmdparse.o
+LOAD obj/cmdutil.o
+LOAD /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a
+LOAD obj/endrom.o
+
+.first_stram    0x00000000      0x800
+                0x00000380                        _proc_lives = 0x380
+                0x00000384                        _proc_dregs = 0x384
+                0x000003a4                        _proc_aregs = 0x3a4
+                0x000003c4                        _proc_enum = 0x3c4
+                0x000003c8                        _proc_usp = 0x3c8
+                0x000003cc                        _proc_stk = 0x3cc
+                0x00000400                        sysvars_start = 0x400
+                0x00000400                        _etv_timer = 0x400
+                0x00000404                        _etv_critic = 0x404
+                0x00000408                        _etv_term = 0x408
+                0x0000040c                        _etv_xtra = 0x40c
+                0x00000420                        _memvalid = 0x420
+                0x00000420                        memvalid = _memvalid
+                0x00000424                        memctrl = 0x424
+                0x00000426                        resvalid = 0x426
+                0x0000042a                        resvector = 0x42a
+                0x0000042e                        _phystop = 0x42e
+                0x00000432                        _membot = 0x432
+                0x00000436                        _memtop = 0x436
+                0x0000043a                        _memval2 = 0x43a
+                0x0000043a                        memval2 = _memval2
+                0x0000043e                        _flock = 0x43e
+                0x00000440                        _seekrate = 0x440
+                0x00000442                        _timer_ms = 0x442
+                0x00000444                        _fverify = 0x444
+                0x00000446                        _bootdev = 0x446
+                0x00000448                        _palmode = 0x448
+                0x0000044a                        _defshiftmod = 0x44a
+                0x0000044c                        _sshiftmod = 0x44c
+                0x0000044e                        _v_bas_ad = 0x44e
+                0x00000452                        _vblsem = 0x452
+                0x00000454                        _nvbls = 0x454
+                0x00000456                        _vblqueue = 0x456
+                0x0000045a                        _colorptr = 0x45a
+                0x0000045e                        _screenpt = 0x45e
+                0x00000462                        _vbclock = 0x462
+                0x00000466                        _frclock = 0x466
+                0x0000046a                        _hdv_init = 0x46a
+                0x0000046e                        _swv_vec = 0x46e
+                0x00000472                        _hdv_bpb = 0x472
+                0x00000476                        _hdv_rw = 0x476
+                0x0000047a                        _hdv_boot = 0x47a
+                0x0000047e                        _hdv_mediach = 0x47e
+                0x00000482                        _cmdload = 0x482
+                0x00000484                        _conterm = 0x484
+                0x00000486                        trp14ret = 0x486
+                0x0000048a                        criticret = 0x48a
+                0x0000048e                        _themd = 0x48e
+                0x0000049e                        ____md = 0x49e
+                0x000004a2                        _savptr = 0x4a2
+                0x000004a6                        _nflops = 0x4a6
+                0x000004a8                        _con_state = 0x4a8
+                0x000004ac                        _save_row = 0x4ac
+                0x000004ae                        sav_context = 0x4ae
+                0x000004b2                        _bufl = 0x4b2
+                0x000004ba                        _hz_200 = 0x4ba
+                0x000004be                        the_env = 0x4be
+                0x000004c2                        _drvbits = 0x4c2
+                0x000004c6                        _dskbufp = 0x4c6
+                0x000004ca                        _autopath = 0x4ca
+                0x000004ce                        _vbl_list = 0x4ce
+                0x000004ee                        _dumpflg = 0x4ee
+                0x000004f0                        _prtabt = 0x4f0
+                0x000004f2                        _sysbase = 0x4f2
+                0x000004f6                        _shell_p = 0x4f6
+                0x000004fa                        _end_os = 0x4fa
+                0x000004fe                        _exec_os = 0x4fe
+                0x00000502                        _dump_vec = 0x502
+                0x00000506                        _prt_stat = 0x506
+                0x0000050a                        _prt_vec = 0x50a
+                0x0000050e                        _aux_stat = 0x50e
+                0x00000512                        _aux_vec = 0x512
+                0x00000516                        _pun_ptr = 0x516
+                0x0000051a                        _memval3 = 0x51a
+                0x0000051a                        memval3 = _memval3
+                0x0000051e                        _bconstat_vec = 0x51e
+                0x0000053e                        _bconin_vec = 0x53e
+                0x0000055e                        _bcostat_vec = 0x55e
+                0x0000057e                        _bconout_vec = 0x57e
+                0x0000059e                        _longframe = 0x59e
+                0x000005a0                        _p_cookies = 0x5a0
+                0x000005a4                        _ramtop = 0x5a4
+                0x000005a8                        _ramvalid = 0x5a8
+                0x000005ac                        _bell_hook = 0x5ac
+                0x000005b0                        _kcl_hook = 0x5b0
+                0x000006fc                        _warm_magic = 0x6fc
+                0x00000700                        _pmmutree = 0x700
+                0x00000001                        ASSERT (((ABSOLUTE (_pmmutree) & 0xf) == 0x0), error: bad _pmmutree alignment)
+                0x00000800                        . = 0x800
+ *fill*         0x00000000      0x800 
+                0x00000800                        sysvars_end = .
+
+.stack          0x00000800      0x800
+                0x00000800                        _stkbot = .
+                0x00001000                        . = (. + 0x800)
+ *fill*         0x00000800      0x800 
+                0x00001000                        _stktop = .
+
+.low_stram      0x00001000     0x1140
+                0x00001000                        __low_stram_start = .
+ obj/lowstram.o(.bss COMMON)
+ .bss           0x00001000      0xd38 obj/lowstram.o
+                0x00001000                _shifty
+                0x00001001                _dskbuf_alignment
+                0x00001004                _dskbuf
+                0x00001c04                _phys_work
+ obj/lineavars.o(.bss COMMON)
+ .bss           0x00001d38      0x408 obj/lineavars.o
+                0x00001d3c                _CUR_FONT
+                0x00001d6e                _m_pos_hx
+                0x00001d6e                _mouse_cdb
+                0x00001d70                _m_pos_hy
+                0x00001d74                _m_cdb_bg
+                0x00001d76                _m_cdb_fg
+                0x00001d78                _mask_form
+                0x00001db8                _INQ_TAB
+                0x00001e12                _DEV_TAB
+                0x00001e6c                _mdata
+                0x00001e6c                _GCURX
+                0x00001e6e                _GCURY
+                0x00001e70                _HIDE_CNT
+                0x00001e72                _MOUSE_BT
+                0x00001e74                _REQ_COL
+                0x00001ed4                _SIZ_TAB
+                0x00001ef2                _TERM_CH
+                0x00001ef4                _chc_mode
+                0x00001ef6                _CUR_WORK
+                0x00001efa                _def_font
+                0x00001efe                _font_ring
+                0x00001f0e                _font_count
+                0x00001f10                _line_cw
+                0x00001f12                _loc_mode
+                0x00001f64                _num_qc_lines
+                0x00001f66                _str_mode
+                0x00001f68                _val_mode
+                0x00001f6a                _cur_ms_stat
+                0x00001f6c                _disab_cnt
+                0x00001f6e                _newx
+                0x00001f70                _newy
+                0x00001f72                _draw_flag
+                0x00001f73                _mouse_flag
+                0x00001f74                _sav_cur_x
+                0x00001f76                _sav_cur_y
+                0x00001f78                retsav
+                0x00001f7c                _mouse_cursor_save
+                0x00002084                _tim_addr
+                0x00002088                _tim_chain
+                0x0000208c                _user_but
+                0x00002090                _user_cur
+                0x00002094                _user_mot
+                0x00002098                _v_cel_ht
+                0x0000209a                _v_cel_mx
+                0x0000209c                _v_cel_my
+                0x0000209e                _v_cel_wr
+                0x000020a0                _v_col_bg
+                0x000020a2                _v_col_fg
+                0x000020a4                _v_cur_ad
+                0x000020a8                _v_cur_of
+                0x000020aa                _v_cur_cx
+                0x000020ac                _v_cur_cy
+                0x000020ae                _v_period
+                0x000020af                _v_cur_tim
+                0x000020b0                _v_fnt_ad
+                0x000020b4                _v_fnt_nd
+                0x000020b6                _v_fnt_st
+                0x000020b8                _v_fnt_wr
+                0x000020ba                _V_REZ_HZ
+                0x000020bc                _v_off_ad
+                0x000020c0                _v_stat_0
+                0x000020c2                _V_REZ_VT
+                0x000020c4                _BYTES_LIN
+                0x000020c6                line_a_vars
+                0x000020c6                _v_planes
+                0x000020c8                _v_lin_wr
+                0x000020ca                _local_pb
+                0x000020ca                _CONTRL
+                0x000020ce                _INTIN
+                0x000020d2                _PTSIN
+                0x000020d6                _INTOUT
+                0x000020da                _PTSOUT
+                0x000020de                _COLBIT0
+                0x000020e0                _COLBIT1
+                0x000020e2                _COLBIT2
+                0x000020e4                _COLBIT3
+                0x000020e6                _LSTLIN
+                0x000020e8                _LN_MASK
+                0x000020ea                _WRT_MODE
+                0x000020ec                _X1
+                0x000020ee                _Y1
+                0x000020f0                _X2
+                0x000020f2                _Y2
+                0x000020f4                _PATPTR
+                0x000020f8                _PATMSK
+                0x000020fa                _MFILL
+                0x000020fc                _CLIP
+                0x000020fe                _XMINCL
+                0x00002100                _YMINCL
+                0x00002102                _XMAXCL
+                0x00002104                _YMAXCL
+                0x00002106                _XDDA
+                0x00002108                _DDAINC
+                0x0000210a                _SCALDIR
+                0x0000210c                _MONO
+                0x0000210e                _SOURCEX
+                0x00002110                _SOURCEY
+                0x00002112                _DESTX
+                0x00002114                _DESTY
+                0x00002116                _DELX
+                0x00002118                _DELY
+                0x0000211a                _FBASE
+                0x0000211e                _FWIDTH
+                0x00002120                _STYLE
+                0x00002122                _LITEMASK
+                0x00002124                _SKEWMASK
+                0x00002126                _WEIGHT
+                0x00002128                _ROFF
+                0x0000212a                _LOFF
+                0x0000212c                _SCALE
+                0x0000212e                _CHUP
+                0x00002130                _TEXTFG
+                0x00002132                _SCRTCHP
+                0x00002136                _SCRPT2
+                0x0000213a                _COPYTRAN
+                0x0000213c                _SEEDABORT
+                0x00002140                        __low_stram_end = .
+                0x00000001                        ASSERT ((ABSOLUTE (_shifty) < 0x8000), error: bad _shifty address)
+                0x00000001                        ASSERT (((ABSOLUTE (_dskbuf) & 0x3) == 0x0), error: bad _dskbuf alignment)
+                0x00000001                        ASSERT ((ABSOLUTE (__low_stram_end) <= 0x8000), error: .low_stram section extends beyond 32k)
+
+.text           0x00002140    0x3f8ba
+ CREATE_OBJECT_SYMBOLS
+                0x00002140                        __text = .
+ *(.text .rodata .rodata.*)
+ .text          0x00002140      0x154 obj/startup.o
+                0x00002140                _os_header
+                0x00002170                _main
+                0x0000218c                _osxhbootdelay
+                0x00002258                memdone
+                0x0000225e                _run_cartridge_applications
+ .rodata        0x00002294        0x4 obj/startup.o
+ .text          0x00002298        0x0 obj/lowstram.o
+ .text          0x00002298      0x20c obj/memory.o
+                0x00002298                meminit
+                0x00002448                _detect_32bit_address_bus
+ .text          0x000024a4      0x2d0 obj/processor.o
+                0x000025b2                _processor_init
+                0x0000268e                _instruction_cache_kludge
+                0x0000268e                _invalidate_instruction_cache
+                0x000026cc                _flush_data_cache
+                0x000026de                _invalidate_data_cache
+                0x00002712                _cache_exists
+                0x00002722                _set_cache
+                0x0000275e                _get_cache
+ .rodata        0x00002774       0x14 obj/processor.o
+ .text          0x00002788      0x638 obj/vectors.o
+                0x00002788                _init_exc_vec
+                0x0000279c                _init_user_vec
+                0x0000289c                _int_hbl
+                0x000028b2                _int_vbl
+                0x0000295c                _int_timerc
+                0x00002990                _mfp_rs232_rx_interrupt
+                0x000029a0                _mfp_rs232_tx_interrupt
+                0x000029b0                _scca_rx_interrupt
+                0x000029c8                _scca_tx_interrupt
+                0x000029e0                _scca_es_interrupt
+                0x000029f8                _sccb_rx_interrupt
+                0x00002a10                _sccb_tx_interrupt
+                0x00002a28                _sccb_es_interrupt
+                0x00002a40                _call_etv_critic
+                0x00002a5a                _default_etv_critic
+                0x00002a62                _int_illegal
+                0x00002a88                _int_priv
+                0x00002aea                _int_unimpint
+                0x00002d06                _biostrap
+                0x00002d14                _xbiostrap
+                0x00002d6e                _just_rte
+                0x00002d70                _xbios_unimpl
+                0x00002d7c                _supexec
+                0x00002d82                _check_read_byte
+                0x00002dac                _keyclick
+ .text          0x00002dc0      0x256 obj/aciavecs.o
+                0x00002dc0                _init_acia_vecs
+                0x00002e4e                _int_acia
+                0x00002f12                ikbdraw
+                0x00003000                _call_mousevec
+ .rodata        0x00003016       0x1c obj/aciavecs.o
+ .text          0x00003032      0x82a obj/bios.o
+                0x00003032                _setexc
+                0x00003050                _tickcal
+                0x00003054                _lrwabs
+                0x0000307e                _getbpb
+                0x00003092                _mediach
+                0x000030a6                _drvmap
+                0x000030ac                _bconstat
+                0x00003102                _bconin
+                0x0000315c                _bcostat
+                0x000031b6                _bconout
+                0x0000321c                _can_shutdown
+                0x0000322c                _biosmain
+                0x0000383c                _is_text_pointer
+ .rodata.str1.1
+                0x0000385c       0x3d obj/bios.o
+ *fill*         0x00003899        0x1 4afc
+ .rodata        0x0000389a       0x32 obj/bios.o
+                0x0000389a                _bios_ent
+                0x0000389c                _bios_vecs
+ .text          0x000038cc       0xc2 obj/xbios.o
+                0x00003986                _xbios_do_unimpl
+ .rodata        0x0000398e      0x23a obj/xbios.o
+                0x0000398e                _xbios_ent
+                0x00003990                _xbios_vecs
+ .text          0x00003bc8      0x73a obj/acsi.o
+                0x00003c0c                _detect_acsi
+                0x00003c10                _acsi_init
+                0x00003c56                _send_command
+                0x00003efa                _acsi_ioctl
+                0x0000411a                _acsi_request_sense
+                0x000041aa                _acsi_rw
+ .rodata.str1.1
+                0x00004302       0x2b obj/acsi.o
+ *fill*         0x0000432d        0x1 4afc
+ .text          0x0000432e       0xa6 obj/biosmem.o
+                0x0000432e                _bmem_init
+                0x0000434e                _balloc_stram
+                0x0000439e                _getmpb
+ .rodata.str1.1
+                0x000043d4       0x26 obj/biosmem.o
+ .text          0x000043fa      0x946 obj/blkdev.o
+                0x0000477c                _blkdev_getbpb
+                0x00004a14                _compute_cksum
+                0x00004ac4                _blkdev_init
+                0x00004c20                _blkdev_boot
+                0x00004c48                _add_partition
+                0x00004d0e                _get_shift
+                0x00004d26                _blkdev_drvmap
+                0x00004d2e                _blkdev_avail
+ .rodata.str1.1
+                0x00004d40       0x2a obj/blkdev.o
+ .text          0x00004d6a      0x1a4 obj/chardev.o
+                0x00004d6a                _char_dummy
+                0x00004d6e                _charout_dummy
+                0x00004d72                _bcostat2
+                0x00004d76                _bconout2
+                0x00004d86                _bconout5
+                0x00004d9a                _chardev_init
+ .text          0x00004f0e      0xc14 obj/clock.o
+                0x00005324                _detect_icdrtc
+                0x00005368                _detect_monster_rtc
+                0x000053da                _detect_megartc
+                0x00005440                _clockvec
+                0x00005462                _clock_init
+                0x000054a0                _settime
+                0x00005782                _gettime
+ .rodata.str1.1
+                0x00005b22        0x4 obj/clock.o
+ .text          0x00005b26      0x50c obj/conout.o
+                0x00005bc0                _invert_cell
+                0x00005bd4                _move_cursor
+                0x00005ca6                _blank_out
+                0x00005da4                _scroll_up
+                0x00005dfe                _ascii_out
+                0x00005fda                _scroll_down
+ .text          0x00006032       0x5c obj/country.o
+                0x00006032                _detect_akp
+                0x0000605c                _detect_idt
+                0x00006066                _get_keytbl
+                0x0000606e                _get_fonts
+ .rodata        0x0000608e      0x1a1 obj/country.o
+ *fill*         0x0000622f        0x1 4afc
+ .text          0x00006230      0xec6 obj/disk.o
+                0x0000638e                _disk_valid_major
+                0x000063be                _disk_inquire
+                0x00006410                _disk_get_capacity
+                0x000064e6                _disk_rw
+                0x000065b4                _disk_try_dmaboot
+                0x00006ece                _disk_init_all
+                0x00006f92                _disk_rescan
+                0x00006ff0                _disk_mediach
+                0x00007078                _DMAread
+                0x000070d4                _DMAwrite
+ .rodata.str1.1
+                0x000070f6      0x201 obj/disk.o
+ *fill*         0x000072f7        0x1 4afc
+ .rodata        0x000072f8       0x64 obj/disk.o
+ .text          0x0000735c       0x1a obj/dma.o
+                0x0000735c                _set_dma_addr
+ .text          0x00007376      0x7ee obj/dmasound.o
+                0x0000738c                _detect_dmasound
+                0x000073d4                _locksnd
+                0x000073fc                _unlocksnd
+                0x00007420                _soundcmd
+                0x000075ea                _setbuffer
+                0x00007666                _setsndmode
+                0x000076aa                _settracks
+                0x000076ec                _setmontracks
+                0x00007724                _setinterrupt
+                0x0000777a                _buffoper
+                0x000077d0                _dsptristate
+                0x00007816                _gpio
+                0x00007868                _devconnect
+                0x00007a14                _dmasound_init
+                0x00007ab4                _sndstatus
+                0x00007af4                _buffptr
+ .text          0x00007b64     0x10c6 obj/floppy.o
+                0x000081ae                _flop_hdv_init
+                0x00008298                _flop_boot_read
+                0x000082bc                _flop_checksum
+                0x000082f8                _flop_mediach
+                0x00008400                _protobt
+                0x000084b6                _floprd
+                0x000084dc                _flopwr
+                0x00008504                _flopver
+                0x000086aa                _floppy_rw
+                0x000087dc                _flopfmt
+                0x00008ac6                _floprate
+                0x00008b66                _flopvbl
+ .rodata        0x00008c2a       0x8e obj/floppy.o
+ .text          0x00008cb8      0x128 obj/font.o
+                0x00008cb8                _font_init
+                0x00008d4e                _font_set_default
+ .text          0x00008de0     0x187e obj/ide.o
+                0x0000983c                _detect_ide
+                0x000098c6                _ide_init
+                0x00009d38                _ide_rw
+                0x0000a014                _ide_ioctl
+                0x0000a100                _send_ide_command
+                0x0000a5d4                _ide_request_sense
+ .text          0x0000a65e      0x9e6 obj/ikbd.o
+                0x0000aa96                _keytbl
+                0x0000aad2                _bioskeys
+                0x0000aaf0                _kbshift
+                0x0000ab0c                _bconstat2
+                0x0000ab20                _bconin2
+                0x0000ab82                _kbrate
+                0x0000abc4                _kb_timerc_int
+                0x0000ac8c                _kbd_int
+                0x0000af3c                _bcostat4
+                0x0000af4c                _ikbd_writeb
+                0x0000af60                _bconout4
+                0x0000af72                _ikbdws
+                0x0000af9c                _ikbd_writew
+                0x0000afba                _kbd_init
+ .rodata        0x0000b044        0xb obj/ikbd.o
+ *fill*         0x0000b04f        0x1 4afc
+ .text          0x0000b050      0x524 obj/initinfo.o
+                0x0000b1e4                _initinfo
+                0x0000b55e                _display_startup_msg
+ .rodata.str1.1
+                0x0000b574      0x177 obj/initinfo.o
+ *fill*         0x0000b6eb        0x1 4afc
+ .rodata        0x0000b6ec       0xaf obj/initinfo.o
+ *fill*         0x0000b79b        0x1 4afc
+ .text          0x0000b79c      0x4f2 obj/kprint.o
+                0x0000b808                _cprintf
+                0x0000b826                _kprintf
+                0x0000b83c                _kcprintf
+                0x0000b864                _dopanic
+ .rodata.str1.1
+                0x0000bc8e      0x282 obj/kprint.o
+ .rodata        0x0000bf10       0x30 obj/kprint.o
+ .text          0x0000bf40        0x0 obj/kprintasm.o
+ .text          0x0000bf40       0x86 obj/linea.o
+                0x0000bf40                _int_linea
+ .rodata        0x0000bfc6       0x40 obj/linea.o
+ .text          0x0000c006       0x4e obj/lineainit.o
+                0x0000c006                _set_screen_shift
+                0x0000c02e                _linea_init
+ .rodata        0x0000c054        0x5 obj/lineainit.o
+ *fill*         0x0000c059        0x1 4afc
+ .text          0x0000c05a        0x0 obj/lineavars.o
+ .text          0x0000c05a      0x3c2 obj/machine.o
+                0x0000c05a                _machine_detect
+                0x0000c1dc                _machine_init
+                0x0000c1de                _fill_cookie_jar
+                0x0000c3b0                _machine_name
+ .rodata.str1.1
+                0x0000c41c       0x4e obj/machine.o
+ .text          0x0000c46a      0x1ca obj/mfp.o
+                0x0000c46a                _mfp_init
+                0x0000c482                _jdisint
+                0x0000c4be                _jenabint
+                0x0000c4ea                _mfpint
+                0x0000c51e                _setup_timer
+                0x0000c590                _xbtimer
+                0x0000c5e2                _timeout_gpip
+                0x0000c604                _init_system_timer
+ .rodata        0x0000c634        0x8 obj/mfp.o
+ .text          0x0000c63c       0xbe obj/midi.o
+                0x0000c63c                _bconstat3
+                0x0000c650                _bconin3
+                0x0000c69a                _bcostat3
+                0x0000c6aa                _bconout3
+                0x0000c6c0                _midiws
+                0x0000c6ec                _midi_init
+ .text          0x0000c6fa      0x13e obj/mouse.o
+                0x0000c6fa                _Initmous
+ .text          0x0000c838       0x56 obj/natfeat.o
+                0x0000c838                _detect_native_features
+                0x0000c860                _natfeat_cookie
+                0x0000c878                _xhdi_vec
+ .rodata        0x0000c88e        0xc obj/natfeat.o
+ .text          0x0000c89a      0x27a obj/natfeats.o
+                0x0000c89a                _natfeat_init
+                0x0000c948                _has_natfeats
+                0x0000c950                _nfGetFullName
+                0x0000c97c                _is_nfStdErr
+                0x0000c98a                _nfStdErr
+                0x0000c9a4                _get_xhdi_nfid
+                0x0000c9ac                _nf_shutdown
+                0x0000c9d0                _has_nf_shutdown
+                0x0000c9de                _nf_bootstrap
+                0x0000ca22                _nf_getbootdrive
+                0x0000ca56                _nf_getbootstrap_args
+                0x0000ca9e                _mmu_is_emulated
+                0x0000cad8                _nf_setlinea
+ .rodata.str1.1
+                0x0000cb14       0x8c obj/natfeats.o
+ .text          0x0000cba0        0x0 obj/nvram.o
+ .text          0x0000cba0       0x60 obj/panicasm.o
+                0x0000cba0                _panic
+                0x0000cbcc                _halt
+                0x0000cbd2                _kill_program
+                0x0000cbdc                _warm_reset
+                0x0000cbe8                _cold_reset
+ .text          0x0000cc00      0x12e obj/parport.o
+                0x0000cc00                _setprt
+                0x0000cc18                _parport_init
+                0x0000cc4a                _bconin0
+                0x0000cc4e                _bcostat0
+                0x0000cc5c                _bconout0
+ .text          0x0000cd2e      0x410 obj/screen.o
+                0x0000cd52                _initialise_palette_registers
+                0x0000cd9a                _screen_init_address
+                0x0000cdd0                _set_rez_hacked
+                0x0000cde4                _rez_changeable
+                0x0000ce0c                _check_moderez
+                0x0000ce44                _get_monitor_type
+                0x0000ce50                _screen_get_current_mode_info
+                0x0000ce8a                _get_palette
+                0x0000ceb4                _get_pixel_size
+                0x0000cf02                _physbase
+                0x0000cf34                _logbase
+                0x0000cf3c                _getrez
+                0x0000cf4a                _setpalette
+                0x0000cf54                _setcolor
+                0x0000cf8c                _vsync
+                0x0000cfb8                _screen_init_mode
+                0x0000d03e                _setscreen
+                0x0000d0b2                _detect_monitor_change
+ .rodata        0x0000d13e       0x32 obj/screen.o
+ .text          0x0000d170      0xae0 obj/serport.o
+                0x0000d1dc                _bconstat1
+                0x0000d1f0                _bconin1
+                0x0000d282                _rsconf1
+                0x0000d532                _bconoutB
+                0x0000d5f8                _bcostat1
+                0x0000d61a                _bconout1
+                0x0000d660                _push_serial_iorec
+                0x0000d68e                _mfp_rs232_rx_interrupt_handler
+                0x0000d6aa                _mfp_rs232_tx_interrupt_handler
+                0x0000d6f0                _scc_rx_interrupt_handler
+                0x0000d778                _scc_tx_interrupt_handler
+                0x0000d800                _scc_es_interrupt_handler
+                0x0000d836                _scc_init
+                0x0000d8de                _init_serport
+                0x0000db82                _bconmap
+ .rodata.cst4   0x0000dc50        0x8 obj/serport.o
+ .rodata        0x0000dc58       0xea obj/serport.o
+ .text          0x0000dd42      0x198 obj/sound.o
+                0x0000dd42                _snd_init
+                0x0000dd90                _giaccess
+                0x0000ddc2                _ongibit
+                0x0000dde0                _offgibit
+                0x0000ddfe                _dosound
+                0x0000de36                _sndirq
+                0x0000deca                _bell
+ .rodata        0x0000deda       0x38 obj/sound.o
+ .text          0x0000df12        0x0 obj/videl.o
+ .text          0x0000df12      0x6ac obj/vt52.o
+                0x0000e484                _cputc
+                0x0000e49a                _blink
+                0x0000e4e8                _cursconf
+                0x0000e54a                _vt52_init
+ .rodata        0x0000e5be       0xa8 obj/vt52.o
+ .text          0x0000e666      0x6fc obj/xhdi.o
+                0x0000e782                _init_XHDI_drvmap
+                0x0000e794                _xhdi_handler
+ .rodata.str1.1
+                0x0000ed62       0x15 obj/xhdi.o
+ *fill*         0x0000ed77        0x1 4afc
+ .rodata        0x0000ed78       0x3c obj/xhdi.o
+ .text          0x0000edb4       0x1c obj/pmmu030.o
+                0x0000edb4                _setup_68030_pmmu
+ .rodata        0x0000edd0      0x100 obj/pmmu030.o
+ .text          0x0000eed0        0x0 obj/68040_pmmu.o
+ .text          0x0000eed0        0x0 obj/amiga.o
+ .text          0x0000eed0        0x0 obj/amiga2.o
+ .text          0x0000eed0        0x0 obj/spi_vamp.o
+ .text          0x0000eed0        0x0 obj/lisa.o
+ .text          0x0000eed0        0x0 obj/lisa2.o
+ .text          0x0000eed0       0xc0 obj/delay.o
+                0x0000eed0                _init_delay
+                0x0000ef06                _calibrate_delay
+ .text          0x0000ef90       0x86 obj/delayasm.o
+                0x0000ef90                _run_calibration
+ .text          0x0000f016        0x0 obj/sd.o
+ .text          0x0000f016      0x1e6 obj/memory2.o
+                0x0000f016                _ttram_detect
+                0x0000f112                _altram_init
+ .text          0x0000f1fc        0x0 obj/bootparams.o
+ .text          0x0000f1fc       0xf4 obj/scsi.o
+                0x0000f1fc                _build_rw_command
+                0x0000f29a                _decode_sense
+ .text          0x0000f2f0      0xad4 obj/nova.o
+                0x0000f406                _detect_nova
+                0x0000f536                _init_nova
+                0x0000fdbc                _get_novamembase
+ .rodata        0x0000fdc4       0x67 obj/nova.o
+ *fill*         0x0000fe2b        0x1 4afc
+ .text          0x0000fe2c        0x0 obj/dsp.o
+ .text          0x0000fe2c        0x0 obj/dsp2.o
+ .text          0x0000fe2c      0x5c4 obj/scsidriv.o
+                0x0001038c                _scsidriv_init
+ .rodata.str1.1
+                0x000103f0       0x15 obj/scsidriv.o
+ *fill*         0x00010405        0x1 4afc
+ .rodata        0x00010406       0x26 obj/scsidriv.o
+                0x00010406                _scsidriv_root_init
+ .text          0x0001042c      0x704 obj/bdosmain.o
+                0x000104d2                _osinit_before_xmaddalt
+                0x00010516                _osinit_after_xmaddalt
+                0x0001053e                _osif
+ .rodata        0x00010b30      0x242 obj/bdosmain.o
+ .rodata.str1.1
+                0x00010d72       0x1e obj/bdosmain.o
+ .text          0x00010d90      0x722 obj/console.o
+                0x0001108a                _stdhdl_init
+                0x000110f0                _get_default_handle
+                0x00011100                _xconstat
+                0x00011118                _xconostat
+                0x0001113a                _xprtostat
+                0x0001115c                _xauxistat
+                0x00011174                _xauxostat
+                0x00011196                _tabout
+                0x000111a6                _xconout
+                0x000111c4                _xauxout
+                0x000111ec                _xprtout
+                0x00011214                _xrawcin
+                0x0001122c                _conin
+                0x00011254                _xconin
+                0x00011286                _xnecin
+                0x000112b8                _xauxin
+                0x000112da                _xrawio
+                0x0001132a                _xconws
+                0x0001135e                _cgets
+                0x00011484                _xconrs
+ .rodata        0x000114b2        0x6 obj/console.o
+ .text          0x000114b8      0x3b0 obj/fsbuf.o
+                0x0001150a                _bufl_init
+                0x0001156a                _flush
+                0x00011688                _getbcb
+                0x00011824                _getrec
+ .rodata.str1.1
+                0x00011868       0x1b obj/fsbuf.o
+ *fill*         0x00011883        0x1 4afc
+ .text          0x00011884     0x146e obj/fsdir.o
+                0x00011bfe                _xgsdtof
+                0x00011c5c                _builds
+                0x00011d68                _xsnext
+                0x00011f2a                _incr_curdir_usage
+                0x00011f6c                _decr_curdir_usage
+                0x00011fb2                _xgetdir
+                0x00012050                _dirinit
+                0x000120c6                _makofd
+                0x0001212e                _xmkdir
+                0x000122d0                _scan
+                0x000123dc                _findit
+                0x0001255a                _xchdir
+                0x000125f2                _xchmod
+                0x000126b8                _ixsfirst
+                0x000127bc                _xsfirst
+                0x000127fa                _xrename
+                0x00012b96                _xrmdir
+                0x00012ca8                _free_available_dnds
+ .rodata        0x00012cf2       0x1a obj/fsdir.o
+ .text          0x00012d0c      0x284 obj/fsdrive.o
+                0x00012d0c                _log_media
+                0x00012e96                _ckdrv
+ .text          0x00012f90      0x442 obj/fsfat.o
+                0x00012f90                _cl2rec
+                0x00012faa                _clfix
+                0x000130ac                _getrealcl
+                0x00013162                _getclnum
+                0x00013182                _nextcl
+                0x000132d2                _xgetfree
+ .text          0x000133d2        0x0 obj/fsglob.o
+ .text          0x000133d2      0x114 obj/fshand.o
+                0x000133d2                _ixforce
+                0x0001343e                _xforce
+                0x00013454                _xdup
+ .text          0x000134e6      0x5f8 obj/fsio.o
+                0x00013862                _eof
+                0x0001388e                _ixlseek
+                0x0001396c                _xlseek
+                0x000139c4                _ixgetfcb
+                0x00013a3e                _ixread
+                0x00013a74                _xread
+                0x00013a9c                _ixwrite
+                0x00013ab6                _xwrite
+ .text          0x00013ade       0x94 obj/fsmain.o
+                0x00013ade                _xgetdta
+                0x00013aea                _xsetdta
+                0x00013af8                _xsetdrv
+                0x00013b1e                _xgetdrv
+                0x00013b2c                _getofd
+ .text          0x00013b72      0x78e obj/fsopnclo.o
+                0x00013c6c                _xopen
+                0x00013cde                _ixclose
+                0x00013e08                _xclose
+                0x00013f2c                _ixdel
+                0x00014020                _xunlink
+                0x00014090                _contains_illegal_characters
+                0x000140c8                _ixcreat
+                0x000142ee                _xcreat
+ .rodata.str1.1
+                0x00014300       0x11 obj/fsopnclo.o
+ *fill*         0x00014311        0x1 4afc
+ .text          0x00014312      0x1c6 obj/iumem.o
+                0x00014312                _ffit
+                0x000143c6                _freeit
+                0x00014484                _shrinkit
+ .text          0x000144d8      0x326 obj/kpgmld.o
+                0x00014536                _kpgmhdrld
+                0x0001458a                _kpgmld
+                0x000146f8                _kpgm_relocate
+ .text          0x000147fe      0x22e obj/osmem.o
+                0x000148d6                _xmgetmd
+                0x00014950                _xmgetblk
+                0x00014966                _xmfreblk
+                0x00014988                _xmfremd
+                0x00014a0a                _osmem_init
+ .rodata.str1.1
+                0x00014a2c       0x48 obj/osmem.o
+ .text          0x00014a74      0x6d2 obj/proc.o
+                0x00014d1c                _xexec
+                0x00015028                _xterm
+                0x000150f6                _x0term
+                0x000150fc                _xtermres
+ .text          0x00015146      0x176 obj/rwa.o
+                0x00015146                _bdos_trap2
+                0x00015162                _enter
+                0x000151e0                _gouser
+                0x00015216                _termuser
+ .text          0x000152bc      0x1ce obj/time.o
+                0x0001538e                _xgetdate
+                0x00015398                _xsetdate
+                0x00015402                _xgettime
+                0x0001540c                _xsettime
+                0x0001545c                _time_init
+ .rodata        0x0001548a       0x1a obj/time.o
+ .text          0x000154a4      0x34c obj/umem.o
+                0x000154d4                _xmfree
+                0x00015510                _xsetblk
+                0x000155a6                _xmxalloc
+                0x00015678                _xmalloc
+                0x0001569e                _xmaddalt
+                0x00015754                _total_alt_ram
+                0x00015780                _umem_init
+                0x000157c0                _set_owner
+ .text          0x000157f0       0xf2 obj/cookie.o
+                0x000157f0                _cookie_init
+                0x0001580a                _cookie_add
+                0x0001583c                _cookie_get
+                0x0001585c                _get_idt_cookie
+                0x00015884                _get_frb_cookie
+                0x000158a8                _get_floppy_type
+                0x000158ca                _nvdi_cookie_present
+ .text          0x000158e2      0x3ae obj/doprintf.o
+                0x00015990                _doprintf
+ .rodata.str1.1
+                0x00015c90        0x7 obj/doprintf.o
+ *fill*         0x00015c97        0x1 4afc
+ .text          0x00015c98       0x4e obj/intmath.o
+                0x00015c98                _Isqrt
+ .text          0x00015ce6        0x0 obj/langs.o
+ .text          0x00015ce6      0x274 obj/memmove.o
+                0x00015ce6                _memcpy
+                0x00015d08                _memmove
+ .text          0x00015f5a       0xcc obj/memset.o
+                0x00015f5a                _bzero_nobuiltin
+                0x00015f68                _memset
+ .text          0x00016026      0x10c obj/miscasm.o
+                0x00016026                _trap1
+                0x00016046                _trap1_pexec
+                0x0001606a                _stop_until_interrupt
+                0x000160b6                _just_rts
+                0x000160b8                _mul_div_round
+                0x000160d4                _protect_v
+                0x000160e4                _protect_w
+                0x000160fc                _protect_ww
+                0x00016114                _protect_wlwwwl
+ .text          0x00016132        0x0 obj/nls.o
+ .text          0x00016132       0x24 obj/setjmp.o
+                0x00016132                _setjmp
+                0x00016140                _longjmp
+ .text          0x00016156      0x1a6 obj/string.o
+                0x00016170                _strlcpy
+                0x000161ac                _strlen
+                0x000161be                _strcmp
+                0x000161f2                _memcmp
+                0x00016228                _strncmp
+                0x00016262                _toupper
+                0x00016278                _strncasecmp
+                0x000162c2                _sprintf
+ .text          0x000162fc        0x0 obj/lisautil.o
+ .text          0x000162fc       0x5c obj/miscutil.o
+                0x000162fc                _build_root_path
+                0x00016316                _extract_drive_number
+                0x00016348                _set_all_files
+ .rodata.str1.1
+                0x00016358        0x4 obj/miscutil.o
+ .text          0x0001635c      0x22c obj/gemdos.o
+                0x0001635c                _pgmld
+                0x000163b2                _dos_setdt
+                0x000163e0                _dos_label
+                0x0001643c                _dos_space
+                0x000164a6                _dos_alloc_stram
+                0x000164ba                _dos_avail_stram
+                0x000164ce                _dos_avail_altram
+                0x000164e4                _dos_alloc_anyram
+                0x000164fa                _dos_avail_anyram
+                0x00016510                _dos_free
+                0x00016522                _dos_shrink
+                0x0001653c                _dos_load_file
+ .rodata.str1.1
+                0x00016588        0x8 obj/gemdos.o
+ .text          0x00016590      0x23a obj/optimize.o
+                0x00016590                _fmt_str
+                0x000165ec                _unfmt_str
+                0x00016626                _inf_sset
+                0x00016652                _inf_sget
+                0x00016672                _inf_gindex
+                0x000166a6                _inf_what
+                0x000166e2                _scan_2
+                0x00016738                _filename_start
+                0x00016750                _wildcmp
+ .text          0x000167ca       0x30 obj/optimopt.o
+                0x000167ca                _scasb
+                0x000167e0                _expand_string
+ .text          0x000167fa      0x19e obj/rectfunc.o
+                0x000167fa                _inside
+                0x0001682e                _rc_constrain
+                0x0001688c                _rc_equal
+                0x000168c2                _rc_intersect
+                0x00016938                _rc_union
+ .text          0x00016998       0x2e obj/stringasm.o
+                0x00016998                _strlencpy
+                0x000169ac                _strchr
+ .text          0x000169c6        0x0 obj/fnt_off_6x6.o
+ .rodata        0x000169c6      0x202 obj/fnt_off_6x6.o
+                0x000169c6                _off_6x6_table
+ .text          0x00016bc8        0x0 obj/fnt_off_8x8.o
+ .rodata        0x00016bc8      0x202 obj/fnt_off_8x8.o
+                0x00016bc8                _off_8x8_table
+ .text          0x00016dca        0x0 obj/libfont.a(fnt_st_6x6.o)
+ .rodata        0x00016dca      0x4da obj/libfont.a(fnt_st_6x6.o)
+                0x00016dca                _fnt_st_6x6
+ .text          0x000172a4        0x0 obj/libfont.a(fnt_st_8x8.o)
+ .rodata        0x000172a4      0x85a obj/libfont.a(fnt_st_8x8.o)
+                0x000172a4                _fnt_st_8x8
+ .text          0x00017afe        0x0 obj/libfont.a(fnt_st_8x16.o)
+ .rodata        0x00017afe     0x105a obj/libfont.a(fnt_st_8x16.o)
+                0x00017afe                _fnt_st_8x16
+ .text          0x00018b58        0x0 obj/version.o
+ .rodata        0x00018b58        0x9 obj/version.o
+                0x00018b58                _version
+ *fill*         0x00018b61        0x1 4afc
+ .text          0x00018b62      0x1f2 obj/vdi_asm.o
+                0x00018b62                _vditrap
+                0x00018b7e                _GSX_ENTRY
+                0x00018c02                _mouse_int
+                0x00018cba                _wheel_int
+                0x00018d12                _mov_cur
+                0x00018d38                _call_user_but
+                0x00018d44                _call_user_wheel
+ .text          0x00018d54        0x0 obj/vdi_bezier.o
+ .text          0x00018d54      0x348 obj/vdi_col.o
+                0x00018e7e                _vdi_vs_color
+                0x00018ef4                _init_colors
+                0x00018f80                _vdi_vq_color
+ .rodata        0x0001909c       0xb0 obj/vdi_col.o
+ .text          0x0001914c      0x606 obj/vdi_control.o
+                0x00019172                _get_vwk_by_handle
+                0x00019196                _update_rez_dependent
+                0x0001924a                _validate_color_index
+                0x000193dc                _vdi_vs_clip
+                0x0001945c                _vdi_vswr_mode
+                0x00019490                _vdi_v_opnvwk
+                0x00019512                _vdi_v_clsvwk
+                0x00019556                _vdi_v_opnwk
+                0x0001964a                _vdi_v_clswk
+                0x000196a2                _vdi_v_clrwk
+                0x000196c4                _vdi_vq_extnd
+ .rodata        0x00019752       0xcc obj/vdi_control.o
+ .text          0x0001981e      0x1de obj/vdi_esc.o
+                0x000199bc                _vdi_v_escape
+                0x000199e4                _esc_init
+                0x000199f0                _esc_exit
+ .rodata.str1.1
+                0x000199fc       0x28 obj/vdi_esc.o
+ .rodata        0x00019a24       0x50 obj/vdi_esc.o
+ .text          0x00019a74      0xaba obj/vdi_fill.o
+                0x00019ce6                _vdi_vsf_udpat
+                0x00019d28                _vdi_vsf_color
+                0x00019d5a                _vdi_vsf_perimeter
+                0x00019d7c                _vdi_vr_recfl
+                0x00019e34                _vdi_vqf_attributes
+                0x00019e76                _st_fl_ptr
+                0x00019f2c                _vdi_vsf_interior
+                0x00019f54                _vdi_vsf_style
+                0x00019f92                _clc_flit
+                0x0001a0cc                _polygon
+                0x0001a19c                _vdi_v_fillarea
+                0x0001a1ba                _contourfill
+                0x0001a430                _vdi_v_contourfill
+                0x0001a470                _vdi_v_get_pixel
+                0x0001a49c                _get_pix
+                0x0001a4b0                _put_pix
+ .rodata        0x0001a52e      0x284 obj/vdi_fill.o
+                0x0001a52e                _SOLID
+                0x0001a530                _HOLLOW
+                0x0001a792                _ROM_UD_PATRN
+ .text          0x0001a7b2      0x5ae obj/vdi_gdp.o
+                0x0001aa88                _vdi_v_gdp
+ .rodata        0x0001ad60       0xe2 obj/vdi_gdp.o
+ .text          0x0001ae42      0x1be obj/vdi_input.o
+                0x0001ae7a                _vdi_v_choice
+                0x0001ae8e                _vdi_v_string
+                0x0001af3c                _vdi_vq_key_s
+                0x0001af5e                _vdi_vsin_mode
+                0x0001afb6                _vdi_vqin_mode
+ .text          0x0001b000     0x1b30 obj/vdi_line.o
+                0x0001b1f8                _vdi_vsl_udsty
+                0x0001b208                _vdi_vsl_type
+                0x0001b230                _vdi_vsl_width
+                0x0001b268                _vdi_vsl_ends
+                0x0001b29e                _vdi_vsl_color
+                0x0001b2d0                _vdi_vql_attributes
+                0x0001b316                _draw_rect_common
+                0x0001b8ea                _Vwk2Attrib
+                0x0001b916                _draw_rect
+                0x0001b954                _linea_rect
+                0x0001b9f4                _linea_hline
+                0x0001ba3a                _linea_polygon
+                0x0001bab2                _linea_fill
+                0x0001bb26                _clip_line
+                0x0001bd28                _arrow
+                0x0001bde4                _wideline
+                0x0001c226                _abline
+                0x0001c9e6                _polyline
+                0x0001ca60                _linea_line
+                0x0001ca9e                _set_LN_MASK
+                0x0001cac8                _vdi_v_pline
+ .rodata        0x0001cb30       0x14 obj/vdi_line.o
+                0x0001cb30                _LINE_STYLE
+                0x0001cb3c                _op_nodraw
+                0x0001cb40                _op_draw
+ .text          0x0001cb44      0x12a obj/vdi_main.o
+                0x0001cb44                _screen
+ .rodata        0x0001cc6e      0x1bc obj/vdi_main.o
+ .text          0x0001ce2a      0x246 obj/vdi_marker.o
+                0x0001ce2a                _vdi_vsm_height
+                0x0001ce9a                _vdi_vsm_type
+                0x0001cec4                _vdi_vsm_color
+                0x0001cef6                _vdi_v_pmarker
+                0x0001d024                _vdi_vqm_attributes
+ .rodata        0x0001d070       0xa0 obj/vdi_marker.o
+ .text          0x0001d110      0x158 obj/vdi_misc.o
+                0x0001d146                _arb_corner
+                0x0001d170                _arb_line
+                0x0001d19a                _vdi_vex_timv
+                0x0001d1d4                _timer_init
+                0x0001d210                _timer_exit
+                0x0001d238                _get_start_addr
+ .text          0x0001d268      0x890 obj/vdi_mouse.o
+                0x0001d42a                _vdi_vq_mouse
+                0x0001d456                _vdi_vex_butv
+                0x0001d46e                _vdi_vex_motv
+                0x0001d486                _vdi_vex_curv
+                0x0001d49e                _vdi_vex_wheelv
+                0x0001d4b6                _vdimouse_init
+                0x0001d5ae                _vdimouse_exit
+                0x0001d618                _cur_display
+                0x0001d8ae                _cur_replace
+                0x0001d99e                _vdi_v_locator
+                0x0001da54                _vdi_v_hide_c
+                0x0001dac4                _linea_show_mouse
+                0x0001dae2                _vdi_v_show_c
+                0x0001dae4                _linea_hide_mouse
+                0x0001dae8                _linea_transform_mouse
+                0x0001daf6                _vdi_vsc_form
+ .rodata        0x0001daf8        0x4 obj/vdi_mouse.o
+ .text          0x0001dafc      0x792 obj/vdi_raster.o
+                0x0001e0c6                _vdi_vr_trnfm
+                0x0001e1a6                _vdi_vro_cpyfm
+                0x0001e1dc                _vdi_vrt_cpyfm
+                0x0001e214                _linea_raster
+                0x0001e23e                _linea_blit
+ .rodata        0x0001e28e        0x8 obj/vdi_raster.o
+ .text          0x0001e296     0x11c0 obj/vdi_text.o
+                0x0001ea7e                _vdi_v_gtext
+                0x0001eaa2                _text_init2
+                0x0001eaee                _text_init
+                0x0001ec26                _vdi_vst_height
+                0x0001ecd0                _vdi_vst_point
+                0x0001ed8a                _vdi_vst_effects
+                0x0001edaa                _vdi_vst_alignment
+                0x0001ede8                _vdi_vst_rotation
+                0x0001ee2c                _vdi_vst_font
+                0x0001eeec                _vdi_vst_color
+                0x0001ef1e                _vdi_vqt_attributes
+                0x0001ef92                _vdi_vqt_extent
+                0x0001f056                _vdi_vqt_width
+                0x0001f106                _vdi_vqt_name
+                0x0001f176                _vdi_vqt_fontinfo
+                0x0001f206                _gdp_justified
+                0x0001f3a6                _vdi_vst_load_fonts
+                0x0001f430                _vdi_vst_unload_fonts
+ .text          0x0001f456      0xc3a obj/vdi_textblit.o
+                0x0001f52c                _outline
+                0x0001f62e                _rotate
+                0x0001f826                _scale
+                0x0001f9da                _direct_screen_blit
+                0x0001fb32                _text_blt
+ .rodata        0x00020090       0x10 obj/vdi_textblit.o
+ .text          0x000200a0      0x74c obj/vdi_blit.o
+                0x000203e8                _fast_bit_blt
+ .text          0x000207ec      0x6c0 obj/vdi_tblit.o
+                0x000207ec                _normal_blit
+ .rodata        0x00020eac       0xf2 obj/vdi_tblit.o
+ .text          0x00020f9e        0x0 obj/endvdi.o
+ .text          0x00020f9e       0xc4 obj/gemasm.o
+                0x00020f9e                _psetup
+                0x00020fc6                _gotopgm
+                0x00020fea                _dsptch
+                0x00021034                _switchto
+ .text          0x00021062      0x166 obj/gemstart.o
+                0x00021062                _ui_start
+                0x0002111c                _accdesk_start
+                0x00021160                _dos_exec
+ .text          0x000211c8      0x25c obj/gemdosif.o
+                0x000211c8                _disable_interrupts
+                0x000211d4                _enable_interrupts
+                0x000211dc                _retake
+                0x000211fa                _giveerr
+                0x00021202                _takeerr
+                0x0002131c                _unset_aestrap
+                0x00021326                _set_aestrap
+                0x00021338                _far_bcha
+                0x0002135e                _far_mcha
+                0x0002138c                _aes_wheel
+                0x000213ba                _drawrat
+                0x000213ca                _tikcod
+ .rodata        0x00021424       0x12 obj/gemdosif.o
+ .text          0x00021436      0x2dc obj/gemaplib.o
+                0x00021436                _ap_init
+                0x00021448                _ap_rdwr
+                0x000214ae                _ap_find
+                0x000214d0                _ap_tplay
+                0x00021608                _ap_trecd
+                0x000216b4                _ap_exit
+ .text          0x00021712      0x2cc obj/gemasync.o
+                0x00021712                _azombie
+                0x000217bc                _evinsert
+                0x000217e0                _mwait
+                0x0002180c                _iasync
+                0x000218f2                _apret
+                0x0002195c                _acancel
+ .rodata.str1.1
+                0x000219de       0x18 obj/gemasync.o
+ .text          0x000219f6      0x626 obj/gemctrl.o
+                0x00021aba                _ct_chgown
+                0x00021ae4                _ct_mouse
+                0x00021b3a                _ctlmgr
+ .rodata        0x0002201c       0x12 obj/gemctrl.o
+ .text          0x0002202e      0x25c obj/gemdisp.o
+                0x0002202e                _forkq
+                0x00022088                _forker
+                0x0002216c                _chkkbd
+                0x000221d2                _disp
+ .text          0x0002228a      0x400 obj/gemevlib.o
+                0x000222d6                _ev_block
+                0x000222fe                _ev_button
+                0x00022336                _ev_mesag
+                0x00022392                _ev_mouse
+                0x000223b8                _ev_timer
+                0x000223da                _ev_multi
+                0x00022652                _ev_dclick
+ .rodata        0x0002268a        0xa obj/gemevlib.o
+ .text          0x00022694      0x122 obj/gemflag.o
+                0x00022694                _tchange
+                0x000226f6                _tak_flag
+                0x0002272e                _amutex
+                0x0002276c                _unsync
+ .text          0x000227b6      0x47e obj/gemfmalt.o
+                0x00022880                _fm_alert
+ .text          0x00022c34      0x618 obj/gemfmlib.o
+                0x00022d02                _fm_own
+                0x00022d42                _fm_keybd
+                0x00022dce                _fm_button
+                0x00022f4a                _fm_do
+                0x000230b8                _fm_dial
+                0x00023122                _fm_show
+                0x00023170                _eralert
+                0x000231ce                _fm_error
+ .rodata        0x0002324c       0x18 obj/gemfmlib.o
+ .text          0x00023264      0xcce obj/gemfslib.o
+                0x00023506                _fs_start
+                0x00023546                _fs_input
+ .rodata.str1.1
+                0x00023f32        0xe obj/gemfslib.o
+ .rodata        0x00023f40        0x4 obj/gemfslib.o
+ .text          0x00023f44      0xee0 obj/gemgraf.o
+                0x00024048                _gsx_sclip
+                0x000240c0                _gsx_gclip
+                0x000240d8                _gsx_chkclip
+                0x00024134                _gsx_pline
+                0x00024180                _gsx_cline
+                0x000241bc                _gsx_attr
+                0x0002425e                _gsx_xbox
+                0x00024272                _gsx_xcbox
+                0x000243be                _gsx_blt
+                0x000244d4                _bb_screen
+                0x00024504                _gsx_trans
+                0x0002455c                _gsx_start
+                0x00024782                _bb_fill
+                0x00024828                _gsx_tblt
+                0x0002490a                _gr_inside
+                0x00024924                _gr_rect
+                0x00024974                _gr_just
+                0x00024a34                _gr_gtext
+                0x00024a9c                _gr_crack
+                0x00024ae8                _gr_gicon
+                0x00024d88                _gr_box
+ .rodata.str1.1
+                0x00024e24       0x28 obj/gemgraf.o
+ .rodata        0x00024e4c        0xc obj/gemgraf.o
+ .text          0x00024e58      0x7fc obj/gemgrlib.o
+                0x00024fae                _gr_stepcalc
+                0x0002506a                _gr_rubwind
+                0x000250f6                _gr_rubbox
+                0x0002511e                _gr_dragbox
+                0x000251ba                _gr_2box
+                0x00025272                _gr_movebox
+                0x00025330                _gr_growbox
+                0x000253ba                _gr_shrinkbox
+                0x00025434                _gr_watchbox
+                0x000254c6                _gr_slidebox
+                0x00025564                _gr_mouse
+                0x0002562a                _gr_mkstate
+ .text          0x00025654      0x816 obj/gemgsxif.o
+                0x0002567c                _gsx_mfree
+                0x0002568c                _gsx_mret
+                0x000256a2                _gsx_0code
+                0x000256b2                _gsx_1code
+                0x000256cc                _gsx_wsclose
+                0x000256d8                _gsx_wsclear
+                0x000256e4                _ratinit
+                0x000256f8                _gsx_graphic
+                0x00025790                _gsx_tick
+                0x000257b4                _gsx_mxmy
+                0x000257ca                _gsx_kstate
+                0x000257dc                _gsx_moff
+                0x000257f6                _ratexit
+                0x000257f8                _gsx_mon
+                0x00025818                _gsx_mfset
+                0x0002587c                _gsx_char
+                0x000258ce                _gsx_setmousexy
+                0x00025914                _gsx_nplanes
+                0x0002592a                _gsx_textsize
+                0x0002595e                _gsx_fix_screen
+                0x00025998                _gsx_malloc
+                0x000259e2                _gsx_fix
+                0x00025a2c                _v_pline
+                0x00025a50                _vs_clip
+                0x00025a7e                _vst_height
+                0x00025ac6                _vr_recfl
+                0x00025aea                _vro_cpyfm
+                0x00025c6c                _bb_save
+                0x00025c7c                _bb_restore
+                0x00025c8a                _vrt_cpyfm
+                0x00025cd8                _vrn_trnfm
+                0x00025cf2                _vsl_width
+                0x00025d12                _vex_wheelv
+                0x00025d30                _gsx_init
+ .rodata.str1.1
+                0x00025e6a       0x36 obj/gemgsxif.o
+ .text          0x00025ea0      0xa72 obj/geminit.o
+                0x00025ede                _size_theglo
+                0x00025ee6                _init_p0_stkptr
+                0x00025ef8                _default_mform
+                0x00025f00                _set_mouse_to_arrow
+                0x00025f10                _set_mouse_to_hourglass
+                0x00025f20                _all_run
+                0x00025f52                _wait_for_accs
+                0x00025f8c                _set_aes_background
+                0x00025f9a                _run_accs_and_desktop
+                0x000263f6                _gem_main
+ .rodata.str1.1
+                0x00026912       0x67 obj/geminit.o
+ *fill*         0x00026979        0x1 4afc
+ .rodata.cst16  0x0002697a       0x10 obj/geminit.o
+ .text          0x0002698a      0x714 obj/geminput.o
+                0x0002698a                _in_mrect
+                0x000269b8                _b_click
+                0x00026a2e                _b_delay
+                0x00026ab4                _set_ctrl
+                0x00026acc                _get_ctrl
+                0x00026ae4                _get_mown
+                0x00026af0                _dq
+                0x00026b16                _fq
+                0x00026b38                _evremove
+                0x00026bea                _post_keybd
+                0x00026c3a                _kchange
+                0x00026c62                _downorup
+                0x00026cf8                _bchange
+                0x00026de4                _set_mown
+                0x00026e2e                _mchange
+                0x00026ef4                _wheel_change
+                0x00026ef6                _akbin
+                0x00026f32                _adelay
+                0x00026fb6                _abutton
+                0x0002701c                _amouse
+ .text          0x0002709e        0x0 obj/gemmnext.o
+ .text          0x0002709e      0x6ae obj/gemmnlib.o
+                0x000271b0                _do_chg
+                0x00027252                _mn_do
+                0x00027514                _mn_bar
+                0x000275f2                _mn_cleanup
+                0x00027632                _mn_register
+                0x000276e8                _mn_init
+                0x0002771a                _mn_getownid
+ .text          0x0002774c      0x692 obj/gemobed.o
+                0x00027872                _ob_center
+                0x00027936                _ins_char
+                0x00027994                _ob_edit
+ .rodata.str1.1
+                0x00027dde       0x5e obj/gemobed.o
+ .text          0x00027e3c      0x1d4 obj/gemobjop.o
+                0x00027e3c                _ob_sst
+                0x00027f10                _everyobj
+                0x00027fd8                _get_par
+ .text          0x00028010      0xd6e obj/gemoblib.o
+                0x00028010                _ob_offset
+                0x0002805c                _ob_relxywh
+                0x00028086                _ob_actxywh
+                0x000280cc                _ob_setxywh
+                0x000280f6                _ob_format
+                0x000288aa                _ob_draw
+                0x00028948                _ob_find
+                0x00028a5c                _ob_add
+                0x00028abc                _ob_delete
+                0x00028b64                _ob_order
+                0x00028c0a                _ob_change
+                0x00028d5e                _ob_fs
+ .rodata.str1.1
+                0x00028d7e       0x2b obj/gemoblib.o
+ *fill*         0x00028da9        0x1 4afc
+ .text          0x00028daa      0x190 obj/gempd.o
+                0x00028daa                _pd_index
+                0x00028dd4                _fpdnm
+                0x00028e30                _p_nameit
+                0x00028e72                _p_setappdir
+                0x00028eb6                _pstart
+                0x00028f1c                _insert_process
+ .text          0x00028f3a      0x1c6 obj/gemqueue.o
+                0x00029036                _aqueue
+ .text          0x00029100      0x93e obj/gemrslib.o
+                0x000293cc                _rs_obfix
+                0x00029442                _rs_free
+                0x000294c0                _rs_gaddr
+                0x000294f2                _rs_saddr
+                0x00029526                _rs_fixit
+                0x000295be                _rs_load
+                0x00029a26                _rs_str
+                0x00029a3c                _xlate_obj_array
+ .text          0x00029a3e       0xca obj/gemsclib.o
+                0x00029a3e                _sc_read
+                0x00029a50                _sc_write
+                0x00029a62                _sc_clear
+ .rodata.str1.1
+                0x00029b08        0x8 obj/gemsclib.o
+ .text          0x00029b10      0x842 obj/gemshlib.o
+                0x00029bde                _sh_read
+                0x00029c06                _sh_write
+                0x00029d54                _sh_get
+                0x00029d70                _sh_put
+                0x00029d8c                _sh_tographic
+                0x00029dc8                _sh_name
+                0x00029dea                _sh_envrn
+                0x00029e36                _sh_find
+                0x00029fa6                _sh_rdef
+                0x00029fc4                _sh_wdef
+                0x00029fe2                _aes_run_rom_program
+                0x0002a016                _sh_main
+ .rodata.str1.1
+                0x0002a352       0x16 obj/gemshlib.o
+ .text          0x0002a368      0x93e obj/gemsuper.o
+                0x0002a368                _super
+ .text          0x0002aca6     0x1a12 obj/gemwmlib.o
+                0x0002afa2                _w_getsize
+                0x0002afec                _w_setactive
+                0x0002b03a                _w_drawdesk
+                0x0002b06e                _w_bldactive
+                0x0002b6ba                _ap_sendmsg
+                0x0002b70e                _w_update
+                0x0002b872                _wm_init
+                0x0002ba04                _wm_start
+                0x0002ba42                _wm_create
+                0x0002baac                _wm_get
+                0x0002bc1e                _wm_find
+                0x0002bc3e                _wm_update
+                0x0002bc8e                _wm_calc
+                0x0002c1d6                _wm_open
+                0x0002c29c                _wm_close
+                0x0002c314                _wm_delete
+                0x0002c398                _wm_set
+                0x0002c648                _wm_new
+ .rodata.str1.1
+                0x0002c6b8        0x1 obj/gemwmlib.o
+ *fill*         0x0002c6b9        0x1 4afc
+ .rodata        0x0002c6ba       0x8e obj/gemwmlib.o
+ .text          0x0002c748      0x2b8 obj/gemwrect.o
+                0x0002c748                _or_start
+                0x0002c770                _get_orect
+                0x0002c93a                _newrect
+ .text          0x0002ca00       0x1e obj/gsx2.o
+                0x0002ca00                _gsx2
+ .text          0x0002ca1e       0x7c obj/gem_rsc.o
+                0x0002ca1e                _gem_rsc_init
+                0x0002ca74                _gem_rsc_fixit
+ .rodata.str1.1
+                0x0002ca9a      0x495 obj/gem_rsc.o
+ *fill*         0x0002cf2f        0x1 4afc
+ .rodata        0x0002cf30      0x9a1 obj/gem_rsc.o
+                0x0002cf30                _rs_fstr
+                0x0002cf6c                _rs_trees
+                0x0002d5a8                _rs_bitblk
+ *fill*         0x0002d8d1        0x1 4afc
+ .text          0x0002d8d2        0x0 obj/mforms.o
+ .rodata        0x0002d8d2      0x270 obj/mforms.o
+                0x0002d8d2                _mform_rs_data
+ .text          0x0002db42       0x3c obj/deskstart.o
+                0x0002db42                _deskstart
+ .text          0x0002db7e     0x1be8 obj/deskmain.o
+                0x0002e600                _hndl_msg
+                0x0002e8ba                _align_title
+                0x0002e908                _install_shortcuts
+                0x0002e97e                _deskmain
+ .rodata.str1.1
+                0x0002f766        0xd obj/deskmain.o
+ *fill*         0x0002f773        0x1 4afc
+ .rodata        0x0002f774       0xac obj/deskmain.o
+                0x0002f7f4                _shortcut_mapping
+ .text          0x0002f820      0x8ca obj/gembind.o
+                0x0002f876                _appl_init
+                0x0002f8be                _appl_exit
+                0x0002f8ca                _evnt_button
+                0x0002f91c                _evnt_timer
+                0x0002f936                _evnt_multi
+                0x0002fa36                _evnt_dclick
+                0x0002fa50                _menu_bar
+                0x0002fa6a                _menu_icheck
+                0x0002fa8c                _menu_ienable
+                0x0002faae                _menu_tnormal
+                0x0002fad0                _objc_add
+                0x0002faf2                _objc_draw
+                0x0002fb34                _objc_find
+                0x0002fb66                _objc_offset
+                0x0002fb9c                _objc_order
+                0x0002fbbe                _form_do
+                0x0002fbd8                _form_dial
+                0x0002fc2a                _form_alert
+                0x0002fc44                _form_error
+                0x0002fc56                _form_center
+                0x0002fc98                _graf_rubbox
+                0x0002fcde                _graf_growbox_grect
+                0x0002fd2c                _graf_shrinkbox_grect
+                0x0002fd7a                _graf_handle
+                0x0002fdb4                _graf_mouse
+                0x0002fdce                _graf_mkstate
+                0x0002fe02                _fsel_exinput
+                0x0002fe36                _wind_create_grect
+                0x0002fe6a                _wind_open_grect
+                0x0002fe9e                _wind_close
+                0x0002feb0                _wind_delete
+                0x0002fec2                _wind_get
+                0x0002ff0c                _wind_get_grect
+                0x0002ff30                _wind_set
+                0x0002ff6c                _wind_set_grect
+                0x0002ff90                _wind_find
+                0x0002ffaa                _wind_update
+                0x0002ffbc                _wind_calc_grect
+                0x00030026                _wind_new
+                0x00030032                _rsrc_load
+                0x00030044                _rsrc_free
+                0x00030050                _rsrc_obfix
+                0x0003006a                _shel_write
+                0x0003009c                _shel_get
+                0x000300b6                _shel_put
+                0x000300d0                _shel_wdef
+ .text          0x000300ea      0xbe0 obj/deskact.o
+                0x000302fc                _act_chg
+                0x000303cc                _act_allchg
+                0x00030570                _act_bsclick
+                0x00030654                _act_bdown
+ .text          0x00030cca     0x1756 obj/deskapp.o
+                0x00030e38                _nomem_alert
+                0x00030e4c                _app_alloc
+                0x00030e84                _app_free
+                0x00030eb8                _scan_str
+                0x00030f12                _app_tran
+                0x00030f40                _app_start
+                0x00031ae8                _app_save
+                0x00032036                _app_blddesk
+                0x000321e6                _app_afind_by_id
+                0x0003220c                _app_afind_by_name
+                0x000322be                _app_afind_viewer
+                0x000322d8                _app_read_inf
+ .rodata.str1.1
+                0x00032420      0x15b obj/deskapp.o
+ *fill*         0x0003257b        0x1 4afc
+ .rodata        0x0003257c      0x148 obj/deskapp.o
+ .text          0x000326c4      0xf3a obj/deskdir.o
+                0x0003281e                _draw_dial
+                0x00032930                _draw_fld
+                0x0003299c                _add_path
+                0x000329ca                _add_fname
+                0x000329e2                _del_fname
+                0x00032d42                _illegal_op_msg
+                0x00032dd8                _d_doop
+                0x00033126                _dir_op
+ .rodata.str1.1
+                0x000335fe        0x5 obj/deskdir.o
+ *fill*         0x00033603        0x1 4afc
+ .text          0x00033604      0x402 obj/deskfpd.o
+                0x0003362e                _pn_close
+                0x00033630                _pn_open
+                0x00033676                _pn_sort
+                0x00033826                _pn_active
+                0x000339a0                _pn_clear
+                0x000339b8                _pn_selected
+                0x000339d2                _pn_count
+ .text          0x00033a06     0x1448 obj/deskfun.o
+                0x00033b6a                _fun_alert
+                0x00033b84                _fun_alert_merge
+                0x00033bbc                _fun_msg
+                0x00033c74                _fun_mark_for_rebld
+                0x00033cae                _fun_rebld_marked
+                0x00033cee                _fun_rebld
+                0x00033d40                _add_one_level
+                0x00033f4e                _fun_search
+                0x0003418a                _fun_selectall
+                0x00034212                _fun_mask
+                0x000342aa                _fun_mkdir
+                0x000343ca                _fun_op
+                0x000343f2                _fun_close
+                0x0003459a                _wants_to_delete_files
+                0x00034978                _fun_drag
+                0x00034cde                _fun_del
+ .rodata.str1.1
+                0x00034e4e        0x6 obj/deskfun.o
+ .text          0x00034e54        0x0 obj/deskglob.o
+ .text          0x00034e54     0x14cc obj/deskinf.o
+                0x000351e4                _dr_code
+                0x0003548a                _start_dialog
+                0x0003550a                _end_dialog
+                0x000355bc                _inf_show
+                0x000355e2                _inf_numset
+                0x000356dc                _set_tedinfo_name
+                0x0003570e                _inf_file_folder
+                0x000359d4                _inf_disk
+                0x00035aec                _inf_pref
+                0x00035cb4                _inf_backgrounds
+                0x00035eba                _inf_conf
+                0x000362c0                _opn_appl
+ .rodata.str1.1
+                0x00036320       0x6e obj/deskinf.o
+ .text          0x0003638e     0x141e obj/deskins.o
+                0x000364b4                _is_installed
+                0x000364e0                _is_viewer
+                0x00036b44                _snap_icon
+                0x00036f92                _ins_devices
+                0x00037110                _ins_app
+                0x00037192                _is_executable
+                0x000374d2                _ins_icon
+                0x000375c2                _rmv_icon
+                0x00037616                _ins_shortcut
+ .rodata.str1.1
+                0x000377ac        0xe obj/deskins.o
+ .rodata.cst16  0x000377ba       0x10 obj/deskins.o
+ .rodata        0x000377ca       0x14 obj/deskins.o
+ .text          0x000377de      0x2e2 obj/deskobj.o
+                0x000377de                _obj_init
+                0x0003794a                _obj_walloc
+                0x0003798c                _obj_wfree
+                0x00037a04                _obj_ialloc
+                0x00037a74                _obj_get_obid
+ .rodata        0x00037ac0       0x30 obj/deskobj.o
+ .text          0x00037af0       0x72 obj/deskpro.o
+                0x00037af0                _pro_run
+ .text          0x00037b62       0x3e obj/deskrez.o
+                0x00037b62                _change_resolution
+ .text          0x00037ba0       0x16 obj/deskrsrc.o
+                0x00037ba0                _desktop_str_addr
+ .text          0x00037bb6     0x1ae4 obj/desksupp.o
+                0x00037d44                _deselect_all
+                0x00037d60                _desk_clear
+                0x00037ddc                _desk_clear_all
+                0x00037e0e                _desk_verify
+                0x00037e7a                _do_wredraw
+                0x00037f5a                _do_xyfix
+                0x00037f7a                _do_wopen
+                0x00038052                _do_wfull
+                0x000380de                _remove_locate_shortcut
+                0x000381cc                _i_find
+                0x000382a4                _valid_drive
+                0x0003830a                _malloc_fail_alert
+                0x0003831c                _desk_busy_on
+                0x0003832c                _desk_busy_off
+                0x0003833a                _do_diropen
+                0x0003841c                _do_dopen
+                0x00038520                _print_file
+                0x000386ea                _do_info
+                0x0003883e                _set_default_path
+                0x00038878                _do_aopen
+                0x00038d74                _do_fopen
+                0x00038efe                _do_open
+                0x000390d0                _refresh_window
+                0x00039130                _refresh_drive
+                0x00039170                _do_format
+ .rodata.str1.1
+                0x0003969a        0x6 obj/desksupp.o
+ .rodata.cst4   0x000396a0       0x10 obj/desksupp.o
+ .rodata        0x000396b0       0xa4 obj/desksupp.o
+ .text          0x00039754      0xbaa obj/deskwin.o
+                0x00039754                _win_view
+                0x00039824                _win_start
+                0x00039892                _win_free
+                0x000398e4                _win_alloc
+                0x000399c6                _win_find
+                0x000399ec                _win_top
+                0x00039a3a                _win_onbottom
+                0x00039a56                _win_ontop
+                0x00039a98                _win_count
+                0x00039aa0                _win_bldview
+                0x00039f9a                _win_dispfile
+                0x0003a024                _win_slide
+                0x0003a0a0                _win_arrow
+                0x0003a134                _win_srtall
+                0x0003a168                _win_bdall
+                0x0003a1ac                _win_shwall
+                0x0003a202                _win_isel
+                0x0003a252                _win_sname
+                0x0003a274                _win_sinfo
+ .text          0x0003a2fe       0x86 obj/desk_rsc.o
+                0x0003a2fe                _desk_rs_init
+ .rodata.str1.1
+                0x0003a384     0x1223 obj/desk_rsc.o
+ *fill*         0x0003b5a7        0x1 4afc
+ .rodata        0x0003b5a8     0x2394 obj/desk_rsc.o
+                0x0003b5a8                _desk_rs_fstr
+                0x0003d454                _desk_rs_bitblk
+ .text          0x0003d93c        0x0 obj/icons.o
+ .rodata.str1.1
+                0x0003d93c        0x1 obj/icons.o
+ *fill*         0x0003d93d        0x1 4afc
+ .rodata        0x0003d93e      0x890 obj/icons.o
+                0x0003d93e                _icon_rs_iconblk
+ .text          0x0003e1ce       0xd0 obj/cmdasm.o
+                0x0003e1ce                _coma_start
+                0x0003e20c                _getwh
+                0x0003e218                _getht
+                0x0003e226                _jmp_gemdos
+                0x0003e24e                _jmp_bios
+                0x0003e276                _jmp_xbios
+ .text          0x0003e29e      0x446 obj/cmdmain.o
+                0x0003e45a                _cmdmain
+                0x0003e6aa                _valid_res
+ .rodata.str1.1
+                0x0003e6e4       0x63 obj/cmdmain.o
+ *fill*         0x0003e747        0x1 4afc
+ .text          0x0003e748      0x680 obj/cmdedit.o
+                0x0003e85a                _insert_char
+                0x0003e8d2                _read_line
+                0x0003ecd0                _init_screen
+                0x0003ed02                _init_cmdedit
+                0x0003ed4a                _save_history
+ .rodata.str1.1
+                0x0003edc8        0x5 obj/cmdedit.o
+ *fill*         0x0003edcd        0x1 4afc
+ .text          0x0003edce      0x2c4 obj/cmdexec.o
+                0x0003eea4                _exec_program
+ .rodata.str1.1
+                0x0003f092        0xc obj/cmdexec.o
+ .text          0x0003f09e     0x159c obj/cmdint.o
+                0x0004044c                _lookup_builtin
+                0x0004050e                _get_path
+ .rodata.str1.1
+                0x0004063a      0x8e0 obj/cmdint.o
+ .rodata        0x00040f1a      0x300 obj/cmdint.o
+ .text          0x0004121a       0xe0 obj/cmdparse.o
+                0x0004121a                _parse_line
+ .rodata.str1.1
+                0x000412fa       0x4c obj/cmdparse.o
+ .text          0x00041346      0x4ba obj/cmdutil.o
+                0x0004134c                _escape
+                0x0004137c                _message
+                0x000413a8                _messagenl
+                0x000413bc                _errmsg
+                0x000414fc                _strlower
+                0x00041524                _strupper
+                0x0004154c                _getword
+                0x00041582                _decode_date_time
+                0x00041694                _get_path_component
+                0x000416de                _has_wildcard
+                0x000416fe                _strequal
+                0x00041744                _program_extension
+                0x000417c6                _getcookie
+ .rodata.str1.1
+                0x00041800      0x170 obj/cmdutil.o
+ .text          0x00041970        0x0 obj/endrom.o
+ .rodata        0x00041970        0xc obj/endrom.o
+                0x00041970                _ui_mupb
+ .text          0x0004197c       0x22 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+                0x0004197c                __mulsi3_internal
+                0x0004197c                __mulsi3
+ .text          0x0004199e       0x5c /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+                0x0004199e                __udivsi3_internal
+                0x0004199e                __udivsi3
+                0x000419fa                        __etext = .
+
+.data           0x000419fa        0x0
+                0x000419fa                        __data = .
+ *(.data)
+ .data          0x000419fa        0x0 obj/startup.o
+ .data          0x000419fa        0x0 obj/lowstram.o
+ .data          0x000419fa        0x0 obj/memory.o
+ .data          0x000419fa        0x0 obj/processor.o
+ .data          0x000419fa        0x0 obj/vectors.o
+ .data          0x000419fa        0x0 obj/aciavecs.o
+ .data          0x000419fa        0x0 obj/bios.o
+ .data          0x000419fa        0x0 obj/xbios.o
+ .data          0x000419fa        0x0 obj/acsi.o
+ .data          0x000419fa        0x0 obj/biosmem.o
+ .data          0x000419fa        0x0 obj/blkdev.o
+ .data          0x000419fa        0x0 obj/chardev.o
+ .data          0x000419fa        0x0 obj/clock.o
+ .data          0x000419fa        0x0 obj/conout.o
+ .data          0x000419fa        0x0 obj/country.o
+ .data          0x000419fa        0x0 obj/disk.o
+ .data          0x000419fa        0x0 obj/dma.o
+ .data          0x000419fa        0x0 obj/dmasound.o
+ .data          0x000419fa        0x0 obj/floppy.o
+ .data          0x000419fa        0x0 obj/font.o
+ .data          0x000419fa        0x0 obj/ide.o
+ .data          0x000419fa        0x0 obj/ikbd.o
+ .data          0x000419fa        0x0 obj/initinfo.o
+ .data          0x000419fa        0x0 obj/kprint.o
+ .data          0x000419fa        0x0 obj/kprintasm.o
+ .data          0x000419fa        0x0 obj/linea.o
+ .data          0x000419fa        0x0 obj/lineainit.o
+ .data          0x000419fa        0x0 obj/lineavars.o
+ .data          0x000419fa        0x0 obj/machine.o
+ .data          0x000419fa        0x0 obj/mfp.o
+ .data          0x000419fa        0x0 obj/midi.o
+ .data          0x000419fa        0x0 obj/mouse.o
+ .data          0x000419fa        0x0 obj/natfeat.o
+ .data          0x000419fa        0x0 obj/natfeats.o
+ .data          0x000419fa        0x0 obj/nvram.o
+ .data          0x000419fa        0x0 obj/panicasm.o
+ .data          0x000419fa        0x0 obj/parport.o
+ .data          0x000419fa        0x0 obj/screen.o
+ .data          0x000419fa        0x0 obj/serport.o
+ .data          0x000419fa        0x0 obj/sound.o
+ .data          0x000419fa        0x0 obj/videl.o
+ .data          0x000419fa        0x0 obj/vt52.o
+ .data          0x000419fa        0x0 obj/xhdi.o
+ .data          0x000419fa        0x0 obj/pmmu030.o
+ .data          0x000419fa        0x0 obj/68040_pmmu.o
+ .data          0x000419fa        0x0 obj/amiga.o
+ .data          0x000419fa        0x0 obj/amiga2.o
+ .data          0x000419fa        0x0 obj/spi_vamp.o
+ .data          0x000419fa        0x0 obj/lisa.o
+ .data          0x000419fa        0x0 obj/lisa2.o
+ .data          0x000419fa        0x0 obj/delay.o
+ .data          0x000419fa        0x0 obj/delayasm.o
+ .data          0x000419fa        0x0 obj/sd.o
+ .data          0x000419fa        0x0 obj/memory2.o
+ .data          0x000419fa        0x0 obj/bootparams.o
+ .data          0x000419fa        0x0 obj/scsi.o
+ .data          0x000419fa        0x0 obj/nova.o
+ .data          0x000419fa        0x0 obj/dsp.o
+ .data          0x000419fa        0x0 obj/dsp2.o
+ .data          0x000419fa        0x0 obj/scsidriv.o
+ .data          0x000419fa        0x0 obj/bdosmain.o
+ .data          0x000419fa        0x0 obj/console.o
+ .data          0x000419fa        0x0 obj/fsbuf.o
+ .data          0x000419fa        0x0 obj/fsdir.o
+ .data          0x000419fa        0x0 obj/fsdrive.o
+ .data          0x000419fa        0x0 obj/fsfat.o
+ .data          0x000419fa        0x0 obj/fsglob.o
+ .data          0x000419fa        0x0 obj/fshand.o
+ .data          0x000419fa        0x0 obj/fsio.o
+ .data          0x000419fa        0x0 obj/fsmain.o
+ .data          0x000419fa        0x0 obj/fsopnclo.o
+ .data          0x000419fa        0x0 obj/iumem.o
+ .data          0x000419fa        0x0 obj/kpgmld.o
+ .data          0x000419fa        0x0 obj/osmem.o
+ .data          0x000419fa        0x0 obj/proc.o
+ .data          0x000419fa        0x0 obj/rwa.o
+ .data          0x000419fa        0x0 obj/time.o
+ .data          0x000419fa        0x0 obj/umem.o
+ .data          0x000419fa        0x0 obj/cookie.o
+ .data          0x000419fa        0x0 obj/doprintf.o
+ .data          0x000419fa        0x0 obj/intmath.o
+ .data          0x000419fa        0x0 obj/langs.o
+ .data          0x000419fa        0x0 obj/memmove.o
+ .data          0x000419fa        0x0 obj/memset.o
+ .data          0x000419fa        0x0 obj/miscasm.o
+ .data          0x000419fa        0x0 obj/nls.o
+ .data          0x000419fa        0x0 obj/setjmp.o
+ .data          0x000419fa        0x0 obj/string.o
+ .data          0x000419fa        0x0 obj/lisautil.o
+ .data          0x000419fa        0x0 obj/miscutil.o
+ .data          0x000419fa        0x0 obj/gemdos.o
+ .data          0x000419fa        0x0 obj/optimize.o
+ .data          0x000419fa        0x0 obj/optimopt.o
+ .data          0x000419fa        0x0 obj/rectfunc.o
+ .data          0x000419fa        0x0 obj/stringasm.o
+ .data          0x000419fa        0x0 obj/fnt_off_6x6.o
+ .data          0x000419fa        0x0 obj/fnt_off_8x8.o
+ .data          0x000419fa        0x0 obj/libfont.a(fnt_st_6x6.o)
+ .data          0x000419fa        0x0 obj/libfont.a(fnt_st_8x8.o)
+ .data          0x000419fa        0x0 obj/libfont.a(fnt_st_8x16.o)
+ .data          0x000419fa        0x0 obj/version.o
+ .data          0x000419fa        0x0 obj/vdi_asm.o
+ .data          0x000419fa        0x0 obj/vdi_bezier.o
+ .data          0x000419fa        0x0 obj/vdi_col.o
+ .data          0x000419fa        0x0 obj/vdi_control.o
+ .data          0x000419fa        0x0 obj/vdi_esc.o
+ .data          0x000419fa        0x0 obj/vdi_fill.o
+ .data          0x000419fa        0x0 obj/vdi_gdp.o
+ .data          0x000419fa        0x0 obj/vdi_input.o
+ .data          0x000419fa        0x0 obj/vdi_line.o
+ .data          0x000419fa        0x0 obj/vdi_main.o
+ .data          0x000419fa        0x0 obj/vdi_marker.o
+ .data          0x000419fa        0x0 obj/vdi_misc.o
+ .data          0x000419fa        0x0 obj/vdi_mouse.o
+ .data          0x000419fa        0x0 obj/vdi_raster.o
+ .data          0x000419fa        0x0 obj/vdi_text.o
+ .data          0x000419fa        0x0 obj/vdi_textblit.o
+ .data          0x000419fa        0x0 obj/vdi_blit.o
+ .data          0x000419fa        0x0 obj/vdi_tblit.o
+ .data          0x000419fa        0x0 obj/endvdi.o
+ .data          0x000419fa        0x0 obj/gemasm.o
+ .data          0x000419fa        0x0 obj/gemstart.o
+ .data          0x000419fa        0x0 obj/gemdosif.o
+ .data          0x000419fa        0x0 obj/gemaplib.o
+ .data          0x000419fa        0x0 obj/gemasync.o
+ .data          0x000419fa        0x0 obj/gemctrl.o
+ .data          0x000419fa        0x0 obj/gemdisp.o
+ .data          0x000419fa        0x0 obj/gemevlib.o
+ .data          0x000419fa        0x0 obj/gemflag.o
+ .data          0x000419fa        0x0 obj/gemfmalt.o
+ .data          0x000419fa        0x0 obj/gemfmlib.o
+ .data          0x000419fa        0x0 obj/gemfslib.o
+ .data          0x000419fa        0x0 obj/gemgraf.o
+ .data          0x000419fa        0x0 obj/gemgrlib.o
+ .data          0x000419fa        0x0 obj/gemgsxif.o
+ .data          0x000419fa        0x0 obj/geminit.o
+ .data          0x000419fa        0x0 obj/geminput.o
+ .data          0x000419fa        0x0 obj/gemmnext.o
+ .data          0x000419fa        0x0 obj/gemmnlib.o
+ .data          0x000419fa        0x0 obj/gemobed.o
+ .data          0x000419fa        0x0 obj/gemobjop.o
+ .data          0x000419fa        0x0 obj/gemoblib.o
+ .data          0x000419fa        0x0 obj/gempd.o
+ .data          0x000419fa        0x0 obj/gemqueue.o
+ .data          0x000419fa        0x0 obj/gemrslib.o
+ .data          0x000419fa        0x0 obj/gemsclib.o
+ .data          0x000419fa        0x0 obj/gemshlib.o
+ .data          0x000419fa        0x0 obj/gemsuper.o
+ .data          0x000419fa        0x0 obj/gemwmlib.o
+ .data          0x000419fa        0x0 obj/gemwrect.o
+ .data          0x000419fa        0x0 obj/gsx2.o
+ .data          0x000419fa        0x0 obj/gem_rsc.o
+ .data          0x000419fa        0x0 obj/mforms.o
+ .data          0x000419fa        0x0 obj/deskstart.o
+ .data          0x000419fa        0x0 obj/deskmain.o
+ .data          0x000419fa        0x0 obj/gembind.o
+ .data          0x000419fa        0x0 obj/deskact.o
+ .data          0x000419fa        0x0 obj/deskapp.o
+ .data          0x000419fa        0x0 obj/deskdir.o
+ .data          0x000419fa        0x0 obj/deskfpd.o
+ .data          0x000419fa        0x0 obj/deskfun.o
+ .data          0x000419fa        0x0 obj/deskglob.o
+ .data          0x000419fa        0x0 obj/deskinf.o
+ .data          0x000419fa        0x0 obj/deskins.o
+ .data          0x000419fa        0x0 obj/deskobj.o
+ .data          0x000419fa        0x0 obj/deskpro.o
+ .data          0x000419fa        0x0 obj/deskrez.o
+ .data          0x000419fa        0x0 obj/deskrsrc.o
+ .data          0x000419fa        0x0 obj/desksupp.o
+ .data          0x000419fa        0x0 obj/deskwin.o
+ .data          0x000419fa        0x0 obj/desk_rsc.o
+ .data          0x000419fa        0x0 obj/icons.o
+ .data          0x000419fa        0x0 obj/cmdasm.o
+ .data          0x000419fa        0x0 obj/cmdmain.o
+ .data          0x000419fa        0x0 obj/cmdedit.o
+ .data          0x000419fa        0x0 obj/cmdexec.o
+ .data          0x000419fa        0x0 obj/cmdint.o
+ .data          0x000419fa        0x0 obj/cmdparse.o
+ .data          0x000419fa        0x0 obj/cmdutil.o
+ .data          0x000419fa        0x0 obj/endrom.o
+ .data          0x000419fa        0x0 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .data          0x000419fa        0x0 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+                0x000419fa                        __edata = .
+
+.bss            0x000419fa     0xde10
+                0x000419fa                        __bss = .
+ *(.bss COMMON)
+ .bss           0x000419fa        0x0 obj/startup.o
+ .bss           0x000419fa        0x0 obj/memory.o
+ .bss           0x000419fa       0x12 obj/processor.o
+                0x000419fa                _mcpu
+                0x00041a00                _fputype
+ .bss           0x00041a0c      0x290 obj/vectors.o
+                0x00041c9c                _trap_save_area
+ .bss           0x00041c9c      0x1d7 obj/aciavecs.o
+                0x00041e1c                _ikbdiorec
+                0x00041e2a                _midiiorec
+                0x00041e38                _mousexvec
+                0x00041e40                _kbdvecs
+ *fill*         0x00041e73        0x1 
+ .bss           0x00041e74       0x10 obj/bios.o
+                0x00041e74                _bootflags
+                0x00041e76                _boot_status
+ .bss           0x00041e84        0x4 obj/xbios.o
+ .bss           0x00041e88        0xa obj/acsi.o
+ .bss           0x00041e92        0x0 obj/biosmem.o
+ .bss           0x00041e92      0x54a obj/blkdev.o
+                0x00041e92                _blkdev
+ .bss           0x000423dc        0x0 obj/chardev.o
+ .bss           0x000423dc       0x18 obj/clock.o
+                0x000423dc                _has_megartc
+                0x000423de                _has_monster_rtc
+                0x000423e0                _has_icdrtc
+ .bss           0x000423f4        0x0 obj/conout.o
+ .bss           0x000423f4        0x8 obj/country.o
+                0x000423f4                _cookie_akp
+                0x000423f8                _cookie_idt
+ .bss           0x000423fc      0x5dc obj/disk.o
+                0x000423fc                _drvrem
+                0x00042400                _ultrasatan_id
+                0x00042402                _has_ultrasatan_clock
+                0x00042404                _units
+ .bss           0x000429d8        0x0 obj/dma.o
+ .bss           0x000429d8        0xc obj/dmasound.o
+                0x000429d8                _has_falcon_dmasound
+                0x000429da                _has_microwire
+                0x000429dc                _has_dmasound
+ .bss           0x000429e4       0x3c obj/floppy.o
+ .bss           0x00042a20      0x11e obj/font.o
+                0x00042a20                _sysfonts
+                0x00042a30                _fon6x6
+                0x00042a8a                _fon8x8
+                0x00042ae4                _fon8x16
+ .bss           0x00042b3e      0x290 obj/ide.o
+ .bss           0x00042dce       0x38 obj/ikbd.o
+                0x00042dce                _mouse_packet
+ .bss           0x00042e06        0x2 obj/initinfo.o
+ .bss           0x00042e08        0x0 obj/kprint.o
+ .bss           0x00042e08        0x0 obj/kprintasm.o
+ .bss           0x00042e08       0x10 obj/linea.o
+ .bss           0x00042e18        0x1 obj/lineainit.o
+                0x00042e18                _v_planes_shift
+ *fill*         0x00042e19        0x1 
+ .bss           0x00042e1a       0x2b obj/machine.o
+                0x00042e1a                _has_dip_switches
+                0x00042e1c                _blitter_is_enabled
+                0x00042e1e                _has_blitter
+                0x00042e20                _has_magnum
+                0x00042e22                _has_monster
+                0x00042e24                _has_vme
+                0x00042e26                _has_scc
+                0x00042e28                _has_modectl
+                0x00042e2a                _has_ste_shifter
+                0x00042e2c                _cookie_swi
+                0x00042e30                _cookie_mch
+                0x00042e34                _cookie_snd
+                0x00042e38                _cookie_fdc
+                0x00042e3c                _cookie_vdo
+                0x00042e40                _detected_busses
+                0x00042e44                _is_bus32
+ *fill*         0x00042e45        0x1 
+ .bss           0x00042e46        0x2 obj/mfp.o
+                0x00042e46                _timer_c_sieve
+ .bss           0x00042e48        0x0 obj/midi.o
+ .bss           0x00042e48        0xc obj/mouse.o
+                0x00042e48                _rel_pblock
+ .bss           0x00042e54        0x0 obj/natfeat.o
+ .bss           0x00042e54       0x1a obj/natfeats.o
+ .bss           0x00042e6e        0x0 obj/nvram.o
+ .bss           0x00042e6e        0x0 obj/panicasm.o
+ .bss           0x00042e6e        0xa obj/parport.o
+ .bss           0x00042e78        0x1 obj/screen.o
+ *fill*         0x00042e79        0x1 
+ .bss           0x00042e7a      0x6fc obj/serport.o
+                0x00042e7a                _recovery_loops
+                0x00042e7e                _bconmap_root
+                0x00042e86                _rs232iorecptr
+                0x00042e8a                _rsconfptr
+ .bss           0x00043576        0x6 obj/sound.o
+ .bss           0x0004357c        0x0 obj/videl.o
+ .bss           0x0004357c        0x0 obj/vt52.o
+ .bss           0x0004357c        0x8 obj/xhdi.o
+ .bss           0x00043584        0x0 obj/pmmu030.o
+ .bss           0x00043584        0x0 obj/68040_pmmu.o
+ .bss           0x00043584        0x0 obj/amiga.o
+ .bss           0x00043584        0x0 obj/amiga2.o
+ .bss           0x00043584        0x0 obj/spi_vamp.o
+ .bss           0x00043584        0x0 obj/lisa.o
+ .bss           0x00043584        0x0 obj/lisa2.o
+ .bss           0x00043584        0x4 obj/delay.o
+                0x00043584                _loopcount_1_msec
+ .bss           0x00043588        0x8 obj/delayasm.o
+ .bss           0x00043590        0x0 obj/sd.o
+ .bss           0x00043590        0x1 obj/memory2.o
+                0x00043590                _meminit_flags
+ *fill*         0x00043591        0x1 
+ .bss           0x00043592        0x0 obj/bootparams.o
+ .bss           0x00043592        0x0 obj/scsi.o
+ .bss           0x00043592       0x14 obj/nova.o
+                0x00043592                _has_nova
+ .bss           0x000435a6        0x0 obj/dsp.o
+ .bss           0x000435a6        0x0 obj/dsp2.o
+ .bss           0x000435a6       0xf0 obj/scsidriv.o
+                0x000435a6                _scsidriv_root
+ .bss           0x00043696      0x104 obj/bdosmain.o
+                0x00043696                _old_trap2
+ .bss           0x0004379a      0x21a obj/console.o
+ .bss           0x000439b4        0x0 obj/fsbuf.o
+ .bss           0x000439b4        0x8 obj/fsdir.o
+ .bss           0x000439bc       0xf4 obj/fsdrive.o
+                0x000439bc                _drvsel
+                0x000439c0                _dirtbl
+ .bss           0x00043ab0        0x0 obj/fsfat.o
+ .bss           0x00043ab0      0x394 obj/fsglob.o
+                0x00043ab0                _errbuf
+                0x00043ae4                _errdrv
+                0x00043ae6                _errcode
+                0x00043aea                _rwerr
+                0x00043aee                _sft
+                0x00043ddc                _drvtbl
+ .bss           0x00043e44        0x0 obj/fshand.o
+ .bss           0x00043e44        0x0 obj/fsio.o
+ .bss           0x00043e44        0x0 obj/fsmain.o
+ .bss           0x00043e44        0x0 obj/fsopnclo.o
+ .bss           0x00043e44        0x0 obj/iumem.o
+ .bss           0x00043e44        0x0 obj/kpgmld.o
+ .bss           0x00043e44     0x1e94 obj/osmem.o
+                0x00043e44                _root
+ .bss           0x00045cd8      0x83c obj/proc.o
+                0x00045cd8                _run
+ .bss           0x00046514      0x7d4 obj/rwa.o
+ .bss           0x00046ce8        0x6 obj/time.o
+                0x00046ce8                _current_date
+                0x00046cea                _current_time
+ .bss           0x00046cee       0x26 obj/umem.o
+                0x00046cee                _malloc_align_stram
+                0x00046cf2                _has_alt_ram
+                0x00046cf4                _pmdalt
+                0x00046d00                _pmd
+ .bss           0x00046d14       0xa0 obj/cookie.o
+ .bss           0x00046db4        0x0 obj/doprintf.o
+ .bss           0x00046db4        0x0 obj/intmath.o
+ .bss           0x00046db4        0x0 obj/langs.o
+ .bss           0x00046db4        0x0 obj/memmove.o
+ .bss           0x00046db4        0x0 obj/memset.o
+ .bss           0x00046db4        0xc obj/miscasm.o
+ .bss           0x00046dc0        0x0 obj/nls.o
+ .bss           0x00046dc0        0x0 obj/setjmp.o
+ .bss           0x00046dc0        0x6 obj/string.o
+ .bss           0x00046dc6        0x0 obj/lisautil.o
+ .bss           0x00046dc6        0x0 obj/miscutil.o
+ .bss           0x00046dc6        0x0 obj/gemdos.o
+ .bss           0x00046dc6        0x0 obj/optimize.o
+ .bss           0x00046dc6        0x0 obj/optimopt.o
+ .bss           0x00046dc6        0x0 obj/rectfunc.o
+ .bss           0x00046dc6        0x0 obj/stringasm.o
+ .bss           0x00046dc6        0x0 obj/fnt_off_6x6.o
+ .bss           0x00046dc6        0x0 obj/fnt_off_8x8.o
+ .bss           0x00046dc6        0x0 obj/libfont.a(fnt_st_6x6.o)
+ .bss           0x00046dc6        0x0 obj/libfont.a(fnt_st_8x8.o)
+ .bss           0x00046dc6        0x0 obj/libfont.a(fnt_st_8x16.o)
+ .bss           0x00046dc6        0x0 obj/version.o
+ .bss           0x00046dc6        0x0 obj/vdi_asm.o
+ .bss           0x00046dc6        0x0 obj/vdi_bezier.o
+ .bss           0x00046dc6       0x40 obj/vdi_col.o
+                0x00046dc6                _REV_MAP_COL
+                0x00046de6                _MAP_COL
+ .bss           0x00046e06      0x208 obj/vdi_control.o
+                0x00046e06                _mcs_ptr
+ .bss           0x0004700e        0x0 obj/vdi_esc.o
+ .bss           0x0004700e      0xc10 obj/vdi_fill.o
+                0x0004700e                _vdishare
+ .bss           0x00047c1e        0xe obj/vdi_gdp.o
+ .bss           0x00047c2c        0x0 obj/vdi_input.o
+ .bss           0x00047c2c       0x5a obj/vdi_line.o
+ .bss           0x00047c86        0x2 obj/vdi_main.o
+                0x00047c86                _flip_y
+ .bss           0x00047c88        0x0 obj/vdi_marker.o
+ .bss           0x00047c88        0x2 obj/vdi_misc.o
+ .bss           0x00047c8a        0x8 obj/vdi_mouse.o
+                0x00047c8a                _old_statvec
+                0x00047c8e                _user_wheel
+ .bss           0x00047c92       0x4c obj/vdi_raster.o
+ .bss           0x00047cde        0x0 obj/vdi_text.o
+ .bss           0x00047cde        0x0 obj/vdi_textblit.o
+ .bss           0x00047cde        0x0 obj/vdi_blit.o
+ .bss           0x00047cde        0x0 obj/vdi_tblit.o
+ .bss           0x00047cde        0x0 obj/endvdi.o
+                0x00047cde                __endvdibss
+ .bss           0x00047cde      0x288 obj/gemasm.o
+ .bss           0x00047f66      0x108 obj/gemstart.o
+ .bss           0x0004806e      0x6b4 obj/gemdosif.o
+                0x00048078                _drwaddr
+                0x00048084                _tiksav
+                0x00048088                _NUM_TICK
+                0x0004808c                _CMP_TICK
+                0x00048090                _enable_ceh
+ .bss           0x00048722        0xa obj/gemaplib.o
+                0x00048722                _gl_rbuf
+                0x00048726                _gl_rlen
+                0x00048728                _gl_recd
+                0x0004872a                _gl_play
+ .bss           0x0004872c        0x0 obj/gemasync.o
+ .bss           0x0004872c       0x1e obj/gemctrl.o
+                0x0004872c                _appl_msg
+                0x0004873c                _gl_ctmown
+                0x0004873e                _gl_ctwait
+ .bss           0x0004874a        0x0 obj/gemdisp.o
+ .bss           0x0004874a        0x6 obj/gemevlib.o
+                0x0004874a                _gl_ticktime
+                0x0004874c                _gl_dclick
+ .bss           0x00048750        0x0 obj/gemflag.o
+ .bss           0x00048750        0x0 obj/gemfmalt.o
+ .bss           0x00048750      0x112 obj/gemfmlib.o
+                0x00048750                _ml_ocnt
+ .bss           0x00048862       0x14 obj/gemfslib.o
+ .bss           0x00048876      0x232 obj/gemgraf.o
+                0x00048876                _gl_rmenu
+                0x0004887e                _gl_rcenter
+                0x00048886                _gl_rzero
+                0x0004888e                _gl_rfull
+                0x00048896                _gl_rscreen
+                0x0004889e                _ptsin
+                0x000488c6                _intin
+                0x000489c6                _contrl
+                0x000489de                _gl_ws
+                0x00048a50                _gl_dst
+                0x00048a64                _gl_src
+                0x00048a78                _gl_handle
+                0x00048a7a                _gl_nplanes
+                0x00048a7c                _gl_clip
+                0x00048a84                _gl_hbox
+                0x00048a86                _gl_wbox
+                0x00048a88                _gl_hschar
+                0x00048a8a                _gl_wschar
+                0x00048a8c                _gl_hchar
+                0x00048a8e                _gl_wchar
+                0x00048a90                _gl_height
+                0x00048a92                _gl_width
+ .bss           0x00048aa8        0x0 obj/gemgrlib.o
+ .bss           0x00048aa8       0x96 obj/gemgsxif.o
+                0x00048aa8                _gl_moff
+                0x00048aaa                _ptsout
+                0x00048ac2                _intout
+ .bss           0x00048b3e     0x36d6 obj/geminit.o
+                0x00048b3e                _D
+                0x0004bf88                _curpid
+                0x0004bf8a                _wind_spb
+                0x0004bf94                _fpcnt
+                0x0004bf96                _fph
+                0x0004bf98                _fpt
+                0x0004bf9a                _indisp
+                0x0004bf9c                _zlr
+                0x0004bfa0                _dlr
+                0x0004bfa4                _eul
+                0x0004bfa8                _nrl
+                0x0004bfac                _drl
+                0x0004bfb0                _rlr
+                0x0004bfb4                _gl_prevmouse
+                0x0004bffe                _gl_mouse
+                0x0004c048                _mouse_cursor
+                0x0004c068                _ad_envrn
+                0x0004c06c                _num_accs
+                0x0004c06e                _totpds
+ .bss           0x0004c214       0x32 obj/geminput.o
+                0x0004c214                _gl_bdely
+                0x0004c216                _gl_btrue
+                0x0004c218                _gl_bdesired
+                0x0004c21a                _gl_bclick
+                0x0004c21c                _ctl_pd
+                0x0004c220                _gl_mowner
+                0x0004c224                _pr_mclick
+                0x0004c226                _pr_yrat
+                0x0004c228                _pr_xrat
+                0x0004c22a                _pr_button
+                0x0004c22c                _mtrans
+                0x0004c22e                _mclick
+                0x0004c230                _kstate
+                0x0004c232                _yrat
+                0x0004c234                _xrat
+                0x0004c236                _button
+ .bss           0x0004c246        0x0 obj/gemmnext.o
+ .bss           0x0004c246       0x2e obj/gemmnlib.o
+                0x0004c246                _gl_dafirst
+                0x0004c248                _gl_mnppd
+                0x0004c24c                _gl_mntree
+ .bss           0x0004c274       0x1c obj/gemobed.o
+ .bss           0x0004c290        0x0 obj/gemobjop.o
+ .bss           0x0004c290        0x0 obj/gemoblib.o
+ .bss           0x0004c290        0x0 obj/gempd.o
+ .bss           0x0004c290        0x0 obj/gemqueue.o
+ .bss           0x0004c290       0x88 obj/gemrslib.o
+ .bss           0x0004c318        0x0 obj/gemsclib.o
+ .bss           0x0004c318      0x102 obj/gemshlib.o
+                0x0004c318                _gl_nextrez
+                0x0004c31a                _gl_changerez
+                0x0004c31c                _ad_stail
+ .bss           0x0004c41a        0x4 obj/gemsuper.o
+ .bss           0x0004c41e      0x32c obj/gemwmlib.o
+                0x0004c41e                _gl_awind
+                0x0004c422                _gl_wtop
+ .bss           0x0004c74a       0x10 obj/gemwrect.o
+ .bss           0x0004c75a       0x14 obj/gsx2.o
+                0x0004c75a                _vdipb
+ .bss           0x0004c76e      0x950 obj/gem_rsc.o
+                0x0004c76e                _rs_obj
+                0x0004cd9e                _rs_tedinfo
+ .bss           0x0004d0be        0x0 obj/mforms.o
+ .bss           0x0004d0be      0xa00 obj/deskstart.o
+ .bss           0x0004dabe       0x74 obj/deskmain.o
+                0x0004dabe                _menu_shortcuts
+                0x0004dae0                _gl_apid
+                0x0004dae2                _gl_pmstr
+                0x0004dae6                _gl_amstr
+ .bss           0x0004db32       0x7c obj/gembind.o
+                0x0004db32                _global
+ .bss           0x0004dbae        0x0 obj/deskact.o
+ .bss           0x0004dbae        0x6 obj/deskapp.o
+ .bss           0x0004dbb4        0xc obj/deskdir.o
+ .bss           0x0004dbc0        0x0 obj/deskfpd.o
+ .bss           0x0004dbc0        0x8 obj/deskfun.o
+ .bss           0x0004dbc8      0x34a obj/deskglob.o
+                0x0004dbc8                _G
+ .bss           0x0004df12        0x4 obj/deskinf.o
+ .bss           0x0004df16       0x22 obj/deskins.o
+ .bss           0x0004df38        0x0 obj/deskobj.o
+ .bss           0x0004df38        0x0 obj/deskpro.o
+ .bss           0x0004df38        0x0 obj/deskrez.o
+ .bss           0x0004df38        0x0 obj/deskrsrc.o
+ .bss           0x0004df38        0x6 obj/desksupp.o
+ .bss           0x0004df3e        0x0 obj/deskwin.o
+ .bss           0x0004df3e      0x5a5 obj/desk_rsc.o
+                0x0004df3e                _desk_rs_trees
+                0x0004df86                _desk_rs_obj
+                0x0004df8a                _desk_rs_tedinfo
+ *fill*         0x0004e4e3        0x1 
+ .bss           0x0004e4e4        0x0 obj/icons.o
+ .bss           0x0004e4e4     0x1010 obj/cmdasm.o
+                0x0004e4e4                _environment
+ .bss           0x0004f4f4      0x260 obj/cmdmain.o
+                0x0004f4f4                _redir_handle
+                0x0004f4f8                _user_path
+                0x0004f578                _dta
+                0x0004f57c                _nflops_copy
+                0x0004f57e                _linewrap
+                0x0004f580                _requested_res
+                0x0004f582                _current_res
+                0x0004f584                _screen_rows
+                0x0004f586                _screen_cols
+                0x0004f588                _idt_value
+ .bss           0x0004f754       0xb0 obj/cmdedit.o
+ .bss           0x0004f804        0x2 obj/cmdexec.o
+ .bss           0x0004f806        0x4 obj/cmdint.o
+ .bss           0x0004f80a        0x0 obj/cmdparse.o
+ .bss           0x0004f80a        0x0 obj/cmdutil.o
+ .bss           0x0004f80a        0x0 obj/endrom.o
+ .bss           0x0004f80a        0x0 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_mulsi3.o)
+ .bss           0x0004f80a        0x0 /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a(_udivsi3.o)
+                0x0004f80a                        __ebss = .
+
+.laststram      0x0004f80c        0x0
+                0x0004f80c                        __end_os_stram = .
+
+/DISCARD/
+ *(.comment)
+ *(.debug*)
+                0x0004197c                        PROVIDE (___mulsi3 = __mulsi3)
+                [!provide]                        PROVIDE (___divsi3 = __divsi3)
+                [!provide]                        PROVIDE (___modsi3 = __modsi3)
+                0x0004199e                        PROVIDE (___udivsi3 = __udivsi3)
+                [!provide]                        PROVIDE (___umodsi3 = __umodsi3)
+LOAD /opt/homebrew/Cellar/m68k-elf-gcc/16.2.0/lib/gcc/m68k-elf/16.2.0/m68000/libgcc.a
+OUTPUT(emutos.img binary)

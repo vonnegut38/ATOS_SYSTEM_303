@@ -1,0 +1,12 @@
+# EmuTOS RAM-TOS — zamrozony build (etap 1 planu)
+
+Zrodlo: files-pasted-by-the-user-projekt/work/emutos-reference
+Polecenie: make 256 ELF=1 DEF='-DTARGET_PRG' -j4
+Toolchain: m68k-elf-gcc (GCC) 16.2.0
+           GNU assembler (GNU Binutils) 2.47.20260726
+
+Naglowek obrazu: BRA=602e ver=0206 ENTRY=0x00002170 base=0x00002140
+Mapa: __text = . pod 0x00002140 (zgodna z obrazem)
+
+4a6fa0b4656137ab7cd274f4a5a3a2bfc5496bf6560e2e84e1961d2a88bb7a08  work/emutos-ram/emutos.img
+c92eee9ae3ea670c0fc70add2eecfb8f7a01314ff06a0230abad5d07127f5df9  work/emutos-ram/emutos.map

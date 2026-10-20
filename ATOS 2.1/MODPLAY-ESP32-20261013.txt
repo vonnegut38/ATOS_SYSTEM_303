@@ -1,0 +1,86 @@
+MODPLAY: YAMAHA / ESP32 SOUND ACCELERATOR — 2026-10-13
+
+OBSŁUGA
+W oknie programu przyciski Yamaha i ESP32 Sound Accelerator. F1 wybiera
+Yamahę, F2 akcelerator. Zaznaczone wyjście ma nawiasy kwadratowe.
+Yamaha pozostaje wyjściem domyślnym i zachowuje pauzę/wznowienie.
+Dla akceleratora SPACE / przycisk STOP zatrzymuje, PLAY zaczyna od początku:
+ASND-v1 nie udostępnia pauzy ani seek. Nie nazywamy tego wznowieniem.
+Zmiana wyjścia zatrzymuje stare odtwarzanie i zaczyna przygotowanie utworu
+na nowym wyjściu. Można zmienić wyjście lub zamknąć okno także podczas uploadu.
+Brak akceleratora przy F2 pozostawia aktualnie działającą Yamahę.
+
+URUCHOMIENIE
+MOD Player.app obok tego dokumentu uruchamia specjalne Hatari z NF_ATOS_SOUND,
+BIOS i osobny obraz live/test.img. Obraz główny ATOS_AKTUALNY nie był zmieniany.
+Z pulpitu można uruchomić MODPLAY; krótki alias w RUN: M.
+Konfiguracja: 68030 / 32 MHz, 8 MB ST + 64 MB TT, ET4000, 800x600,
+audio 44100 Hz. Nie uruchamiać równocześnie dwóch instancji na live/test.img.
+
+CO ZMIENIONO
+Źródła w Deepseek_test/ATOS 2.1:
+- system/modplay.c: wybór wyjścia, przejścia/cleanup, UI, rozdzielenie submit;
+- system/modplay_sound.c i include/modplay_sound.h: ASND-v1 przez usługę
+  jądra 86/87; HELLO, CAPS, upload transakcyjny, PLAY/STOP/RESET/GET_CLOCK;
+- third_party/atos_sound_client: snapshot wspólnego klienta wire/client/upload
+  z opcjonalną szybką CRC, identyczny protokół jak integracja Prehistorika;
+- Makefile: klient i pomocnicze funkcje PIC w MODPLAY; rozszerzony test;
+- tests/test_modplay_app.c: prawdziwy player + rzeczywisty silnik ASND.
+Sterownik Yamahy, jądro, ABI protokołu i firmware sprzętowy pozostają bez zmian.
+Kopie poprzednich zmienionych plików: before/. Patch: MODPLAY-ESP32.patch.
+
+BUDOWANIE
+cd "/Users/xxx/Documents/Deepseek_test/ATOS 2.1"
+gmake modplay
+gmake check-modplay-pcm
+
+FORMAT I OGRANICZENIA
+To przełączenie wyjścia istniejącego playera, NIE dekoder MOD wewnątrz ESP32.
+Nadal używa HYMN.MOD i opcjonalnego zweryfikowanego HYMN.PCM. Nie dodano
+wybierania innego pliku ani trwałego zapisu wybranego wyjścia.
+Istniejący cache jest U8 mono, 12288 Hz. Dla ASND zamieniamy go na S16LE mono
+podczas uploadu; to nie przywraca precyzji utraconej przy tworzeniu cache.
+Wyjście emulowanego modułu jest stereo S16 44100 Hz; ten utwór pozostaje mono.
+HYMN: 3 104 640 ramek / 252,66 s. Yamaha: 3 104 640 B;
+akcelerator: 6 209 280 B. Mieści się w obecnym budżecie 6 MiB.
+Budżet pobierany z GET_CAPS; dłuższy klip jest odrzucany czytelnym komunikatem,
+nie jest ucinany. Brak / błędny cache powoduje renderowanie Micromodem.
+To nadal pełny PCM w pamięci i długi pierwszy upload. Odtwarzanie po uploadzie
+nie wymaga generowania kolejnych bloków w pętli aplikacji. Nie przeprowadzono
+w tej rundzie benchmarku CPU.
+
+Broker bieżącego jądra rezerwuje urządzenie ASND dla PID aż do zamknięcia
+programu. RESET czyści głosy i sample, ale przejście F1 do Yamahy nie oddaje
+rezerwacji innemu klientowi ASND. Aby uruchomić Prehistorika z ASND po tym
+teście, należy zamknąć MODPLAY. Osobne domeny PSG i ASND są zachowane.
+Następny krok systemowy: jawne zwalnianie rezerwacji brokera przy zachowaniu
+bezpiecznego resetu/cleanup; nie obchodzimy właściciela wywołaniami raw NF.
+Niepewna odpowiedź transportu zatrzymuje dalsze komendy — program należy
+zamknąć, aby kernel przeprowadził końcowe sprzątanie. Nie wysyłamy zmienionego
+polecenia z numerem niepotwierdzonej poprzedniej transakcji.
+
+WERYFIKACJA
+Host ASan + UBSan PASS: dotychczasowy PCM/Yamaha, pauza/wznowienie, cache
+prawidłowy/uszkodzony, zmiana wyjścia klawiaturą i myszą, brak urządzenia,
+zajęty broker, render do rzeczywistego miksera, STOP/restart, anulowanie
+uploadu, limit pamięci oraz utrata odpowiedzi bez niebezpiecznego retry.
+Finalny APP: 14 674 B, pamięć 42 312 B, stos 8192 B. Checksum, polityka APW2
+oraz brak absolutnych skoków do kodu PASS. Bajty APP na live/test.img zgodne
+z buildem (live-manifest.json). Nie zmieniono KERNEL.SYS ani BIOS obrazu.
+
+Emulator: Yamaha PLAY -> ESP32 PLAY -> STOP -> PLAY -> Yamaha (ponowne
+przygotowanie) -> zamknięcie. kernel_fault_vector=0, kdbg_uf_count=0.
+Dowody: runtime.json, run/*.png i audio-stats.json. Ten przebieg używał
+identycznej logiki przed skróceniem dwóch długich etykiet w GUI.
+Yamaha: nagrane 4,00 s, peak 5767; ASND: 5,95 s, peak 15532,
+521552 niezerowych wartości. Zero clippingu. Po zamknięciu nagrane 2,66 s:
+wszystkie próbki równe zero. To weryfikacja zapisu PCM wyjścia Hatari,
+nie deklaracja osobistego odsłuchu głośników ani testu fizycznego modułu.
+
+Pełny ESP32-S3, NetUSBee i ES8388 nie były testowane sprzętowo.
+Następny etap jakości/wydajności: dekoder MOD w koprocesorze lub strumieniowanie;
+nie powiększanie bez końca bufora pełnych utworów PCM.
+
+PAKIET / OBRAZ / LOGI: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/modplay-accelerator
+
+Finalna wersja z poprawionymi etykietami: widoczne Hatari, ESP32 PLAY, pełny klip 3104640 ramek, fault=0, uf=0. Potwierdzone live/verified.json, live/modplayer.png oraz modplayer-esp32.wav. Nagranie: {"rate": 44100, "channels": 2, "bits": 16, "seconds": 6.002086167800454, "peak": 16515, "clipped": 0, "nonzero": 526912}

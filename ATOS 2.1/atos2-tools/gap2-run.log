@@ -1,0 +1,39 @@
+--- baseline: total_overrun=0 total_pending=0 irq_dropped=[0] ---
+setup done
+--- after cycle 8: total_overrun=9 total_pending=14 irq_dropped=[0] ---
+    id  0 0 timer/switch       overrun=   2 pending=   0
+    id  1 1 input poll         overrun=   1 pending=   0
+    id  2 2 ksessions          overrun=   1 pending=   1
+    id  3 3 consumer loop      overrun=   1 pending=   0
+    id  4 4 notify             overrun=   1 pending=   0
+    id  7 7 ksessions2         overrun=   0 pending=   1
+    id 10 10 wm_applet_bar     overrun=   0 pending=   1
+    id 11 11 ksessions_paint   overrun=   1 pending=   4
+    id 12 12 kvideo_flush      overrun=   2 pending=   1
+    id 14 14 Timer-C handler   overrun=   0 pending=   6
+--- after cycle 16: total_overrun=9 total_pending=27 irq_dropped=[0] ---
+    id  0 0 timer/switch       overrun=   2 pending=   0
+    id  1 1 input poll         overrun=   1 pending=   2
+    id  2 2 ksessions          overrun=   1 pending=   4
+    id  3 3 consumer loop      overrun=   1 pending=   1
+    id  4 4 notify             overrun=   1 pending=   0
+    id  7 7 ksessions2         overrun=   0 pending=   2
+    id  9 9 wm_frame_tick      overrun=   0 pending=   1
+    id 10 10 wm_applet_bar     overrun=   0 pending=   2
+    id 11 11 ksessions_paint   overrun=   1 pending=   5
+    id 12 12 kvideo_flush      overrun=   2 pending=   2
+    id 14 14 Timer-C handler   overrun=   0 pending=   8
+--- final: total_overrun=9 total_pending=27 irq_dropped=[0] ---
+    id  0 0 timer/switch       overrun=   2 pending=   0
+    id  1 1 input poll         overrun=   1 pending=   2
+    id  2 2 ksessions          overrun=   1 pending=   4
+    id  3 3 consumer loop      overrun=   1 pending=   1
+    id  4 4 notify             overrun=   1 pending=   0
+    id  7 7 ksessions2         overrun=   0 pending=   2
+    id  9 9 wm_frame_tick      overrun=   0 pending=   1
+    id 10 10 wm_applet_bar     overrun=   0 pending=   2
+    id 11 11 ksessions_paint   overrun=   1 pending=   5
+    id 12 12 kvideo_flush      overrun=   2 pending=   2
+    id 14 14 Timer-C handler   overrun=   0 pending=   8
+closing
+hatari rc= 0

@@ -1,0 +1,17 @@
+{
+  "include/gui_damage.h": {
+    "baseline_sha256": "7c123440563a09c9695a76c39da964973bf6603615f293ac53c77b2c7a52c61f",
+    "live_unchanged": true,
+    "patched_sha256": "c24ef8f9698b6982fa6d26b5e52fac01dc0073cd2b135e8f20a4a36b4d64c843"
+  },
+  "system/kernel_graphics.c": {
+    "baseline_sha256": "f3ac505316ca425c709f06577ad7d6e290cc272bc046f6a31f5325021cb24924",
+    "live_unchanged": true,
+    "patched_sha256": "b6d80ad2b42facfc680d53910cfb8ab7612df391af08b1df44ad8c1f32f4cf79"
+  },
+  "system/desktop_wm.c": {
+    "baseline_sha256": "08f21e149ffa9439e7a63e30ae4d2256bc922e417ea52e903673aaacd84ba2a2",
+    "live_unchanged": true,
+    "patched_sha256": "b5c561f0b7fa7644ebd6fac5839f783f7da8fae075b62c160a9a764af4088922"
+  }
+}

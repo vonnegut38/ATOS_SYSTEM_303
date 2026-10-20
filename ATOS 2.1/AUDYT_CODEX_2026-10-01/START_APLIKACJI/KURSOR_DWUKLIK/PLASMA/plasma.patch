@@ -1,0 +1,134 @@
+--- a/system/plasma.c
++++ b/system/plasma.c
+@@ -1,7 +1,7 @@
+-/* PLASMA 0.1 - animated colour "ripple plasma" in a window.  CPU-bound by
+-   design (it recomputes every cell and spins between frames) so the process
+-   manager shows it consuming time while the desktop stays responsive. */
++/* PLASMA: timer-driven animation; no input required to advance frames. */
+ #include "gui_app.h"
++#include "icons_color.h"
++#define FRAME_COUNTS 1229u /* approximately 10 fps; skip missed deadlines */
+ 
+ #define KKEY 0x4b4b4559u
+ #define KMOU 0x4b4d4f55u
+@@ -61,14 +61,13 @@
+         pend_push(&m);
+     }
+ }
+-static void add(uint16_t kind,int16_t x,int16_t y,uint16_t w,uint16_t h,uint16_t color,const char *text)
++/* BSS clears the unused text/flags once; fills only change geometry/colour. */
++static void add_fill(int16_t x,int16_t y,uint16_t w,uint16_t h,uint16_t color)
+ {
+-    gui_draw_t *d;uint8_t *p;unsigned i;
+-    if(n>=sizeof(list)/sizeof(list[0]))return;
+-    d=&list[n++];p=(uint8_t *)d;
+-    for(i=0;i<sizeof(*d);++i)p[i]=0;
+-    d->kind=kind;d->x=x;d->y=y;d->w=w;d->h=h;d->color=color;d->background=1;
+-    if(text)copytext(d->text,text,sizeof(d->text));
++    gui_draw_t *d;
++    if(n>=GUI_DRAW_MAX)return;
++    d=&list[n++];d->kind=GUI_FILL;d->x=x;d->y=y;
++    d->w=w;d->h=h;d->color=color;
+ }
+ static void flush(void)
+ {
+@@ -77,24 +76,36 @@
+     n=0;
+ }
+ 
+-/* One frame: ripple rings mapped onto the 128-entry icon palette (20..147). */
+-static void frame(uint32_t t)
++static uint8_t base[CH][CW];
++static void prepare(void)
++{
++    unsigned x,y;
++    for(y=0;y<CH;++y)for(x=0;x<CW;++x)
++        base[y][x]=(uint8_t)(((x*x*3u+y*y*2u)>>4u)%ICON_PAL_COLORS);
++}
++static uint16_t colour(unsigned x,unsigned y,uint32_t phase)
++{
++    unsigned v=base[y][x]+phase;
++    if(v>=ICON_PAL_COLORS)v-=ICON_PAL_COLORS;
++    return chunky?(uint16_t)(ICON_PAL_BASE+v):(uint16_t)((v>>3u)&1u);
++}
++static void frame(uint32_t phase)
+ {
+     unsigned x,y;
+     n=0;
+-    for(y=0;y<CH;++y)for(x=0;x<CW;++x){
+-        uint32_t v=((x*x*3u+y*y*2u+t)>>4u)&0x7fu;
+-        add(GUI_FILL,(int16_t)(x*CELL),(int16_t)(y*CELL),CELL,CELL,
+-            (uint16_t)(20u+v),0);
+-        if(n>=80u)flush();
++    for(y=0;y<CH;++y)for(x=0;x<CW;){
++        unsigned start=x;uint16_t c=colour(x,y,phase);
++        while(++x<CW&&colour(x,y,phase)==c){}
++        add_fill((int16_t)(start*CELL),(int16_t)(y*CELL),
++                 (uint16_t)((x-start)*CELL),CELL,c);
++        if(n>=GUI_DRAW_MAX)flush();
+     }
+     flush();
+-    (void)gfx(GFX_CONTENT,CLIENT_H,0,0);
+ }
+ 
+ int app_main(void)
+ {
+-    uint32_t t=0;
++    uint32_t phase=0,last;
+     gfx_pid=lookup("SYSTEM.GFX");if(gfx_pid<0)return 1;
+     gui_pid=lookup("SYSTEM.GUI");if(gui_pid<0)return 1;
+     {int32_t v=gfx(GFX_VIDEO_MODE,0,0,0);
+@@ -110,18 +121,31 @@
+         (void)gfx(GFX_WINDOW,((uint32_t)(uint16_t)wx<<16)|(uint16_t)wy,((uint32_t)WW<<16)|WH,0u);
+         (void)gfx(GFX_TITLE,(uint32_t)(uintptr_t)"PLASMA",0,0);
+     }
+-    frame(t);                          /* draw the first frame immediately */
+-    for(;;){
+-        volatile unsigned k;
+-        if(!pend_pop(&m)&&receive(&m,1)){pause_tick();}
+-        if(m.sender)continue;
+-        if(m.v[0]==KKEY){if(((m.v[1]>>24)&0xffu)==1u){uint32_t s=m.v[1]&0x7fu;
+-            if(s==1||s==0x44){quit=1;break;}}}
+-        else if(m.v[0]==WCLS){quit=1;break;}
+-        else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)(m.v[1]&0xffffu);}
++    prepare();
++    add_fill(0,0,WW,CLIENT_H,0);flush();
++    (void)gfx(GFX_CONTENT,CLIENT_H,0,0); /* geometry, not a per-frame operation */
++    frame(phase);last=hires();
++    while(!quit){
++        unsigned events;
++        /* Bound input work, so a stream of motion cannot starve animation. */
++        for(events=0;events<16u;++events){
++            if(!pend_pop(&m)&&receive(&m,0))break;
++            if(m.sender)continue;
++            if(m.v[0]==KKEY&&((m.v[1]>>24)&0xffu)==1u){
++                uint32_t scan=m.v[1]&0x7fu;
++                if(scan==1u||scan==0x44u)quit=1;
++            }else if(m.v[0]==WCLS)quit=1;
++            else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)m.v[1];}
++            if(quit)break;
++        }
+         if(quit)break;
+-        frame(t);t+=240u;             /* advance the ripple */
+-        for(k=0;k<40000u;++k){}       /* spin: keep the process CPU-bound */
++        {uint32_t now=hires(),elapsed=now-last;
++         if(elapsed>=FRAME_COUNTS){
++             uint32_t steps=elapsed/FRAME_COUNTS;
++             last+=steps*FRAME_COUNTS;
++             phase=(phase+(steps%ICON_PAL_COLORS)*15u)%ICON_PAL_COLORS;
++             frame(phase);
++         }else pause_tick();}
+     }
+     if(fullscreen){(void)gui_op(GUI_END_KEYS);(void)gfx(GFX_RESTORE,0,0,0);}
+     return 0;
+--- a/Makefile
++++ b/Makefile
+@@ -315,7 +315,7 @@
+ 	$(OBJCOPY) -O binary build/system/taskmgr.elf $@
+ 	python3 tools/patch_boot_checksum.py $@
+ 
+-build/system/plasma.o: system/plasma.c include/gui_app.h include/gui_draw.h
++build/system/plasma.o: system/plasma.c include/gui_app.h include/gui_draw.h system/icons_color.h
+ 	$(CC) $(GUI_APP_CFLAGS) -MMD -MP -c $< -o $@
+ build/system/PLASMA.APP: build/system/gui_app_runtime.o build/system/plasma.o linker/app-sys.ld include/gui_app.h include/gui_draw.h
+ 	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/app-sys.ld -Wl,--gc-sections -o build/system/plasma.elf $(filter %.o,$^) -lgcc

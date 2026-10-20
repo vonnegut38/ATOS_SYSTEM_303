@@ -1,0 +1,18 @@
+Najpierw przeczytaj RAPORT.md i obejrzyj evidence/icons-before.png oraz icons-after.png.
+
+Przyczyna: DESKTOP pyta o opcode 35, kernel go obsługuje, ale GFX.APP nadal
+odrzuca opcode >34. Pulpit interpretuje kod błędu jako mono.
+
+Minimalna poprawka: GFX-depth-query.patch. Test A/B: po podmianie samego
+GFX.APP kosz czerwony, skróty niebieskie, drugi dysk szary.
+
+Zbuduj i zainstaluj GFX.APP w zatrzymanej kopii obrazu, potem restart.
+Nie wystarczy przebudować KERNEL.SYS albo DESKTOP.APP.
+Nie omijaj autoryzacji klienta w kernelu.
+
+Nowe pliki PNG to osobny etap: obecny renderer nadal wybiera stare zasoby
+EmuTOS i ink/paper. PNG nie są podpięte, a mk_icons.py usuwa kolory (1 bpp).
+W raporcie jest plan konwersji podczas budowy do indeksowanych ikon + maski,
+wspólnej palety i osobnych stanów. Patch nie implementuje ładowania PNG.
+
+Źródła użytkownika i aktywny obraz pozostały bez zmian.

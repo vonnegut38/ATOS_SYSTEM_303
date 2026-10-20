@@ -1,0 +1,81 @@
+PRE2 — KOLEJNA OPTYMALIZACJA PRZEWIJANIA, 2026-10-12
+
+WYNIK I OGRANICZENIA
+Zachowany rozmiar obrazu, tempo gry 70/3 Hz, sterowanie i potwierdzenie ESC.
+Średnia całego przebiegu: 18,17 -> 19,00 kl./s (+4,6%). To umiarkowany zysk,
+nie stabilne 25–30 FPS. Podczas ruchu kamery nadal występują wolniejsze klatki.
+
+95. percentyl czasu klatki podczas ruchu kamery:
+- poziom: 109,62 -> 92,12 ms (około 16% krócej), 58 / 52 próbki;
+- pion lub obie osie: 107,75 -> 96,52 ms (około 10% krócej), 43 / 43 próbki;
+- bez zmiany kamery: 42,97 -> 42,97 ms.
+P95 oznacza czas, w którym mieściło się 95% klatek danej kategorii, nie średnią.
+Maksimum przewijania poziomego: 112,63 -> 104,17 ms; pionowego: 111,90 -> 106,12 ms.
+
+Pomiar: Hatari, 68030 32 MHz, 8 MB ST + 64 MB TT, TF536, ET4000, bez fast-forward.
+200 klatek rozgrzewki + 400 mierzonych; ten sam skrypt biegu/skoków/ataku.
+To kompilacje diagnostyczne, z kosztem wywołań pomiarowych. Przebiegi nie mają
+idealnie identycznej trajektorii kamery, dlatego liczby są wskazaniem kierunku
+zmiany, a nie gwarancją takiego przyspieszenia każdej sceny.
+
+CO TRAFIA DO WYDANIA
+1. camera.c / frame.c: kamera zachowuje obliczanie flag kafelków i końcowego
+   wskaźnika tła, ale pomija rysowanie niewidocznej kolumny do starej pamięci
+   EGA w M. Wyświetlany obraz nadal buduje renderer w GPL. Oryginalna funkcja
+   rysująca kolumnę pozostaje dostępna; nowa funkcja wylicza tylko stan.
+2. frame.c: kafelki z maską łączą odczyt tła i nakładanie maski w jednym
+   przebiegu słowami RAM. Nie ma pośredniego zapisania tła i poprawiania go
+   bajt po bajcie. Nietypowe adresowanie/aliasowanie zachowuje dawną ścieżkę.
+3. plat_atos.c: gdy przynajmniej 36 z 44 próbek wskazuje zmianę obszaru gry,
+   uruchamiana jest procedura 68030 konwertująca 176 wierszy bez indywidualnego
+   porównywania każdej grupy pikseli. Pasek HUD pozostaje różnicowany.
+   Po konwersji aktualizowany jest cache; zawijanie i brak dużej tablicy
+   mają bezpieczny fallback. Małe zmiany nadal używają poprzedniej ścieżki.
+4. render.c: gotowy obraz HUD jest zapamiętywany do zmiany punktów, energii,
+   żyć, bonusów lub zasobów. W każdej klatce nadal przywracamy go na docelową
+   stronę, aby duszki nie zostawiały śladów. Nie jest to samo pominięcie HUD.
+
+TESTY
+- 28 800 klatek, 16 poziomów x 1800: identyczne obrazy/palety starego i nowego
+  renderera, z ASan/UBSan. Dodatkowy przebieg 7000 klatek z wymuszonymi zdarzeniami
+  także zgodny. To nie dowód przejścia całej gry.
+- 216 porównań całych czterech płaszczyzn po blitach: różne wyrównania,
+  maski, zawijanie i aliasowanie. 512 porównań flag kolumny i wyniku funkcji.
+- 2112 przypadków konwersji z powtórzeniami niezmienionych klatek: zgodność,
+  przesunięcia, szerokości, wrap, fallback tablicy; testy ASan/UBSan.
+- Rzeczywista procedura 68030: 16 konwersji w Hatari porównanych bajt po bajcie
+  z referencyjną funkcją C; powtórzenia bez zmian nie zgłaszają dirty blocks.
+- Dialog ESC: zachowane potwierdzenie, domyślne NIE, pauza i wznowienie.
+- Produkcyjny plik jest pozbawiony profilerów, automatycznego sterowania
+  i uruchamiania bezpośrednio od pierwszego poziomu.
+- Szczegóły końcowego testu emulatora: accept/PASS.json i zrzuty w accept/.
+
+ODRZUCONE EKSPERYMENTY — NIE SĄ WDRAŻANE
+Mniejsza tablica konwersji, rozwijanie pętli w C, przesuwanie gotowego bufora
+RAM (także z próbkowaniem opłacalności), osobny bufor powiększony do 640x400:
+koszt dostępu do pamięci/kopiowania przeważył nad zyskiem.
+Eksperymentalna zmiana skalera w jądrze wymagała dodatkowych 256 KB RAM
+i nie dała przekonującej poprawy najwolniejszych klatek; ją też odrzuciłem.
+Jądro w wydaniu pozostaje identyczne z poprzednim.
+
+WDROŻENIE
+W obrazie zmienia się tylko SYSTEM/APP/PRE2.APP. Dane gry, BIOS, pulpit,
+jądro, Flashback i Arkanoid są porównywane bajtowo przed/po instalacji.
+Plik PRE2.APP: 257648 B; SHA256:
+914576780ea97b40d99f1e700d7de5dcb56e619c612cdecdfa675706c5f49ff4
+Jądro: 463486 B; SHA256:
+30bcd805065c4244f31acd24df2e7609d01d1edb5ee208e1de09e504ed38df18
+Obraz: /Users/xxx/Documents/Deepseek_test/ATOS_AKTUALNY/ATOS.img
+Źródła: /Users/xxx/Documents/Deepseek_test/PRE2
+Dowody, pomiary i kopia poprzedniej wersji:
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/pre2-scroll2
+Kopia dysku: release-before.img. Kopia źródeł: source-before/.
+Pomiary wszystkich wariantów: performance.json; wybrany wariant run-hud.
+Stan instalacji i kontrola FAT: deployment.json.
+
+CO DALEJ
+Pełny obraz nadal przechodzi przez format EGA i skalowanie przy prezentacji.
+Duży kolejny zysk wymaga prototypu renderera składającego grafikę bezpośrednio
+jako indeksy kolorów ATOS. Osobną sprawą jest skok kamery o 16 pikseli — nie
+zmieniałem logiki kamery ani fizyki w tej poprawce. Dźwięk PRE2 nadal nie jest
+zintegrowany. Nie deklaruję stabilnych 25–30 FPS na podstawie tych pomiarów.

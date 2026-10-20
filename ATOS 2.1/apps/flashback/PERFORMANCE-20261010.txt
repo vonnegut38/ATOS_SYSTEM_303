@@ -1,0 +1,75 @@
+FLASHBACK / ATOS — optymalizacja 2026-10-10
+
+Wdrożona wersja 1.2, FLASHBK.APP 256824 B
+SHA256: 4aee6c4e83911cb3d95061fe2d5192cd1d773138fcce0039ddd63bf7b80297b4
+
+Najważniejsza przyczyna:
+Resource::loadBankData() wpisywał bank do _bankBuffers, ale nie zwiększał
+_bankBuffersCount. findBankData() nie widział żadnego wpisu. Kolejne rysowania
+ponownie rozpakowywały ten sam bank i zapełniały bufor. Licznik jest teraz
+zwiększany po udanym dekodowaniu; sprawdzane są też limit wpisów i rozmiar banku.
+
+Pozostałe zmiany:
+- Przywracanie tła tylko pod zaznaczonymi blokami. Osobna mapa przywracania
+  pozostaje ważna także wtedy, gdy menu wykona wiele prezentacji obrazu.
+- Porównanie bloków 8x8 w RAM przed wysłaniem ich do ET4000. Nieruchomy
+  obraz nie powoduje ponownego transferu.
+- Łączenie prostokątów bez kopiowania dwóch tablic dla każdego wiersza.
+- Odrzucanie niewidocznych części obiektów przed ich rozpakowaniem.
+- Rozwijanie par pikseli przez tabelę 16-bitową, z obsługą nieparzystego adresu.
+- Cache 64 rozpakowanych sprite'ów, około 129 KB, z porównaniem zawartości
+  źródłowej. Sam adres nie wystarcza, ponieważ bank przeciwnika może być nadpisany.
+- DOS_decodeSpm liczył półbajty jak bajty i czytał 2x za dużo. Nowy kod
+  rozwija dokładnie wymaganą liczbę bajtów, bez odczytu za końcem banku.
+- Profiler jest opcjonalny (PROFILE=1), domyślnie wyłączony. Poprawione
+  jednostki, numery faz 10–15, zakres faz i pojemność bufora raportu.
+- Liczniki i pierścień czasów klatek można odczytać debuggerem bez logowania
+  co klatkę. Makefile śledzi zmianę flag i obsługuje oddzielny BUILD.
+
+Pomiar wdrożonego builda:
+Hatari z Flashback.app, 68030 32 MHz / TF536 / 8 MB ST + 64 MB TT,
+ET4000 640x480x8, skalowanie gry 2x, fast-forward OFF. Pełne dane DOS.
+Ruch w prawo/lewo, zmiana planszy, 69 próbek około sekundowych po starcie poziomu.
+Mierzony licznik updateTiming(), czyli iteracje gry, nie liczba zapisów do VRAM.
+Średnia: 29.61 FPS. 68/69 próbek >=25 FPS.
+Minimum próbki: 20.56 FPS, pojedynczy spadek w odcinku przejścia.
+Ostatnie 512 klatek: czas pracy średnio 8.53 ms, maksimum 25 ms;
+pełen odstęp klatki średnio 33.38 ms, p99 42 ms.
+Nie jest to gwarancja minimum 25 FPS dla każdej klatki ani całej kampanii.
+Zmiana planszy nadal wykonuje synchroniczne dekodowanie mapy i pełny transfer;
+czasomierz/powrót z usypiania również pozostawia pojedyncze dłuższe klatki.
+Próba zmiany progu usypiania 25→40 ms nie dała poprawy i nie została wdrożona.
+
+Weryfikacja:
+- gmake: nagłówek aplikacji, checksum i relokacje sprawdzone.
+- check-graphics z AddressSanitizer + UndefinedBehaviorSanitizer:
+  500 losowych/sparse klatek, identyczne klatki, nieosiowe prostokąty, powtórne zapisy;
+  rozwijanie pikseli dla 4 wyrównań i wszystkich długości 0..512;
+  1284 prawdziwe sprite'y PERSO/GLUE/JUNKY/MERCENAI/REPLICAN, zimny/ciepły cache;
+  podmiana zawartości pod tym samym adresem;
+  bank-cache: trafienia, pełna tabela, ponowne ładowanie, zbyt duży bank.
+- Wariant VERIFY_RESTORE=1 porównywał przywrócone tło z pełnym buforem
+  podczas gry i obsługi ekwipunku; brak rozbieżności. Ten kosztowny test jest
+  wyłączony w wydaniu.
+- Hatari: kernel_fault_vector=0, kernel_fault_pc=0.
+- Cztery obrazy: ponowny odczyt aplikacji zgodny bajt w bajt, FAT-y identyczne,
+  zero skrzyżowanych łańcuchów; kernel i VOFA zachowane. Podpisy obu aplikacji OK.
+
+Wdrożenie:
+Źródła i build: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/apps/flashback
+Obraz projektu: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/flash.img
+Obraz gracza: /Users/xxx/Library/Application Support/Flashback ATOS/flash.img
+Wzorzec: /Users/xxx/Desktop/Flashback.app/Contents/Resources/flash.img
+Wzorzec roboczy: output/flashback-launcher/Flashback.app/Contents/Resources/flash.img
+Podmieniony wyłącznie SYSTEM/APP/FLASHBK.APP; pełne dane i zapisy pozostają.
+
+Dowody, kopie źródeł i obrazów przed zmianą:
+/Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/flashback-opt
+Próbki: run-release/samples.json; log: release.log; wdrożenie: deployment.json.
+Kopie obrazów: before-user-performance.img, before-deepseek-performance.img.
+
+Dalsza praca, gdy wymagane jest ścisłe minimum także przy zmianie planszy:
+Profilować osobno loadLevelMap i pełny frame_to_card; rozważyć cache
+zdekodowanych map oraz szybszy pełny blit. Osobno sprawdzić dokładność
+czasomierza HIRES, który wykrywa przepełnienia przez odpytywanie timera.
+Nie zmieniać zegara emulowanego CPU ani nie maskować problemu fast-forward.

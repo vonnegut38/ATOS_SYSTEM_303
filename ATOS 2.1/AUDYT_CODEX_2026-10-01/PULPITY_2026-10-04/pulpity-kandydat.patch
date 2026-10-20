@@ -1,0 +1,79 @@
+--- a/system/kernel_wm.c
++++ b/system/kernel_wm.c
+@@ -648,7 +648,17 @@
+         return;
+     }
+ }
+-void kernel_wm_refresh_bar(void){task_draw();}
++/* Switch the view before any hit test or composition uses cached clips. */
++static void wm_sync_view(void)
++{
++    uint8_t next=(uint8_t)ksessions_current();
++    if(!wm_ready||wm.view_session==next)return;
++    wm.view_session=next;
++    wm_rebuild_clip(&wm);
++    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
++    wm_force_compose=1;
++}
++void kernel_wm_refresh_bar(void){wm_sync_view();task_draw();}
+ /* Draw the icon (and the open list) into the live framebuffer. */
+ /* --- Desktop (session) switcher -------------------------------------------
+    A two-monitor glyph the size of a font cell sits next to the task icon.  With
+@@ -1181,6 +1191,7 @@
+     /* One composite per tick (50 Hz): everything else only appends damage.
+        This is the structural guard that keeps the WM from eating the CPU. */
+     if(!wm_ready)return;
++    wm_sync_view();
+     /* The compositor only owns the screen in desktop mode.  Without this gate
+        a WM-enabled kernel would paint the applet bar/decorations over the text
+        console every main-loop iteration. */
+@@ -1496,7 +1507,7 @@
+         kvideo_damage(wm.damage[d].x,wm.damage[d].y,(int32_t)wm.damage[d].w,(int32_t)wm.damage[d].h);
+         wm_damage_pixels+=(uint32_t)wm.damage[d].w*(uint32_t)wm.damage[d].h;}}
+     /* Only the session being displayed composes and hit-tests its windows. */
+-    wm.view_session=(uint8_t)ksessions_current();
++    wm_sync_view();
+     ++wm_frames;++kdbg_wm_composes;
+     {uint32_t seen=kgfx_request_count();uint32_t delta=seen-wm_requests_seen;
+      wm_requests_seen=seen;wm_requests_last=delta;wm_requests_total+=delta;
+--- a/system/kernel_sessions.c
++++ b/system/kernel_sessions.c
+@@ -25,6 +25,7 @@
+    The spawn happens in the main loop, once the context switch has been applied
+    there, so the process is born into the new session. */
+ static uint8_t autostart_desk;
++static unsigned autostart_target;
+ uint32_t kdbg_desk_set,kdbg_desk_take;
+ static int enabled,menu,mouse_x=600,mouse_y=8;
+ static void (*session_reset)(void);
+@@ -43,8 +44,15 @@
+ static uint32_t mouse_q_dropped;
+ static uint8_t f10_down,escape_down,mouse_capture;
+ unsigned ksessions_current(void){return current;}
+-void ksessions_autostart_desktop(void){autostart_desk=1u;++kdbg_desk_set;}
+-int ksessions_take_autostart(void){int r=autostart_desk;autostart_desk=0u;if(r)++kdbg_desk_take;return r;}
++void ksessions_autostart_desktop(void)
++{autostart_target=request?request-1u:current;autostart_desk=1u;++kdbg_desk_set;}
++int ksessions_take_autostart(void)
++{
++    if(!autostart_desk||request)return 0; /* selection can be deferred by input */
++    autostart_desk=0u;
++    if(current!=autostart_target)return 0; /* cancelled or failed selection */
++    ++kdbg_desk_take;return 1;
++}
+ unsigned ksessions_mask(void){return mask;}
+ int ksessions_mouse_x(void){return mouse_x;}
+ uint32_t ksessions_mouse_buttons(void){return mouse_buttons;}
+--- a/system/wm_core.c
++++ b/system/wm_core.c
+@@ -36,8 +36,8 @@
+ {
+     unsigned i;
+     if(!s)return;
+-    s->count=0;s->damage_count=0;s->screen_w=w;s->screen_h=h;
+-    for(i=0;i<WM_MAX;++i){s->clip_count[i]=0;s->win[i].flags=0;s->win[i].pid=0;}
++    s->count=0;s->damage_count=0;s->view_session=0;s->screen_w=w;s->screen_h=h;
++    for(i=0;i<WM_MAX;++i){s->clip_count[i]=0;s->win[i].flags=0;s->win[i].pid=0;s->win[i].session=0;}
+ }
+ 
+ /* a minus b -> up to four rectangles (classic strip decomposition). */

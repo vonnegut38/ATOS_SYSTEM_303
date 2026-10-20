@@ -1,0 +1,22 @@
+{
+  "system/kernel_graphics.c": {
+    "before_sha256": "70c588a1afce27d18d2dfc2a76e28a472cef098f1d60aa5f64e8629d2d10cbbf",
+    "after_sha256": "96e33acf65c2aaeb7536cb0c4cb91f02d0758dea9e8f55075fe97523616ff659"
+  },
+  "system/kernel_wm.c": {
+    "before_sha256": "26d7ef32937efa281ff98f50564ef2bba7810099a2e319257f74a13a59d0384a",
+    "after_sha256": "8a50afb088c47d4b5f0222ad5a7267d5ed2c5ff3cde275526b7b8f9a69a076d1"
+  },
+  "system/kernel_entry.S": {
+    "before_sha256": "f8feeae14a981977873a1a18d66af5794cb74c6b39051a7121a8e918300a4b26",
+    "after_sha256": "e52035a8c620b1038a3539a9eba86c389b43662de0894d3c1cbf2dbefb3a0bb2"
+  },
+  "include/chunky_raster.h": {
+    "before_sha256": null,
+    "after_sha256": "491e4818918dbdec89877a27dae321b07d1f0eb4ad7d87971d37b457f04de5ac"
+  },
+  "tests/test_chunky_raster.c": {
+    "before_sha256": null,
+    "after_sha256": "9e7244fcfce807ed3a0f0551ec7cea6194ea6854b944221a6ed77b413179f6aa"
+  }
+}

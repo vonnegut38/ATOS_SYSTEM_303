@@ -1,0 +1,89 @@
+--- a/system/desktop_wm.c
++++ b/system/desktop_wm.c
+@@ -1140,6 +1140,7 @@
+         icons[i].gy=(int8_t)(idx/(unsigned)maxc);
+         ++idx;
+     }
++    bg_dirty=1;
+     paint();
+ }
+ 
+@@ -1162,6 +1163,8 @@
+     add(GUI_FRAME,info_x,info_y,212,88,0,0);
+     for(i=0;i<4u;++i)if(info_l[i][0])add(GUI_TEXT,(int16_t)(info_x+6),(int16_t)(info_y+4+(int)i*16),0,0,0,info_l[i]);
+     (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,0);
++    (void)gfx(GFX_OVERLAY,((uint32_t)(uint16_t)info_x<<16)|(uint16_t)info_y,
++              ((uint32_t)212u<<16)|88u,1u);
+ }
+ static void ctx_paint(void)
+ {
+@@ -1179,6 +1182,8 @@
+             add(GUI_TEXT,(int16_t)(ctx_x+6),y,0,0,0,ctx_label[i]);
+     }
+     (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,0);
++    (void)gfx(GFX_OVERLAY,((uint32_t)(uint16_t)ctx_x<<16)|(uint16_t)ctx_y,
++              ((uint32_t)CTX_W<<16)|h,1u);
+     if(info_open)info_paint();
+ }
+ 
+@@ -1255,7 +1260,9 @@
+ static void icp_open_it(int icon,int file_row);
+ static void ctx_activate(void)
+ {
+-    if(ctx_sel<0){ctx_open=0;return;}
++    ctx_open=0;bg_dirty=1;
++    (void)gfx(GFX_OVERLAY,0,0,0);
++    if(ctx_sel<0||ctx_sel>=ctx_items){paint();return;}
+     if(ctx_what==0u){
+         if(ctx_sel==0){bg_dirty=1;}                          /* refresh */
+         else if(ctx_sel==1)ctx_arrange();                    /* arrange */
+@@ -1275,6 +1282,7 @@
+     }
+     ctx_open=0;
+     paint();
++    if(info_open)info_paint();
+ }
+ static void ctx_open_at(int mx,int my,uint8_t what,int icon,int file_row)
+ {
+@@ -1745,7 +1753,7 @@
+                 if(scan==0x48u&&ctx_sel>0){ctx_sel--;ctx_paint();}          /* up */
+                 else if(scan==0x50u&&ctx_sel+1<ctx_items){ctx_sel++;ctx_paint();} /* down */
+                 else if(scan==0x1cu)ctx_activate();                          /* enter */
+-                else if(scan==0x01u){ctx_open=0;paint();}                    /* escape */
++                else if(scan==0x01u){ctx_open=0;bg_dirty=1;(void)gfx(GFX_OVERLAY,0,0,0);paint();}                    /* escape */
+             }else if(menu_open){
+                 unsigned items=menu_which?OPT_ITEMS:MENU_ITEMS;
+                 if(scan==0x48u&&menu_sel)menu_sel--;         /* up */
+@@ -1842,7 +1850,7 @@
+         buttons=(m.v[2]>>24)&7u;
+         /* Info popup: any click dismisses it (and is consumed). */
+         if(info_open&&((buttons&1u&&!prev_left)||(buttons&2u&&!prev_right))){
+-            info_open=0;paint();
++            info_open=0;bg_dirty=1;(void)gfx(GFX_OVERLAY,0,0,0);paint();
+             if(buttons&1u)prev_left=1;
+             if(buttons&2u)prev_right=1;
+             continue;
+@@ -1850,7 +1858,7 @@
+         /* Right mouse button: Windows-style context menu. */
+         if((buttons&2u)&&!prev_right){
+             prev_right=1;
+-            if(ctx_open){ctx_open=0;paint();}       /* erase the old popup */
++            if(ctx_open){ctx_open=0;bg_dirty=1;(void)gfx(GFX_OVERLAY,0,0,0);paint();}       /* erase the old popup */
+             if(fb_open&&mx>=fb_wx&&mx<fb_wx+(int)fb_ww&&
+                my>=fb_wy+16&&my<fb_wy+(int)fb_wh){
+                 int row=fb_row_at(my);
+@@ -1866,12 +1874,13 @@
+         /* Navigate the open popup: hover highlights, left click activates,
+            a click outside (or Escape, handled below) closes it. */
+         if(ctx_open){
++            if(!(buttons&1u))prev_left=0;
+             if((buttons&1u)&&!prev_left){
+                 prev_left=1;
+                 int hit=(mx>=ctx_x&&mx<ctx_x+CTX_W&&
+                          my>=ctx_y&&my<ctx_y+(int)ctx_items*CTX_ROW+4);
+                 if(hit){ctx_sel=(my-(int)ctx_y-2)/CTX_ROW;ctx_activate();}
+-                else{ctx_open=0;paint();}
++                else{ctx_open=0;bg_dirty=1;(void)gfx(GFX_OVERLAY,0,0,0);paint();}
+                 continue;
+             }
+             if(!buttons){

@@ -1,0 +1,89 @@
+AUDYT AUDIO R13 — 11.10.2026
+DECYZJA: jeszcze nie instalować do ATOS_AKTUALNY. Istotny postęp potwierdzony,
+ale pozostał odtworzony błąd obsługi pamięci i brak gotowego pakietu produkcyjnego.
+Zakres: odczyt aktualnych źródeł i plików z FAT, nowe kompilacje hostowe sond.
+W tym audycie nie powtarzano przebiegów A/B w emulatorze; ich wyniki są deklaracją
+Deepseeka, ocenioną w zestawieniu z kodem i niezależnymi testami hostowymi.
+Nie zmieniano źródeł systemu, buildów, obrazów ani konfiguracji produkcyjnej.
+
+1. POTWIERDZONE NAPRAWY
+probe_generation: PASS. Natywny PID 7, kanał A volume=12, STOP na t=100.
+Po teardown TOS: owner=7, queue=1. Po terminie: owner=7, queue=0, volume=0.
+To jest realne wykonanie STOP, a nie wyłącznie zachowanie właściciela/kolejki.
+Przy niedostępnym IRQ: owner=0, playing=0 — właściciel nie wycieka.
+probe_contracts: PASS (6 sprawdzeń).
+probe_remaining: PASS (4 sprawdzenia).
+Aktualne test_kernel_audio i test_psg: PASS.
+Test 19 teraz sprawdza słyszalny kanał przed terminem i zerową głośność po STOP.
+W kodzie rozdzielono generację właściciela od generacji TOS; dla natywnej kolejki
+zmiana generacji TOS nie jest powodem odrzucenia zdarzenia.
+Test 22 uczciwie opisuje pokrycie sekcji krytycznych, a nie wstrzykiwanie IRQ.
+Przeszukiwanie przydziałów omija dziury w tablicy alokacji.
+Sonda restartuje sekwencję przed wymuszonym wyjątkiem, przed wyciszeniem PSG.
+
+2. ODTWORZONY BŁĄD: ZWOLNIENIE OBCEGO BLOKU ZATRZYMUJE DOSOUND
+system/kernel_audio.c:545–559, kaudio_dosound_revalidate(lo,new_end).
+Funkcja sprawdza wyłącznie snd_table >= lo. Nie dostaje starego końca bloku,
+więc nie potrafi stwierdzić, czy odtwarzana tabela należy do zmienianej alokacji.
+Przykład: alokacja A niżej, tabela Dosound w niezależnej alokacji B wyżej.
+Mfree(A) zatrzymuje tabelę B. Mshrink(A) także może ją zatrzymać.
+Dotyczy to również Mshrink bazowego TPA przy tabeli w wyżej położonym TT-RAM.
+Nowa sonda probe_revalidate.c: oba przypadki FAIL (playing spada do 0).
+Dotychczasowy test 24 nie wymusza obu porządków adresów i przepuszcza ten błąd.
+
+Naprawa: przekazywać pełny zakres starej alokacji i nowy koniec, np.
+kaudio_dosound_revalidate(old_base, old_end, new_end).
+Działać wyłącznie gdy old_base <= snd_table < old_end; inne alokacje ignorować.
+Porównania adresów wykonywać na uintptr_t, z kontrolą przepełnień.
+Alternatywnie zapamiętać identyfikator i granice alokacji podczas startu tabeli.
+Callery w tos_prg.c: Mfree oraz oba warianty Mshrink muszą podać stare granice.
+Dopilnować, aby nieudane Mshrink/Mfree nie zmieniało odtwarzania; odłączenie
+konsumenta musi nastąpić atomowo względem IRQ i przed zwróceniem pamięci.
+Testy: obcy blok niżej i wyżej, własny free, własny shrink przed/za bieżącym
+wskaźnikiem, tabela w TT-RAM przy zmniejszeniu TPA, nieudana operacja pamięci.
+
+3. PAKIET NIE JEST OBECNIE PRODUKCYJNY, A MANIFEST JEST NIEAKTUALNY
+Odczytałem KERNEL.SYS bezpośrednio z FAT atos-audio-r13.img:
+457816 B, SHA256 b56838985fc2aa51a8ae02559bc45c1433721d0a43339d75758f909f8668d197.
+Manifest r13-final podaje 93bbb14461388b24a3edffb6bf6de1a02e6c0ada40736d239e230d817ff2cd3f.
+Obraz zgadza się z aktualnym buildem jądra, ale nie z manifestem.
+Pozostałe 4 wpisy manifestu zgadzają się z FAT i bieżącym buildem.
+FAT: 397 plików, zgodne kopie, brak crosslinków.
+W build/.profile nadal jest -DARK_TEST_TOS_AUTORUN; kernel.elf zawiera ar_done
+oraz ar_start. W kodzie hook po 35 s uruchamia asynchronicznie F.PRG.
+Nie zarzucam ukrywania hooka — został opisany jako testowy — ale pusty domyślnie
+ARK_EXTRA_CFLAGS nie dowodzi, że aktualny artefakt został tak zbudowany.
+Makefile ma śledzenie profilu flag: produkcyjne przebudowanie należy wykonać,
+zweryfikować wynik, zainstalować na kopii i dopiero wtedy wygenerować manifest.
+Nie kopiować tego testowego KERNEL.SYS do stabilnego zestawu.
+
+4. CO FAKTYCZNIE DOWODZĄ POMIARY
+Asynchroniczne kernel_tos_start_async jest właściwą ścieżką do testowania
+współistnienia aplikacji. Hook nie sprawdza samego dialogu, fokusu ani wejścia.
+Owner=5 po sesji jest dobrym dowodem zachowania właściciela, ale qcount=0 nie
+sprawdza natywnego STOP; hostowa sonda teraz potwierdza ten kontrakt osobno.
+Nie należy mieszać ref=4 ze ścieżki blokującej z ref=1 asynchronicznej;
+raport A/B powinien podawać spójne wyniki osobnych przebiegów.
+
+bEnableSound FALSE/TRUE w Hatari zmienia dźwięk po stronie emulatora, natomiast
+Arkanoid nadal zgłasza audio i wykonuje ścieżkę PSG w gościu. Taka para 40 FPS
+vs 39–41 FPS nie izoluje kosztu nowego podsystemu w ATOS. Do tego potrzebna jest
+para z rzeczywiście wyłączonym/włączonym generowaniem i obsługą audio w gościu,
+ta sama scena i ustawienia CPU, rozgrzewka oraz wielokrotne pomiary czasu klatek.
+HUD to pożyteczna kontrola orientacyjna, ale nie średnia i percentyle płynności.
+
+isr_max obejmuje kaudio_timer_tick (snd_step + kolejkę), nie całą obsługę IRQ
+od wejścia asemblerowego po EOI i wyjście. Przy zegarze 12288 Hz 3 jednostki
+to nominalnie ok. 244 mikrosekundy zmierzonego callbacku. Nie jest to dowód
+najgorszego kosztu: potrzebny osobny przebieg z 256 zapisami i pełną kolejką.
+
+5. NAJKRÓTSZA DROGA DO WDROŻENIA
+A. Naprawić ograniczenie revalidate do właściwej alokacji i dołączyć nowe testy.
+B. Powtórzyć trzy stare sondy, nową sondę oraz check-audio/psg/irq/app-abi/game.
+C. Zbudować produkcyjnie bez hooków, potwierdzić profil i brak symboli autorun.
+D. Na kopii obrazu: gra ma aktywny kanał i STOP w przyszłości; TOS odmawia przejęcia,
+   faultuje; sprawdzić wykonanie STOP w terminie, owner, głośność i kolejkę.
+   Osobno TOS jako właściciel: fault i sprawdzenie wyciszenia wszystkich kanałów.
+E. Krótka porównywalna regresja płynności, świeży manifest z FAT i SHA artefaktów.
+F. Dopiero ten dokładnie przetestowany pakiet można promować do ATOS_AKTUALNY;
+   nie nadpisywać ATOS_KOPIA w trakcie eksperymentu.

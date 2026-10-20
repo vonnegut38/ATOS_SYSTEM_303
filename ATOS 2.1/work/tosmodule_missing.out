@@ -1,0 +1,6 @@
+booted: False
+baseline: {'loads': 0, 'module_screen': 0, 'fallbacks': 0, 'adopted': 0}
+run1 done=0x900D diag={'loads': 0, 'module_screen': 0, 'fallbacks': 1, 'adopted': 0}
+run2 done=0x900D diag={'loads': 0, 'module_screen': 0, 'fallbacks': 2, 'adopted': 0}
+final: {'loads': 0, 'module_screen': 0, 'fallbacks': 2, 'adopted': 0}
+rc 0

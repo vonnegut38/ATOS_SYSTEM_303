@@ -1,0 +1,87 @@
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -MMD -MP -ffunction-sections -fdata-sections -c system/kernel_main.c -o build/system/kernel_main.o
+m68k-elf-gcc -m68000 -Os -ffreestanding -fno-builtin -fomit-frame-pointer -Wall -Wextra -Werror -std=gnu11 -Iinclude -nostdlib -nostartfiles -Wl,-T,linker/kernel-sys.ld -Wl,--gc-sections -o build/system/kernel.elf build/system/kernel_entry.o build/system/kernel_main.o build/system/kernel_memory.o build/system/kernel_exception.o build/system/kernel_module.o build/system/kernel_graphics.o build/system/text_terminal.o build/system/video_driver.o build/system/irq.o build/system/desktop_module.o build/system/mod_clock.o build/system/kernel_console.o build/system/kernel_sessions.o build/system/kernel_video.o build/system/kernel_video_boot.o build/system/vofa_et4000.o build/system/video_bus.o build/system/emutos_vdi_mono.o build/system/kernel_blitter.o build/system/kernel_surface.o build/system/wm_core.o build/system/wm_blit.o build/system/kernel_wm.o build/system/tos_vdi.o build/system/tos_prg.o build/system/tos_entry.o build/system/tos_start.o build/system/kernel_block.o build/system/kernel_fat.o build/system/kernel_partition.o build/ui/font.o -lgcc
+/opt/homebrew/opt/m68k-elf-binutils/bin/m68k-elf-ld: warning: build/system/kernel.elf has a LOAD segment with RWX permissions
+m68k-elf-objcopy -O binary build/system/kernel.elf build/system/KERNEL.SYS
+python3 tools/patch_boot_checksum.py build/system/KERNEL.SYS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_machine_detect.c -o build/tests/test_machine_detect
+build/tests/test_machine_detect
+MACHINE_DETECT: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_lang.c ui/lang.c -o build/tests/test_lang
+build/tests/test_lang
+LANG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_config.c -o build/tests/test_config
+build/tests/test_config
+CONFIG: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_exception.c -o build/tests/test_exception
+build/tests/test_exception
+EXCEPTION: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_irq.c system/irq.c -o build/tests/test_irq
+build/tests/test_irq
+IRQ: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_driver.c system/video_driver.c -o build/tests/test_video_driver
+build/tests/test_video_driver
+VIDEO_DRIVER: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_video_backends.c system/video_driver.c video/shifter.c video/et4000.c -o build/tests/test_video_backends
+build/tests/test_video_backends
+VIDEO_BACKENDS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_cpu_ops.c system/cpu_ops.c -o build/tests/test_cpu_ops
+build/tests/test_cpu_ops
+CPU_OPS: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_desktop_module.c system/desktop_module.c -o build/tests/test_desktop_module
+build/tests/test_desktop_module
+DESKTOP_MODULE: ALL PASS
+cc -std=c11 -Wall -Wextra -Werror -Iinclude tests/test_mod_clock.c system/mod_clock.c system/video_driver.c -o build/tests/test_mod_clock
+build/tests/test_mod_clock
+MOD_CLOCK: ALL PASS
+python3 -m unittest discover -s tests -v
+test_config_allocation_updates_both_copies (test_bios_fat_mirrors.BiosFatMirrors.test_config_allocation_updates_both_copies) ... ok
+test_all_planes_offsets_and_edges (test_cursor_words.CursorWordsTest.test_all_planes_offsets_and_edges) ... ok
+test_pagination_and_guards (test_directory_page.DirectoryPageTest.test_pagination_and_guards) ... ok
+test_capture_during_wait_and_timeout (test_disk_input_poll.DiskInputPoll.test_capture_during_wait_and_timeout) ... ok
+test_foreground_gui_does_not_lose_keys_to_console (test_foreground_input.ForegroundInput.test_foreground_gui_does_not_lose_keys_to_console) ... ok
+test_full_mailbox_keeps_click (test_gui_input_backpressure.GuiBackpressure.test_full_mailbox_keeps_click) ... ok
+test_background_lifecycle (test_gui_session_owners.GuiOwners.test_background_lifecycle) ... ok
+test_kernel_entry_header (test_kernel_load_addr.KernelLoadAddress.test_kernel_entry_header) ... ok
+test_linker_script (test_kernel_load_addr.KernelLoadAddress.test_linker_script) ... ok
+test_loader_uses_macro_and_not_stale_address (test_kernel_load_addr.KernelLoadAddress.test_loader_uses_macro_and_not_stale_address) ... ok
+test_shared_macro (test_kernel_load_addr.KernelLoadAddress.test_shared_macro) ... ok
+test_mouse_coordinates_are_not_keys (test_keyboard_framing.KeyboardFraming.test_mouse_coordinates_are_not_keys) ... ok
+test_edges (test_mouse_edges.MouseEdgeTest.test_edges) ... ok
+test_padding (test_rom_tools.RomToolsTest.test_padding) ... ok
+test_split_join_roundtrip (test_rom_tools.RomToolsTest.test_split_join_roundtrip) ... ok
+test_overlay_pixels_and_restore (test_session_overlay.SessionOverlayTest.test_overlay_pixels_and_restore) ... ok
+test_retained_frames_and_exit (test_session_redraw.SessionRedrawTest.test_retained_frames_and_exit) ... ok
+test_background_routing (test_session_routing.Routing.test_background_routing) ... ok
+test_readonly_bounds (test_sysinfo_api.SysinfoApiTest.test_readonly_bounds) ... ok
+test_idle_dispatch_wakes_sleepers (test_user_sleep_wakeup.UserSleepWakeup.test_idle_dispatch_wakes_sleepers) ... ok
+test_character_damage (test_video_damage.VideoDamage.test_character_damage) ... ok
+test_register_tables (test_vofa_reference.VofaReference.test_register_tables) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 9.045s
+
+OK
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_text_terminal.c system/text_terminal.c -o build/tests/test_text_terminal
+build/tests/test_text_terminal
+Terminal PASS: semigraphics, attributes, raster reference, bounds, scroll/wrap, isolated buffers; initial 32000 bytes / unchanged 0 / single cell 32 bytes
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_kernel_console.c system/text_terminal.c -o build/tests/test_kernel_console
+build/tests/test_kernel_console
+Kernel console PASS: batched writes, bounded flush, CR/Tab/Backspace, scroll, desktop isolation, restore, legacy invalidation, panic and non-mono fallback
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sessions.c -o build/tests/test_sessions
+build/tests/test_sessions
+Sessions PASS: active-only menu, create/close, busy guard, deferred switching, both Shifts, autorepeat, Escape, outside click and GUI input isolation
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_commander.c system/text_terminal.c -o build/tests/test_commander
+build/tests/test_commander
+Commander PASS: double active frame, incremental redraw, marks across pages/panels, group copy/cancel/error, mouse/trash/restore/purge
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_sysinfo.c system/text_terminal.c -o build/tests/test_sysinfo
+build/tests/test_sysinfo
+SYSINFO PASS: report views, output vs detected card, unknown values, partition paging, division, CPU/RAM/disk accounting, skips, cancel and mouse tabs
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+Language packs PASS: EN/PL completeness, English fallback, CRLF, escapes, spaces, duplicates, bounds, short reads and handle cleanup
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_language_setting.c -o build/tests/test_language_setting
+build/tests/test_language_setting
+Language setting PASS: EN/PL write, bounded selector, missing/invalid/read-only file and failed/short writes
+cc -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Iinclude tests/test_setup.c system/text_terminal.c -o build/tests/test_setup
+build/tests/test_setup
+SETUP PASS: EN/PL preview and selection, persisted preference, failed save, missing pack, cancel and invalid-config fallback

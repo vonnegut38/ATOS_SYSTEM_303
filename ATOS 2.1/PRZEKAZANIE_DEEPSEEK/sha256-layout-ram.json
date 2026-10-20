@@ -1,0 +1,11 @@
+{
+  "checkpoint": "atos2-layout-ram-2026-09-24",
+  "note": "Audyt kmem + nowy uklad pamieci: KERNEL.SYS 0x80000 -> 0x20000, BOOT.SYS 0x20000 -> 0x8000; ST-RAM FREE po starcie 3272 -> 3656 KB.",
+  "build/bios_mste.bin": "52856786c0e6a6492f05353b81e62b870ac3c10fa3b621e3499287828c1b7caa",
+  "build/system/KERNEL.SYS": "655fba3257adc22313942110287893de0a3c91f982de5c750ad6c79c9ed5728c",
+  "build/system/BOOT.SYS": "44015878d45b810284efad4b45dc87f9884e88dc1421668dd53b362515814a45",
+  "build/system/VOFA.SYS": "809780c9c1fdab609e3e1364360ae0e9a53293ee03d6a7244185e27c09fc46a1",
+  "work/atos-v2.img": "98ccfc91ed7495220e92e5adac35995c87aff170035924aacd3200d076330a63",
+  "work/layout-ram.patch": "985cefb6c04f0521d334b03b98909473df0d5b9bcdf5b4d31bd3fdea65ef8d6c",
+  "docs/AUDYT-RAM-KMEM_2026-09-24_PL.md": "6ec62913aa8e119754835a03704bc77c3201d4b22dcfd41330acbaccb6219a79"
+}

@@ -1,0 +1,2705 @@
+    .section .module_header,"a"
+    .ascii "ASYSMOD0"
+    .word 3
+    .word 32
+    .long __image_file_end
+    .long 0
+    .long shell_module_entry
+    .long __image_memory_end
+    .long 0
+
+    .section .text.startup,"ax"
+    .globl shell_module_entry
+shell_module_entry:
+    move.l 4(%sp),%a0
+    cmpi.l #0x4b4d4150,(%a0)
+    bne shell_fail
+    cmpi.w #3,4(%a0)
+    bne shell_fail
+    cmpi.w #168,6(%a0)
+    blo shell_fail
+    tst.l 160(%a0)
+    beq shell_fail
+    tst.l 40(%a0)
+    beq shell_fail
+    tst.l 44(%a0)
+    beq shell_fail
+    tst.l 48(%a0)
+    beq shell_fail
+    tst.l 52(%a0)
+    beq shell_fail
+    tst.l 56(%a0)
+    beq shell_fail
+    tst.l 60(%a0)
+    beq shell_fail
+    tst.l 80(%a0)
+    beq shell_fail
+    tst.l 84(%a0)
+    beq shell_fail
+    tst.l 88(%a0)
+    beq shell_fail
+    tst.l 92(%a0)
+    beq shell_fail
+    lea shell_api(%pc),%a1
+    move.l %a0,(%a1)
+    move.l #0x45564e54,%d0
+    moveq #1,%d1
+    bsr shell_find_service
+    tst.l %d0
+    beq shell_fail
+    lea shell_event(%pc),%a0
+    move.l %d0,(%a0)
+    move.l #0x494e5054,%d0
+    moveq #1,%d1
+    bsr shell_find_service
+    tst.l %d0
+    beq shell_fail
+    move.l %d0,%a0
+    cmpi.w #20,6(%a0)
+    blo shell_fail
+    tst.l 16(%a0)
+    beq shell_fail
+    lea shell_input(%pc),%a1
+    move.l %a0,(%a1)
+    move.l #0x50524f43,%d0
+    moveq #4,%d1
+    bsr shell_find_service
+    tst.l %d0
+    beq shell_fail
+    lea shell_proc(%pc),%a0
+    move.l %d0,(%a0)
+    move.l #0x54494d52,%d0
+    moveq #1,%d1
+    bsr shell_find_service
+    tst.l %d0
+    beq shell_fail
+    lea shell_timer(%pc),%a0
+    move.l %d0,(%a0)
+    move.l #0x56465320,%d0
+    moveq #3,%d1
+    bsr shell_find_service
+    tst.l %d0
+    beq shell_fail
+    lea shell_vfs(%pc),%a0
+    move.l %d0,(%a0)
+
+    lea shell_service(%pc),%a1
+    move.l #0x53484c4c,(%a1)
+    move.w #4,4(%a1)
+    move.w #40,6(%a1)
+    lea shell_start(%pc),%a0
+    move.l %a0,8(%a1)
+    lea shell_pump(%pc),%a0
+    move.l %a0,12(%a1)
+    lea shell_key_count(%pc),%a0
+    move.l %a0,16(%a1)
+    lea shell_redraw_prompt(%pc),%a0
+    move.l %a0,20(%a1)
+    lea shell_line_active(%pc),%a0
+    move.l %a0,24(%a1)
+    lea shell_select_session(%pc),%a0
+    move.l %a0,28(%a1)
+    lea shell_submit(%pc),%a0
+    move.l %a0,32(%a1)
+    lea shell_run_pending(%pc),%a0
+    move.l %a0,36(%a1)
+    move.l %a1,-(%sp)
+    move.l #4,-(%sp)
+    move.l #0x53484c4c,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 24(%a0),%a1
+    jsr (%a1)
+    lea 12(%sp),%sp
+    rts
+
+shell_find_service:
+    move.l %d1,-(%sp)
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 28(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    rts
+shell_fail:
+    moveq #0,%d0
+    rts
+
+shell_puts:
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 44(%a0),%a0
+    jmp (%a0)
+shell_put_u32:
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 48(%a0),%a0
+    jmp (%a0)
+
+shell_put_hex32:
+    movem.l %d2/%a1-%a2,-(%sp)
+    move.l 16(%sp),%d0
+    lea shell_hex_buffer(%pc),%a0
+    move.b #'0',(%a0)
+    move.b #'x',1(%a0)
+    clr.b 10(%a0)
+    lea 2(%a0),%a2
+    lea shell_hex_digits(%pc),%a1
+    moveq #7,%d1
+1:  move.l %d0,%d2
+    lsr.l #8,%d2
+    lsr.l #8,%d2
+    lsr.l #8,%d2
+    lsr.l #4,%d2
+    andi.w #15,%d2
+    move.b (%a1,%d2.w),(%a2)+
+    lsl.l #4,%d0
+    dbra %d1,1b
+    pea shell_hex_buffer(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    movem.l (%sp)+,%d2/%a1-%a2
+    rts
+
+/* label, inclusive start and exclusive end */
+shell_put_map_range:
+    move.l 4(%sp),-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 8(%sp),-(%sp)
+    bsr shell_put_hex32
+    addq.l #4,%sp
+    pea shell_map_separator(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 12(%sp),-(%sp)
+    bsr shell_put_hex32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+shell_start:
+    lea shell_current_path(%pc),%a0
+    move.b #92,(%a0)
+    clr.b 1(%a0)
+    pea shell_exec_path(%pc)
+    move.l #0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 160(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_print_prompt
+    rts
+
+shell_redraw_prompt:
+    lea shell_cursor_visible(%pc),%a0
+    clr.b (%a0)
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_print_prompt
+    bsr shell_cursor_hide
+    pea shell_buffer(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_cursor_show
+    rts
+
+shell_print_prompt:
+    pea shell_tts_prefix(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    clr.l -(%sp)
+    clr.l -(%sp)
+    bsr shell_session_control
+    addq.l #8,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_space(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %a2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 60(%a0),%a0
+    jsr (%a0)
+    lea shell_prompt_buffer(%pc),%a0
+    move.b %d0,(%a0)
+    move.b #':',1(%a0)
+    lea shell_current_path(%pc),%a1
+    lea 2(%a0),%a2
+1:  move.b (%a1)+,(%a2)+
+    bne.s 1b
+    subq.l #1,%a2
+    move.b #'>',(%a2)+
+    move.b #' ',(%a2)+
+    clr.b (%a2)
+    move.l %a0,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l (%sp)+,%a2
+    bsr shell_cursor_show
+    rts
+
+shell_pump:
+    pea shell_value(%pc)
+    pea shell_type(%pc)
+    move.l 12(%sp),-(%sp)
+    lea shell_event(%pc),%a0
+    move.l (%a0),%a0
+    move.l 8(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_cursor_update
+    lea shell_type(%pc),%a0
+    cmpi.l #2,(%a0)
+    beq shell_key_release
+    cmpi.l #1,(%a0)
+    bne shell_consumed
+    lea shell_value(%pc),%a0
+    move.l (%a0),%d0
+    andi.l #0x7f,%d0
+    cmpi.b #0x2a,%d0
+    beq shell_left_shift_down
+    cmpi.b #0x36,%d0
+    beq shell_right_shift_down
+    move.l %d0,-(%sp)
+    bsr shell_cursor_hide
+    move.l (%sp)+,%d0
+    cmpi.b #0x1c,%d0
+    beq shell_enter
+    cmpi.b #0x0e,%d0
+    beq shell_backspace
+    cmpi.b #0x0f,%d0
+    beq shell_complete
+    cmpi.b #0x48,%d0
+    beq shell_history_recall
+    cmpi.b #0x50,%d0
+    beq shell_history_forward
+    cmpi.l #64,%d0
+    bhs shell_consumed
+    lea shell_shift_state(%pc),%a0
+    tst.b (%a0)
+    beq.s shell_use_plain_keymap
+    lea shell_shift_keymap(%pc),%a0
+    bra.s shell_keymap_ready
+shell_use_plain_keymap:
+    lea shell_keymap(%pc),%a0
+shell_keymap_ready:
+    move.b 0(%a0,%d0.w),%d0
+    beq shell_consumed
+    lea shell_length(%pc),%a0
+    moveq #0,%d1
+    move.b (%a0),%d1
+    cmpi.b #63,%d1
+    bhs shell_consumed
+    lea shell_buffer(%pc),%a1
+    move.b %d0,0(%a1,%d1.w)
+    addq.b #1,%d1
+    move.b %d1,(%a0)
+    clr.b 0(%a1,%d1.w)
+    lea shell_char(%pc),%a0
+    move.b %d0,(%a0)
+    clr.b 1(%a0)
+    move.l %a0,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    bra shell_count
+
+shell_left_shift_down:
+    lea shell_shift_state(%pc),%a0
+    bset #0,(%a0)
+    bra shell_consumed
+shell_right_shift_down:
+    lea shell_shift_state(%pc),%a0
+    bset #1,(%a0)
+    bra shell_consumed
+shell_key_release:
+    lea shell_value(%pc),%a0
+    move.l (%a0),%d0
+    andi.l #0x7f,%d0
+    cmpi.b #0x2a,%d0
+    beq.s shell_left_shift_up
+    cmpi.b #0x36,%d0
+    bne shell_consumed
+    lea shell_shift_state(%pc),%a0
+    bclr #1,(%a0)
+    bra shell_consumed
+shell_left_shift_up:
+    lea shell_shift_state(%pc),%a0
+    bclr #0,(%a0)
+    bra shell_consumed
+
+shell_backspace:
+    lea shell_length(%pc),%a0
+    tst.b (%a0)
+    beq shell_consumed
+    subq.b #1,(%a0)
+    moveq #0,%d0
+    move.b (%a0),%d0
+    lea shell_buffer(%pc),%a1
+    clr.b 0(%a1,%d0.w)
+    pea shell_backspace_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bra shell_count
+
+shell_complete:
+    movem.l %d2-%d4/%a2-%a3,-(%sp)
+    lea shell_length(%pc),%a0
+    moveq #0,%d3
+    move.b (%a0),%d3
+    beq shell_complete_done
+    move.l %d3,%d2
+    lea shell_buffer(%pc),%a2
+1:  tst.l %d2
+    beq.s 2f
+    move.l %d2,%d0
+    subq.l #1,%d0
+    cmpi.b #' ',0(%a2,%d0.w)
+    beq.s 2f
+    subq.l #1,%d2
+    bra.s 1b
+2:  move.l %d3,%d4
+    sub.l %d2,%d4
+    beq shell_complete_done
+    pea shell_completion_leaf(%pc)
+    move.l #64,-(%sp)
+    pea shell_work_path(%pc)
+    lea 0(%a2,%d2.w),%a0
+    move.l %a0,-(%sp)
+    pea shell_current_path(%pc)
+    bsr shell_prepare_completion
+    lea 20(%sp),%sp
+    tst.l %d0
+    beq shell_complete_done
+    lea shell_completion_leaf(%pc),%a0
+    add.l (%a0),%d2
+    move.l %d3,%d4
+    sub.l %d2,%d4
+    beq shell_complete_done
+    lea shell_completion(%pc),%a3
+    lea 0(%a2,%d2.w),%a0
+    move.l %a0,(%a3)
+    move.l %d4,4(%a3)
+    clr.l 8(%a3)
+    clr.b 12(%a3)
+    clr.l 76(%a3)
+    move.l %a3,-(%sp)
+    pea shell_completion_entry(%pc)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 24(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_complete_done
+    tst.l 8(%a3)
+    beq shell_complete_done
+    move.l %d2,%d1
+    moveq #0,%d2
+3:  cmpi.l #63,%d1
+    bhs 4f
+    move.b 12(%a3,%d2.w),%d0
+    beq 4f
+    move.b %d0,0(%a2,%d1.w)
+    addq.l #1,%d2
+    addq.l #1,%d1
+    bra.s 3b
+4:  clr.b 0(%a2,%d1.w)
+    lea shell_length(%pc),%a0
+    move.b %d1,(%a0)
+    move.l %d1,%d3
+    /* Erase the typed leaf before echoing the completed name so the display
+       shows the completion in place (names only ever grow, never shrink). */
+    move.l %d4,%d2
+5:  tst.l %d2
+    beq.s 6f
+    pea shell_backspace_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    subq.l #1,%d2
+    bra.s 5b
+6:  pea 12(%a3)
+    bsr shell_puts
+    addq.l #4,%sp
+    cmpi.l #1,8(%a3)
+    bne shell_complete_done
+    btst #4,79(%a3)
+    beq shell_complete_done
+    cmpi.l #63,%d3
+    bhs shell_complete_done
+    move.b #92,0(%a2,%d3.w)
+    addq.l #1,%d3
+    clr.b 0(%a2,%d3.w)
+    lea shell_length(%pc),%a0
+    move.b %d3,(%a0)
+    pea shell_slash_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_complete_done:
+    movem.l (%sp)+,%d2-%d4/%a2-%a3
+    bra shell_count
+
+shell_enter:
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_history_save
+    lea shell_foreground_attached(%pc),%a0
+    clr.b (%a0)
+    bsr shell_execute
+    lea shell_foreground_attached(%pc),%a0
+    tst.b (%a0)
+    bne.s shell_enter_no_prompt
+    bsr shell_print_prompt
+shell_enter_no_prompt:
+    lea shell_length(%pc),%a0
+    clr.b (%a0)
+    lea shell_buffer(%pc),%a0
+    clr.b (%a0)
+    bra shell_count
+
+shell_history_save:
+    lea shell_buffer(%pc),%a0
+    tst.b (%a0)
+    beq.s 4f
+    lea shell_history_next(%pc),%a1
+    moveq #0,%d0
+    move.b (%a1),%d0
+    lsl.l #6,%d0
+    lea shell_history(%pc),%a1
+    adda.l %d0,%a1
+1:  move.b (%a0)+,(%a1)+
+    bne.s 1b
+    lea shell_history_next(%pc),%a0
+    addq.b #1,(%a0)
+    andi.b #7,(%a0)
+    lea shell_history_count(%pc),%a0
+    cmpi.b #8,(%a0)
+    bhs.s 3f
+    addq.b #1,(%a0)
+3:  lea shell_history_view(%pc),%a0
+    clr.b (%a0)
+4:  rts
+
+shell_history_recall:
+    lea shell_history_count(%pc),%a0
+    moveq #0,%d0
+    move.b (%a0),%d0
+    beq shell_count
+    lea shell_history_view(%pc),%a1
+    moveq #0,%d1
+    move.b (%a1),%d1
+    cmp.l %d0,%d1
+    bhs.s 1f
+    addq.b #1,(%a1)
+    addq.l #1,%d1
+1:  lea shell_history_next(%pc),%a0
+    moveq #0,%d0
+    move.b (%a0),%d0
+    sub.l %d1,%d0
+    andi.l #7,%d0
+    lsl.l #6,%d0
+    lea shell_history(%pc),%a0
+    adda.l %d0,%a0
+    bsr shell_history_replace
+    bra shell_count
+
+shell_history_forward:
+    lea shell_history_view(%pc),%a0
+    tst.b (%a0)
+    beq shell_count
+    subq.b #1,(%a0)
+    moveq #0,%d1
+    move.b (%a0),%d1
+    beq.s 1f
+    lea shell_history_next(%pc),%a0
+    moveq #0,%d0
+    move.b (%a0),%d0
+    sub.l %d1,%d0
+    andi.l #7,%d0
+    lsl.l #6,%d0
+    lea shell_history(%pc),%a0
+    adda.l %d0,%a0
+    bra.s 2f
+1:  lea shell_empty_text(%pc),%a0
+2:  bsr shell_history_replace
+    bra shell_count
+
+shell_history_replace:
+    movem.l %d2/%a2,-(%sp)
+    move.l %a0,%a2
+    lea shell_length(%pc),%a0
+    moveq #0,%d2
+    move.b (%a0),%d2
+1:  tst.l %d2
+    beq.s 2f
+    pea shell_backspace_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    subq.l #1,%d2
+    bra.s 1b
+2:  move.l %a2,%a0
+    lea shell_buffer(%pc),%a1
+    moveq #0,%d2
+3:  move.b (%a0)+,(%a1)+
+    beq.s 4f
+    addq.l #1,%d2
+    bra.s 3b
+4:  lea shell_length(%pc),%a0
+    move.b %d2,(%a0)
+    move.l %a2,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    movem.l (%sp)+,%d2/%a2
+    rts
+
+shell_count:
+    lea shell_keys(%pc),%a0
+    addq.l #1,(%a0)
+shell_consumed:
+    bsr shell_cursor_show
+    moveq #1,%d0
+shell_pump_done:
+    rts
+
+shell_cursor_update:
+    lea shell_timer(%pc),%a0
+    move.l (%a0),%a0
+    move.l 12(%a0),%a0
+    jsr (%a0)
+    lea shell_cursor_tick(%pc),%a0
+    move.l %d0,%d1
+    sub.l (%a0),%d1
+    cmpi.l #25,%d1
+    blo.s shell_cursor_idle
+    move.l %d0,(%a0)
+    lea shell_cursor_visible(%pc),%a0
+    tst.b (%a0)
+    beq.s shell_cursor_show
+    bra.s shell_cursor_hide
+shell_cursor_idle:
+    moveq #0,%d0
+    rts
+
+shell_cursor_show:
+    lea shell_cursor_visible(%pc),%a0
+    tst.b (%a0)
+    bne.s shell_cursor_done
+    move.b #1,(%a0)
+    pea shell_cursor_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_cursor_stamp
+shell_cursor_done:
+    rts
+
+shell_cursor_hide:
+    lea shell_cursor_visible(%pc),%a0
+    tst.b (%a0)
+    beq.s shell_cursor_done
+    clr.b (%a0)
+    pea shell_backspace_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_space_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_backspace_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_cursor_stamp
+    rts
+
+shell_cursor_stamp:
+    lea shell_timer(%pc),%a0
+    move.l (%a0),%a0
+    move.l 12(%a0),%a0
+    jsr (%a0)
+    lea shell_cursor_tick(%pc),%a0
+    move.l %d0,(%a0)
+    rts
+
+shell_session_control:
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 164(%a0),%a0
+    jmp (%a0)
+
+shell_select_session:
+    movem.l %d2-%d3/%a2-%a3,-(%sp)
+    move.l 20(%sp),%d2
+    cmpi.l #3,%d2
+    bhs 9f
+    lea shell_shift_state(%pc),%a0
+    clr.w (%a0)
+    lea shell_context_index(%pc),%a3
+    move.l (%a3),%d0
+    mulu.w #shell_context_end-shell_context_begin,%d0
+    lea shell_contexts(%pc),%a1
+    adda.l %d0,%a1
+    lea shell_context_begin(%pc),%a0
+    move.w #shell_context_end-shell_context_begin-1,%d1
+1:  move.b (%a0)+,(%a1)+
+    dbra %d1,1b
+    move.l %d2,(%a3)
+    lea shell_context_begin(%pc),%a0
+    move.w #shell_context_end-shell_context_begin-1,%d1
+    tst.l 24(%sp)
+    beq 3f
+2:  clr.b (%a0)+
+    dbra %d1,2b
+    bra 5f
+3:  mulu.w #shell_context_end-shell_context_begin,%d2
+    lea shell_contexts(%pc),%a1
+    adda.l %d2,%a1
+4:  move.b (%a1)+,(%a0)+
+    dbra %d1,4b
+5:  moveq #1,%d0
+    bra 8f
+9:  moveq #0,%d0
+8:  movem.l (%sp)+,%d2-%d3/%a2-%a3
+    rts
+
+shell_do_session:
+    clr.l -(%sp)
+    move.l %d0,-(%sp)
+    bsr shell_session_control
+    addq.l #8,%sp
+    tst.l %d0
+    bpl shell_execute_done
+    pea shell_session_busy(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+shell_execute:
+    lea shell_buffer(%pc),%a0
+    tst.b (%a0)
+    beq shell_execute_done
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_tts1(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    beq 1f
+    moveq #1,%d0
+    bra shell_do_session
+1:
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_tts2(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    beq 1f
+    moveq #2,%d0
+    bra shell_do_session
+1:
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_tts3(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    beq 1f
+    moveq #3,%d0
+    bra shell_do_session
+1:
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_exit(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    beq 1f
+    moveq #4,%d0
+    bra shell_do_session
+1:
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_help(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_help
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_uptime(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_uptime
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_cpu(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_cpu
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_tasks(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_tasks
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_jobs(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_jobs
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_memory(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_memory
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_fdd(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_fdd
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_tos(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_tos
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_path(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_path_display
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_inputstat(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_inputstat
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_dir(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_dir
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_ls(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_ls
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_cd(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_cd
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_type(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_type
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_cat(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_type
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_pwd(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_pwd
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_clear(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_clear
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_cls(%pc),%a1
+    bsr shell_same
+    tst.l %d0
+    bne shell_do_clear
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_start(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_start_background
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_startfg(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_start_foreground
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_run(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_run
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_kill(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_kill
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_maps(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_maps
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_watchdog(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_watchdog
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_fg(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_fg
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_bg(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_bg
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_stop(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_stop
+    lea shell_buffer(%pc),%a0
+    lea shell_cmd_wait(%pc),%a1
+    bsr shell_command_arg
+    tst.l %d0
+    bne shell_do_wait
+    lea shell_buffer(%pc),%a0
+    cmpi.b #':',1(%a0)
+    bne.s shell_unknown_command
+    tst.b 2(%a0)
+    bne.s shell_unknown_command
+    moveq #0,%d0
+    move.b (%a0),%d0
+    cmpi.b #'a',%d0
+    blo.s shell_drive_upper_ready
+    cmpi.b #'z',%d0
+    bhi.s shell_unknown_command
+    subi.b #32,%d0
+shell_drive_upper_ready:
+    cmpi.b #'C',%d0
+    blo.s shell_unknown_command
+    cmpi.b #'P',%d0
+    bhi.s shell_unknown_command
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 84(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    beq shell_drive_unavailable
+    lea shell_current_path(%pc),%a0
+    move.b #92,(%a0)
+    clr.b 1(%a0)
+    pea shell_drive_ready_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_drive_unavailable:
+    pea shell_drive_unavailable_text(%pc)
+    bra shell_error_text
+shell_unknown_command:
+    /* v6: filesystem commands (COPY/MOVE/DEL/MKDIR) live in shell_fs.c, so
+       only this one dispatch hook belongs in the assembly shell.  It returns
+       1 when it handled the line and 0 for anything else. */
+    .extern shell_fs_run
+    .extern shell_tos_dispatch
+    lea shell_api(%pc),%a1
+    move.l (%a1),%a1
+    move.l %a1,-(%sp)
+    pea shell_current_path(%pc)
+    pea shell_buffer(%pc)
+    bsr shell_fs_run
+    lea 12(%sp),%sp
+    tst.l %d0
+    bne.s shell_fs_handled
+    /* Not a builtin: try to run the typed name as a program, so "name.app"
+       or just "name" works without the RUN keyword. */
+    lea shell_buffer(%pc),%a0
+    move.l %a0,%d0
+    bra shell_do_run
+shell_fs_handled:
+    rts
+
+/* Print every PATH element. %d2 is callee-saved: the kernel main loop
+   keeps a live function pointer in it, so it MUST be preserved here. */
+shell_do_path_display:
+    move.l %d2,-(%sp)
+    moveq #0,%d2
+1:  pea shell_exec_path(%pc)
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 160(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    beq.s 3f
+    tst.l %d2
+    beq.s 2f
+    pea shell_path_separator(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+2:  pea shell_exec_path(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    addq.l #1,%d2
+    cmpi.l #8,%d2
+    blo.s 1b
+3:  pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l (%sp)+,%d2
+    rts
+shell_do_help:
+    pea shell_help(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_do_uptime:
+    pea shell_uptime_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_timer(%pc),%a0
+    move.l (%a0),%a0
+    move.l 12(%a0),%a0
+    jsr (%a0)
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_ticks_suffix(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_do_tasks:
+    bra shell_do_tasks_body
+shell_do_cpu:
+    pea shell_cpu_info(%pc)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 140(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    beq shell_cpu_unavailable
+    pea shell_cpu_family_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    moveq #0,%d0
+    move.b (%a0),%d0
+    cmpi.b #1,%d0
+    beq.s 1f
+    cmpi.b #2,%d0
+    beq.s 2f
+    cmpi.b #3,%d0
+    beq.s 3f
+    cmpi.b #4,%d0
+    beq.s 4f
+    cmpi.b #5,%d0
+    beq.s 5f
+    pea shell_cpu_68000(%pc)
+    bra.s 6f
+1:  pea shell_cpu_68010(%pc)
+    bra.s 6f
+2:  pea shell_cpu_68020(%pc)
+    bra.s 6f
+3:  pea shell_cpu_68030(%pc)
+    bra.s 6f
+4:  pea shell_cpu_68040(%pc)
+    bra.s 6f
+5:  pea shell_cpu_68060(%pc)
+6:
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_vendor_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_machine_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    move.b 2(%a0),%d0
+    cmpi.b #1,%d0
+    beq.s 11f
+    cmpi.b #2,%d0
+    beq.s 12f
+    cmpi.b #3,%d0
+    beq.s 13f
+    cmpi.b #4,%d0
+    beq.s 14f
+    cmpi.b #5,%d0
+    beq.s 15f
+    pea shell_machine_st(%pc)
+    bra.s 16f
+11: pea shell_machine_megast(%pc)
+    bra.s 16f
+12: pea shell_machine_ste(%pc)
+    bra.s 16f
+13: pea shell_machine_megaste(%pc)
+    bra.s 16f
+14: pea shell_machine_tt(%pc)
+    bra.s 16f
+15: pea shell_machine_falcon(%pc)
+16: bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_clock_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    tst.b 7(%a0)
+    beq.s 17f
+    moveq #0,%d0
+    move.b 8(%a0),%d0
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_cpu_mhz_text(%pc)
+    bra.s 18f
+17: pea shell_cpu_unknown_text(%pc)
+18: bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_address_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    moveq #0,%d0
+    lea shell_cpu_info(%pc),%a0
+    move.b 3(%a0),%d0
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_cpu_bits_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_mmu_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    tst.b 4(%a0)
+    beq.s 2f
+    pea shell_cpu_present(%pc)
+    bra.s 3f
+2:  pea shell_cpu_absent(%pc)
+3:  bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_cache_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    tst.b 5(%a0)
+    beq.s 4f
+    tst.b 6(%a0)
+    beq.s 5f
+    pea shell_cpu_cache_id(%pc)
+    bra.s 6f
+5:  pea shell_cpu_cache_i(%pc)
+    bra.s 6f
+4:  pea shell_cpu_absent(%pc)
+6:  bsr shell_puts
+    addq.l #4,%sp
+    pea shell_cpu_fpu_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_cpu_info(%pc),%a0
+    move.b 1(%a0),%d0
+    beq.s 7f
+    cmpi.b #2,%d0
+    beq.s 8f
+    pea shell_cpu_fpu_external(%pc)
+    bra.s 9f
+8:  pea shell_cpu_fpu_integrated(%pc)
+    bra.s 9f
+7:  pea shell_cpu_absent(%pc)
+9:  bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_cpu_unavailable:
+    pea shell_cpu_unavailable_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_do_tasks_body:
+    pea shell_tasks_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_proc(%pc),%a0
+    move.l (%a0),%a0
+    move.l 8(%a0),%a0
+    jsr (%a0)
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_do_jobs:
+    movem.l %d2/%a2,-(%sp)
+    pea shell_jobs_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    moveq #0,%d2
+    lea shell_jobs_found(%pc),%a0
+    clr.b (%a0)
+shell_jobs_loop:
+    pea shell_job_info(%pc)
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 100(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    beq shell_jobs_next
+    lea shell_jobs_found(%pc),%a0
+    move.b #1,(%a0)
+    pea shell_job_name(%pc)
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 104(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    pea shell_name_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_job_name(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_job_separator(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_pid_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_job_info(%pc),%a2
+    move.l (%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    /* CPU ticks of this task (kernel_user_process_cpu_ticks). */
+    pea shell_ticks_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 132(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_ppid_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 4(%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_state_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 8(%a2),%d0
+    lea shell_state_unknown(%pc),%a0
+    cmpi.l #1,%d0
+    bne.s 1f
+    lea shell_state_ready(%pc),%a0
+    bra.s 5f
+1:  cmpi.l #2,%d0
+    bne.s 2f
+    lea shell_state_running(%pc),%a0
+    bra.s 5f
+2:  cmpi.l #3,%d0
+    bne.s 3f
+    lea shell_state_sleeping(%pc),%a0
+    bra.s 5f
+3:  cmpi.l #4,%d0
+    bne.s 4f
+    lea shell_state_waiting(%pc),%a0
+    bra.s 5f
+4:  cmpi.l #5,%d0
+    bne.s 6f
+    lea shell_state_terminated(%pc),%a0
+    bra.s 5f
+6:  cmpi.l #6,%d0
+    bne.s 7f
+    lea shell_state_input(%pc),%a0
+    bra.s 5f
+7:  cmpi.l #7,%d0
+    bne.s 8f
+    lea shell_state_suspended(%pc),%a0
+    bra.s 5f
+8:  cmpi.l #8,%d0
+    bne.s 5f
+    lea shell_state_message(%pc),%a0
+5:  move.l %a0,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_job_resources(%pc)
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 112(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    beq shell_jobs_next
+    pea shell_memory_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_job_resources(%pc),%a2
+    move.l (%a2),%d0
+    add.l 4(%a2),%d0
+    add.l 8(%a2),%d0
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_files_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 12(%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_stack_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 144(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_stack_separator(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_job_resources(%pc),%a2
+    move.l 4(%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_cpu_ticks_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 132(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_jobs_next:
+    addq.l #1,%d2
+    cmpi.l #4,%d2
+    blo shell_jobs_loop
+    lea shell_jobs_found(%pc),%a0
+    tst.b (%a0)
+    bne.s shell_jobs_done
+    pea shell_no_jobs(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_jobs_done:
+    movem.l (%sp)+,%d2/%a2
+    rts
+
+shell_do_kill:
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_kill_usage
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 108(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    bmi shell_kill_busy
+    beq shell_kill_not_found
+    pea shell_kill_ok_text(%pc)
+    bra shell_error_text
+shell_kill_usage:
+    pea shell_kill_usage_text(%pc)
+    bra shell_error_text
+shell_kill_busy:
+    pea shell_kill_busy_text(%pc)
+    bra shell_error_text
+shell_kill_not_found:
+    pea shell_kill_not_found_text(%pc)
+    bra shell_error_text
+
+shell_do_watchdog:
+    move.l %d0,%a0
+    move.l %a0,%a1
+1:  tst.b (%a1)
+    beq shell_watchdog_usage
+    cmpi.b #' ',(%a1)
+    beq.s 2f
+    addq.l #1,%a1
+    bra.s 1b
+2:  clr.b (%a1)+
+3:  cmpi.b #' ',(%a1)
+    bne.s 4f
+    addq.l #1,%a1
+    bra.s 3b
+4:  bsr shell_parse_u32               /* %a1 survives: parse uses d0/d1/d2/a0 */
+    tst.l %d1
+    beq shell_watchdog_usage
+    lea shell_watchdog_pid(%pc),%a0
+    move.l %d0,(%a0)
+    move.l %a1,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_watchdog_usage
+    move.l %d0,-(%sp)
+    lea shell_watchdog_pid(%pc),%a0
+    move.l (%a0),-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 136(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    bmi shell_watchdog_invalid
+    beq shell_watchdog_not_found
+    pea shell_watchdog_ok_text(%pc)
+    bra shell_error_text
+shell_watchdog_usage:
+    pea shell_watchdog_usage_text(%pc)
+    bra shell_error_text
+shell_watchdog_invalid:
+    pea shell_watchdog_invalid_text(%pc)
+    bra shell_error_text
+shell_watchdog_not_found:
+    pea shell_kill_not_found_text(%pc)
+    bra shell_error_text
+
+shell_do_fg:
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_fg_usage
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 116(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    beq shell_fg_failed
+    lea shell_foreground_attached(%pc),%a0
+    move.b #1,(%a0)
+    pea shell_fg_ok_text(%pc)
+    bra shell_error_text
+shell_fg_usage:
+    pea shell_fg_usage_text(%pc)
+    bra shell_error_text
+shell_fg_failed:
+    pea shell_fg_failed_text(%pc)
+    bra shell_error_text
+shell_do_bg:
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_bg_usage
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 120(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    bmi shell_bg_not_suspended
+    beq shell_bg_not_found
+    pea shell_bg_ok_text(%pc)
+    bra shell_error_text
+shell_bg_usage:
+    pea shell_bg_usage_text(%pc)
+    bra shell_error_text
+shell_bg_not_suspended:
+    pea shell_bg_not_suspended_text(%pc)
+    bra shell_error_text
+shell_bg_not_found:
+    pea shell_bg_not_found_text(%pc)
+    bra shell_error_text
+shell_do_stop:
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_stop_usage
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 124(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    bmi shell_stop_invalid_state
+    beq shell_stop_not_found
+    pea shell_stop_ok_text(%pc)
+    bra shell_error_text
+shell_stop_usage:
+    pea shell_stop_usage_text(%pc)
+    bra shell_error_text
+shell_stop_invalid_state:
+    pea shell_stop_invalid_state_text(%pc)
+    bra shell_error_text
+shell_stop_not_found:
+    pea shell_stop_not_found_text(%pc)
+    bra shell_error_text
+shell_do_maps:
+    move.l %a2,-(%sp)
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_maps_usage
+    pea shell_map_info(%pc)
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 156(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    beq shell_maps_not_found
+    pea shell_maps_pid_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_map_info(%pc),%a2
+    move.l (%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_maps_domain_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 4(%a2),-(%sp)
+    bsr shell_put_hex32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 12(%a2),-(%sp)
+    move.l 8(%a2),-(%sp)
+    pea shell_maps_text_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    move.l 20(%a2),-(%sp)
+    move.l 16(%a2),-(%sp)
+    pea shell_maps_rodata_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    move.l 28(%a2),-(%sp)
+    move.l 24(%a2),-(%sp)
+    pea shell_maps_data_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    move.l 36(%a2),-(%sp)
+    move.l 32(%a2),-(%sp)
+    pea shell_maps_policy_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    move.l 44(%a2),-(%sp)
+    move.l 40(%a2),-(%sp)
+    pea shell_maps_bss_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    move.l 52(%a2),-(%sp)
+    move.l 48(%a2),-(%sp)
+    pea shell_maps_stack_label(%pc)
+    bsr shell_put_map_range
+    lea 12(%sp),%sp
+    pea shell_maps_image_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    tst.l 56(%a2)
+    beq.s 1f
+    pea shell_maps_shared_text(%pc)
+    bra.s 2f
+1:  pea shell_maps_private_text(%pc)
+2:  bsr shell_puts
+    addq.l #4,%sp
+    pea shell_maps_stack_used_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 60(%a2),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    move.l (%sp)+,%a2
+    pea shell_maps_bytes_text(%pc)
+    bra shell_error_text
+shell_maps_usage:
+    move.l (%sp)+,%a2
+    pea shell_maps_usage_text(%pc)
+    bra shell_error_text
+shell_maps_not_found:
+    move.l (%sp)+,%a2
+    pea shell_kill_not_found_text(%pc)
+    bra shell_error_text
+shell_do_wait:
+    move.l %d2,-(%sp)              /* ABI: %d2 is callee-saved */
+    move.l %d0,%a0
+    bsr shell_parse_u32
+    tst.l %d1
+    beq shell_wait_usage
+    move.l %d0,%d2
+    pea shell_wait_status(%pc)
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 128(%a0),%a0
+    jsr (%a0)
+    addq.l #8,%sp
+    tst.l %d0
+    bmi shell_wait_running
+    beq shell_wait_not_found
+    pea shell_wait_pid_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %d2,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    lea shell_wait_status(%pc),%a0
+    move.l (%a0),%d0
+    cmpi.l #-3,%d0
+    beq.s shell_wait_killed
+    cmpi.l #-4,%d0
+    beq.s shell_wait_watchdog
+    bmi.s shell_wait_fault
+    pea shell_wait_exit_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_wait_status(%pc),%a0
+    move.l (%a0),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bra shell_wait_done
+shell_wait_killed:
+    pea shell_wait_killed_text(%pc)
+    bra shell_wait_done
+shell_wait_watchdog:
+    pea shell_wait_watchdog_text(%pc)
+    bra shell_wait_done
+shell_wait_fault:
+    neg.l %d0
+    move.l %d0,%d2
+    pea shell_wait_fault_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l %d2,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bra shell_wait_done
+shell_wait_usage:
+    pea shell_wait_usage_text(%pc)
+    bra shell_wait_done
+shell_wait_running:
+    pea shell_wait_running_text(%pc)
+    bra shell_wait_done
+shell_wait_not_found:
+    pea shell_wait_not_found_text(%pc)
+    bra shell_wait_done
+/* Local epilogue: print the queued text, then restore the callee-saved %d2. */
+shell_wait_done:
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l (%sp)+,%d2
+    rts
+shell_do_inputstat:
+    pea shell_input_dropped_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_input(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_input_pending_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l #0,-(%sp)
+    lea shell_event(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_input(%pc),%a0
+    move.l (%a0),%a0
+    cmpi.w #24,6(%a0)
+    blo.s 2f
+    movem.l %d2/%a2,-(%sp)
+    lea shell_input_stats_labels(%pc),%a2
+    moveq #0,%d2
+1:  move.l %a2,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+3:  tst.b (%a2)+
+    bne.s 3b
+    move.l %d2,-(%sp)
+    lea shell_input(%pc),%a0
+    move.l (%a0),%a0
+    move.l 20(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    addq.l #1,%d2
+    cmpi.l #6,%d2
+    blo.s 1b
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    movem.l (%sp)+,%d2/%a2
+2:  rts
+shell_do_memory:
+    pea shell_st_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_st_stats(%pc)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 52(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    lea shell_st_stats(%pc),%a0
+    move.l 4(%a0),%d0
+    lsr.l #8,%d0
+    lsr.l #2,%d0
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_tt_label(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_tt_stats(%pc)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 56(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    lea shell_tt_stats(%pc),%a0
+    move.l 4(%a0),%d0
+    lsr.l #8,%d0
+    lsr.l #2,%d0
+    move.l %d0,-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_kb_suffix(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+/* FDD: list the floppy root (fdd) or print a file (fdd NAME) through the ROM
+   FAT12 reader exposed on the kernel module API (v4 tail). */
+/* TOS executive: run a .PRG/.TOS through the TOS personality (module API 188).
+   The persona runs the program synchronously and restores the exception vectors
+   before returning, so the prompt comes back on its own. */
+shell_do_tos:
+    move.l %d0,%a0
+    tst.b (%a0)
+    beq shell_tos_usage
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_bad_path
+    pea shell_work_path(%pc)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 188(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    beq shell_tos_ok
+    cmpi.l #-0x2ff,%d0
+    beq shell_tos_absent
+    pea shell_tos_fail_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_tos_ok:
+    rts
+shell_tos_absent:
+    pea shell_tos_absent_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_tos_usage:
+    pea shell_tos_usage_text(%pc)
+    bra shell_error_text
+shell_do_fdd:
+    movem.l %d0-%d3/%a1-%a3,-(%sp)
+    move.l %d0,%a3
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 176(%a0),%a0
+    jsr (%a0)
+    tst.l %d0
+    beq shell_fdd_none
+    tst.b (%a3)
+    beq shell_fdd_list
+    pea shell_fdd_size(%pc)
+    move.l #2048,-(%sp)
+    pea shell_fdd_buffer(%pc)
+    move.l %a3,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 184(%a0),%a0
+    jsr (%a0)
+    lea 16(%sp),%sp
+    tst.l %d0
+    beq shell_fdd_fail
+    move.l shell_fdd_size(%pc),%d2
+    cmpi.l #2047,%d2
+    bls.s 1f
+    move.l #2047,%d2
+1:  lea shell_fdd_buffer(%pc),%a2
+    clr.b (%a2,%d2.l)
+    move.l %a2,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bra shell_fdd_exit
+shell_fdd_list:
+    moveq #0,%d2
+shell_fdd_loop:
+    pea shell_fdd_attr(%pc)
+    pea shell_fdd_size(%pc)
+    pea shell_fdd_name(%pc)
+    move.l %d2,-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 180(%a0),%a0
+    jsr (%a0)
+    lea 16(%sp),%sp
+    tst.l %d0
+    beq shell_fdd_exit
+    pea shell_fdd_name(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_fdd_sep(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l shell_fdd_size(%pc),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    addq.l #1,%d2
+    bra shell_fdd_loop
+shell_fdd_none:
+    pea shell_fdd_none_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bra shell_fdd_exit
+shell_fdd_fail:
+    pea shell_fdd_fail_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_fdd_exit:
+    movem.l (%sp)+,%d0-%d3/%a1-%a3
+    rts
+
+shell_do_dir:
+    move.l %d0,%a0
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_bad_path
+    move.l #0,-(%sp)
+    pea shell_dir_entry(%pc)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 24(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_not_found
+    rts
+
+/* Accept Linux-style "ls -l" while keeping the compact FAT listing format. */
+shell_do_ls:
+    move.l %d0,%a0
+    cmpi.b #'-',(%a0)
+    bne shell_do_dir
+    cmpi.b #'l',1(%a0)
+    bne shell_do_dir
+    tst.b 2(%a0)
+    beq.s shell_ls_current
+    cmpi.b #' ',2(%a0)
+    bne shell_do_dir
+    addq.l #3,%a0
+shell_ls_skip_spaces:
+    cmpi.b #' ',(%a0)
+    bne.s shell_ls_ready
+    addq.l #1,%a0
+    bra.s shell_ls_skip_spaces
+shell_ls_ready:
+    move.l %a0,%d0
+    bra shell_do_dir
+shell_ls_current:
+    addq.l #2,%a0
+    move.l %a0,%d0
+    bra shell_do_dir
+
+shell_do_pwd:
+    lea shell_current_path(%pc),%a0
+    move.l %a0,-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+shell_do_clear:
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 40(%a0),%a0
+    jmp (%a0)
+
+shell_do_cd:
+    move.l %d0,%a0
+    tst.b (%a0)
+    beq shell_bad_path
+    cmpi.b #'.',(%a0)
+    bne.s shell_cd_regular
+    cmpi.b #'.',1(%a0)
+    bne.s shell_cd_regular
+    tst.b 2(%a0)
+    bne.s shell_cd_regular
+    bsr shell_parent_path
+    rts
+shell_cd_regular:
+    lea shell_cd_argument(%pc),%a1
+    move.l %a0,(%a1)
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_bad_path
+    pea shell_attributes(%pc)
+    pea shell_file_size(%pc)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    bne.s shell_cd_stat_ok
+    /* Root-only retry with the unmodified relative component. */
+    lea shell_current_path(%pc),%a0
+    cmpi.b #92,(%a0)
+    bne shell_not_found
+    tst.b 1(%a0)
+    bne shell_not_found
+    lea shell_cd_argument(%pc),%a0
+    move.l (%a0),%a0
+    cmpi.b #92,(%a0)
+    beq shell_not_found
+    cmpi.b #'/',(%a0)
+    beq shell_not_found
+    pea shell_attributes(%pc)
+    pea shell_file_size(%pc)
+    move.l %a0,-(%sp)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_not_found
+shell_cd_stat_ok:
+    lea shell_attributes(%pc),%a0
+    moveq #0,%d0
+    move.b (%a0),%d0
+    andi.b #0x10,%d0
+    beq shell_not_directory
+    lea shell_work_path(%pc),%a0
+    lea shell_current_path(%pc),%a1
+    bsr shell_copy_string
+    rts
+
+shell_do_type:
+    move.l %d0,%a0
+    tst.b (%a0)
+    beq shell_type_usage
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_bad_path
+    pea shell_attributes(%pc)
+    pea shell_file_size(%pc)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_not_found
+    lea shell_attributes(%pc),%a0
+    btst #4,(%a0)
+    bne shell_is_directory
+    lea shell_stream_offset(%pc),%a0
+    clr.l (%a0)
+shell_type_read_block:
+    /* Read in 4 KB blocks: read_path_at() re-resolves the path and walks the
+       FAT chain from the first cluster on every call, so 512-byte blocks made
+       TYPE quadratic in the file size. */
+    pea shell_loaded_size(%pc)
+    move.l #4096,-(%sp)
+    pea shell_file_buffer(%pc)
+    lea shell_stream_offset(%pc),%a0
+    move.l (%a0),-(%sp)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 28(%a0),%a0
+    jsr (%a0)
+    lea 20(%sp),%sp
+    tst.l %d0
+    beq shell_read_error
+    /* Filter the whole block in place, then hand it to kconsole once.  A
+       per-character shell_puts() turned one block into as many module-API calls
+       plus term_write() passes (and capture_append() rescanned the line every
+       time, which is quadratic). */
+    lea shell_file_buffer(%pc),%a0
+    move.l %a0,%a1
+    move.l shell_loaded_size(%pc),%d1
+    beq shell_type_block_done
+shell_type_loop:
+    move.b (%a0)+,%d0
+    cmpi.b #13,%d0
+    beq.s shell_type_skip
+    cmpi.b #10,%d0
+    beq.s shell_type_keep
+    cmpi.b #9,%d0
+    beq.s shell_type_keep
+    cmpi.b #32,%d0
+    blo.s shell_type_dot
+    cmpi.b #126,%d0
+    bls.s shell_type_keep
+shell_type_dot:
+    moveq #'.',%d0
+shell_type_keep:
+    move.b %d0,(%a1)+
+shell_type_skip:
+    subq.l #1,%d1
+    bne.s shell_type_loop
+    clr.b (%a1)
+    pea shell_file_buffer(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+shell_type_block_done:
+    lea shell_stream_offset(%pc),%a0
+    lea shell_loaded_size(%pc),%a1
+    move.l (%a1),%d0
+    add.l %d0,(%a0)
+    lea shell_file_size(%pc),%a1
+    move.l (%a0),%d0
+    cmp.l (%a1),%d0
+    blo shell_type_read_block
+shell_type_done:
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+shell_do_start_background:
+    lea shell_start_foreground(%pc),%a1
+    clr.b (%a1)
+    bra.s shell_do_start
+shell_do_start_foreground:
+    lea shell_start_foreground(%pc),%a1
+    move.b #1,(%a1)
+shell_do_start:
+    move.l %d0,%a0
+    tst.b (%a0)
+    beq shell_start_usage
+    lea shell_start_filename(%pc),%a1
+    move.l %a0,(%a1)
+    move.l %a0,%a1
+1:  tst.b (%a1)
+    beq.s 3f
+    cmpi.b #' ',(%a1)
+    beq.s 2f
+    addq.l #1,%a1
+    bra.s 1b
+2:  clr.b (%a1)+
+    cmpi.b #' ',(%a1)
+    beq.s 2b
+3:  lea shell_start_arguments(%pc),%a0
+    move.l %a1,(%a0)
+    bsr shell_start_add_app
+    lea shell_start_filename(%pc),%a0
+    move.l (%a0),%a0
+    lea shell_path_retry(%pc),%a1
+    clr.b (%a1)
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_bad_path
+shell_start_launch:
+    /* TOS program?  A .PRG/.TOS/.TTP/.GTP name runs synchronously in the TOS
+       personality and prints "TOS RC <code>", so it must not reach the native
+       ASYSAPP0 spawn below (which would reject the 0x601A image). */
+    lea shell_api(%pc),%a0
+    move.l (%a0),-(%sp)                 /* api (3rd arg) */
+    lea shell_start_arguments(%pc),%a0
+    move.l (%a0),-(%sp)                 /* arguments (2nd arg) */
+    pea shell_work_path(%pc)            /* path (1st arg) */
+    bsr shell_tos_dispatch
+    lea 12(%sp),%sp
+    tst.l %d0
+    bne shell_start_tos_handled
+    pea shell_start_pid(%pc)
+    pea shell_current_path(%pc)
+    lea shell_start_arguments(%pc),%a0
+    move.l (%a0),-(%sp)
+    pea shell_work_path(%pc)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 96(%a0),%a0
+    jsr (%a0)
+    lea 16(%sp),%sp
+    tst.l %d0
+    bpl.s shell_start_launched
+    /* Only the "file not found" status (-1) means "try the next PATH entry".
+       -2 (image/stack allocation failed) and -3 (read/verify failed) describe
+       an EXISTING file; walking the whole PATH would end in a misleading
+       PROCESS START FAILED and burn the retry budget. */
+    cmpi.l #-1,%d0
+    bne shell_start_failed
+    lea shell_path_retry(%pc),%a1
+    tst.b (%a1)
+    bne.s shell_start_next_path
+    lea shell_start_filename(%pc),%a0
+    move.l (%a0),%a0
+    bsr shell_simple_program
+    tst.l %d0
+    beq shell_start_failed
+shell_start_next_path:
+    lea shell_path_retry(%pc),%a1
+    addq.b #1,(%a1)
+    lea shell_start_filename(%pc),%a0
+    move.l (%a0),%a0
+    bsr shell_make_exec_path
+    tst.l %d0
+    beq shell_start_failed
+    bra shell_start_launch
+shell_start_launched:
+    lea shell_start_foreground(%pc),%a0
+    tst.b (%a0)
+    beq.s shell_start_report
+    lea shell_start_pid(%pc),%a0
+    move.l (%a0),-(%sp)
+    lea shell_api(%pc),%a0
+    move.l (%a0),%a0
+    move.l 116(%a0),%a0
+    jsr (%a0)
+    addq.l #4,%sp
+    tst.l %d0
+    beq shell_start_failed
+    lea shell_foreground_attached(%pc),%a0
+    move.b #1,(%a0)
+shell_start_report:
+    pea shell_start_ok_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    lea shell_start_pid(%pc),%a0
+    move.l (%a0),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+
+/* A TOS program already ran (and reported its exit code) in the dispatch at
+   the top of shell_start_launch; there is no native pid to print. */
+shell_start_tos_handled:
+    rts
+
+/* RUN uses the kernel's owned-process loader and attaches the terminal.
+ * Returning from a scheduler quantum is not process completion. The old
+ * synchronous loader printed EXIT and released its allocations on that return.
+ * STARTFG already supplies argument parsing, PATH lookup and foreground state. */
+shell_do_run:
+    bra shell_do_start_foreground
+
+/* Shell convenience: a bare name (no extension, no drive letter and no path
+   separator) is tried as name.APP, so "command" finds "COMMAND.APP". The
+   command line and the argument string are left untouched. */
+shell_start_add_app:
+    movem.l %d2-%d3/%a2-%a3,-(%sp)
+    lea shell_start_filename(%pc),%a0
+    move.l (%a0),%a1
+    lea shell_start_name(%pc),%a2
+    moveq #0,%d0
+1:  move.b (%a1),%d1
+    beq.s 2f
+    cmpi.b #46,%d1
+    beq.s 3f
+    cmpi.b #58,%d1
+    beq.s 3f
+    cmpi.b #92,%d1
+    beq.s 3f
+    cmpi.b #47,%d1
+    beq.s 3f
+    cmpi.l #58,%d0
+    bhs.s 3f
+    move.b %d1,(%a2)+
+    addq.l #1,%d0
+    addq.l #1,%a1
+    bra.s 1b
+2:  move.b #46,(%a2)+
+    move.b #'A',(%a2)+
+    move.b #'P',(%a2)+
+    move.b #'P',(%a2)+
+    clr.b (%a2)
+    lea shell_start_name(%pc),%a0
+    lea shell_start_filename(%pc),%a1
+    move.l %a0,(%a1)
+3:  movem.l (%sp)+,%d2-%d3/%a2-%a3
+    rts
+
+shell_start_failed:
+    pea shell_start_failed_text(%pc)
+    bra shell_error_text
+shell_start_usage:
+    pea shell_start_usage_text(%pc)
+    bra shell_error_text
+
+shell_bad_path:
+    pea shell_bad_path_text(%pc)
+    bra.s shell_error_text
+shell_not_found:
+    pea shell_not_found_text(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_work_path(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    rts
+shell_not_directory:
+    pea shell_not_directory_text(%pc)
+    bra.s shell_error_text
+shell_is_directory:
+    pea shell_is_directory_text(%pc)
+    bra.s shell_error_text
+shell_read_error:
+    pea shell_read_error_text(%pc)
+shell_error_text:
+    bsr shell_puts
+    addq.l #4,%sp
+shell_execute_done:
+    rts
+
+/* v4: command line submitted from the GUI. submit() only records the text
+   (safe inside a syscall); run_pending() executes it from the kernel main
+   loop in the shell's own context, so run/start may spawn and wait normally. */
+shell_submit:
+    move.l 4(%sp),%a0
+    lea shell_pending(%pc),%a1
+    moveq #62,%d0
+1:  move.b (%a0)+,%d1
+    move.b %d1,(%a1)+
+    beq.s 2f
+    dbra %d0,1b
+    clr.b (%a1)
+2:  lea shell_pending_flag(%pc),%a0
+    move.b #1,(%a0)
+    moveq #0,%d0
+    rts
+
+shell_run_pending:
+    lea shell_pending_flag(%pc),%a0
+    tst.b (%a0)
+    beq.s 3f
+    clr.b (%a0)
+    lea shell_pending(%pc),%a0
+    lea shell_buffer(%pc),%a1
+4:  move.b (%a0)+,(%a1)+
+    bne.s 4b
+    lea shell_length(%pc),%a0
+    clr.b (%a0)
+    lea shell_foreground_attached(%pc),%a0
+    clr.b (%a0)
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bsr shell_execute
+    lea shell_foreground_attached(%pc),%a0
+    tst.b (%a0)
+    bne.s 5f
+    bsr shell_print_prompt
+5:  lea shell_length(%pc),%a0
+    clr.b (%a0)
+    lea shell_buffer(%pc),%a0
+    clr.b (%a0)
+    moveq #1,%d0
+    rts
+3:  moveq #0,%d0
+    rts
+
+shell_type_usage:
+    pea shell_type_usage_text(%pc)
+    bra shell_error_text
+
+/* Return argument pointer in d0 for an exact command optionally followed by spaces. */
+shell_command_arg:
+1:  move.b (%a1)+,%d1
+    beq.s 2f
+    cmp.b (%a0)+,%d1
+    bne.s 4f
+    bra.s 1b
+2:  tst.b (%a0)
+    beq.s 3f
+    cmpi.b #' ',(%a0)
+    bne.s 4f
+2:  addq.l #1,%a0
+    cmpi.b #' ',(%a0)
+    beq.s 2b
+3:  move.l %a0,%d0
+    rts
+4:  moveq #0,%d0
+    rts
+
+/* Parse one complete unsigned decimal argument. d1 is nonzero on success. */
+shell_parse_u32:
+    move.l %d2,-(%sp)              /* ABI: %d2 is callee-saved */
+    moveq #0,%d0
+    moveq #0,%d1
+    tst.b (%a0)
+    beq.s 4f
+1:  moveq #0,%d2
+    move.b (%a0)+,%d2
+    beq.s 3f
+    cmpi.b #'0',%d2
+    blo.s 4f
+    cmpi.b #'9',%d2
+    bhi.s 4f
+    subi.b #'0',%d2
+    cmpi.l #429496729,%d0
+    bhi.s 4f
+    bne.s 2f
+    cmpi.b #5,%d2
+    bhi.s 4f
+2:  move.l %d0,%d1
+    lsl.l #2,%d0
+    add.l %d1,%d0
+    lsl.l #1,%d0
+    add.l %d2,%d0
+    bra.s 1b
+3:  moveq #1,%d1
+4:  move.l (%sp)+,%d2
+    rts
+
+/* Build an absolute FAT path in shell_work_path. Empty argument means cwd. */
+shell_make_path:
+    move.l #64,-(%sp)
+    pea shell_work_path(%pc)
+    move.l %a0,-(%sp)
+    pea shell_current_path(%pc)
+    bsr shell_build_path
+    lea 16(%sp),%sp
+    rts
+
+/* Resolve a simple executable name relative to PATH instead of cwd. */
+shell_make_exec_path:
+    move.l %a0,-(%sp)
+    pea shell_exec_path(%pc)
+    moveq #0,%d0
+    move.b shell_path_retry(%pc),%d0
+    subq.l #1,%d0
+    move.l %d0,-(%sp)
+    lea shell_api(%pc),%a1
+    move.l (%a1),%a1
+    move.l 160(%a1),%a1
+    jsr (%a1)
+    addq.l #8,%sp
+    tst.l %d0
+    beq.s shell_make_exec_drop
+    move.l (%sp)+,%a0
+    move.l #64,-(%sp)
+    pea shell_work_path(%pc)
+    move.l %a0,-(%sp)
+    pea shell_exec_path(%pc)
+    bsr shell_build_path
+    lea 16(%sp),%sp
+    rts
+shell_make_exec_drop:
+    addq.l #4,%sp
+shell_make_exec_none:
+    moveq #0,%d0
+    rts
+
+/* D0=1 only when A0 contains a bare filename. Explicit paths and drive
+   specifications must never be silently redirected through PATH. */
+shell_simple_program:
+    moveq #0,%d0
+    tst.b (%a0)
+    beq.s 2f
+1:  move.b (%a0)+,%d1
+    beq.s 3f
+    cmpi.b #92,%d1
+    beq.s 2f
+    cmpi.b #'/',%d1
+    beq.s 2f
+    cmpi.b #':',%d1
+    beq.s 2f
+    bra.s 1b
+2:  rts
+3:  moveq #1,%d0
+    rts
+
+shell_copy_string:
+1:  move.b (%a0)+,(%a1)+
+    bne.s 1b
+    rts
+
+shell_parent_path:
+    lea shell_current_path(%pc),%a0
+    move.l %a0,%a1
+1:  tst.b (%a1)+
+    bne.s 1b
+    subq.l #2,%a1
+    cmp.l %a0,%a1
+    beq.s 3f
+2:  cmpi.b #92,(%a1)
+    beq.s 3f
+    subq.l #1,%a1
+    cmp.l %a0,%a1
+    bhi.s 2b
+3:  cmp.l %a0,%a1
+    bne.s 4f
+    move.b #92,(%a0)
+    clr.b 1(%a0)
+    rts
+4:  clr.b (%a1)
+    rts
+
+/* VFS directory callback: name, size, attributes, context. */
+shell_dir_entry:
+    move.l 4(%sp),-(%sp)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 12(%sp),%d0
+    btst #4,%d0
+    beq.s 1f
+    pea shell_dir_suffix(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    bra.s 2f
+1:  pea shell_size_separator(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+    move.l 8(%sp),-(%sp)
+    bsr shell_put_u32
+    addq.l #4,%sp
+    pea shell_newline(%pc)
+    bsr shell_puts
+    addq.l #4,%sp
+2:  moveq #1,%d0
+    rts
+
+shell_same:
+    moveq #0,%d0
+1:  move.b (%a0)+,%d1
+    cmp.b (%a1)+,%d1
+    bne.s 2f
+    tst.b %d1
+    bne.s 1b
+    moveq #1,%d0
+2:  rts
+
+shell_key_count:
+    lea shell_keys(%pc),%a0
+    move.l (%a0),%d0
+    rts
+
+shell_line_active:
+    moveq #0,%d0
+    lea shell_length(%pc),%a0
+    move.b (%a0),%d0
+    rts
+
+    .section .rodata
+shell_backspace_text: .asciz "\b"
+shell_space_text: .asciz " "
+shell_cursor_text: .asciz "_"
+shell_slash_text: .asciz "\\"
+shell_newline: .asciz "\n"
+shell_empty_text: .asciz ""
+shell_tts_prefix: .asciz "tts"
+shell_space: .asciz " "
+shell_session_busy: .asciz "Cannot close tts1 or a session with running processes.\n"
+shell_cmd_tts1: .asciz "tts1"
+shell_cmd_tts2: .asciz "tts2"
+shell_cmd_tts3: .asciz "tts3"
+shell_cmd_exit: .asciz "exit"
+shell_cmd_help: .asciz "help"
+shell_cmd_uptime: .asciz "uptime"
+shell_cmd_cpu: .asciz "cpu"
+shell_cmd_tasks: .asciz "tasks"
+shell_cmd_jobs: .asciz "jobs"
+shell_cmd_memory: .asciz "memory"
+shell_cmd_fdd: .asciz "fdd"
+shell_cmd_tos: .asciz "tos"
+shell_tos_usage_text: .asciz "USAGE: TOS <FILE.PRG>\n"
+shell_tos_fail_text: .asciz "TOS PROGRAM FAILED\n"
+shell_tos_absent_text: .asciz "TOS PERSONA NOT BUILT IN THIS KERNEL\n"
+shell_fdd_none_text: .asciz "NO FLOPPY OR NO FAT12\n"
+shell_fdd_fail_text: .asciz "FDD: FILE NOT FOUND OR TOO BIG\n"
+shell_fdd_dbg: .asciz "FDD SIZE="
+shell_fdd_sep: .asciz "  "
+shell_cmd_inputstat: .asciz "inputstat"
+shell_cmd_dir: .asciz "dir"
+shell_cmd_ls: .asciz "ls"
+shell_cmd_cd: .asciz "cd"
+shell_cmd_type: .asciz "type"
+shell_cmd_cat: .asciz "cat"
+shell_cmd_pwd: .asciz "pwd"
+shell_cmd_clear: .asciz "clear"
+shell_cmd_cls: .asciz "cls"
+shell_cmd_start: .asciz "start"
+shell_cmd_startfg: .asciz "startfg"
+shell_cmd_run: .asciz "run"
+shell_cmd_path: .asciz "path"
+shell_path_separator: .asciz ";"
+shell_cmd_kill: .asciz "kill"
+shell_cmd_maps: .asciz "maps"
+shell_cmd_watchdog: .asciz "watchdog"
+shell_cmd_fg: .asciz "fg"
+shell_cmd_bg: .asciz "bg"
+shell_cmd_stop: .asciz "stop"
+shell_cmd_wait: .asciz "wait"
+shell_help: .asciz "COMMANDS: tts1 tts2 tts3 exit help cpu uptime tasks jobs maps kill watchdog stop fg bg wait memory inputstat dir ls cd type cat pwd clear cls run start startfg copy move del mkdir\n"
+shell_cpu_68000: .asciz "68000-COMPATIBLE\n"
+shell_cpu_68010: .asciz "68010-COMPATIBLE\n"
+shell_cpu_68020: .asciz "68020-COMPATIBLE\n"
+shell_cpu_68030: .asciz "68030-COMPATIBLE\n"
+shell_cpu_68040: .asciz "68040-COMPATIBLE\n"
+shell_cpu_68060: .asciz "68060-COMPATIBLE\n"
+shell_cpu_family_label: .asciz "CPU FAMILY: "
+shell_cpu_vendor_text: .asciz "VENDOR: NOT IDENTIFIABLE BY 68K ISA\n"
+shell_cpu_machine_label: .asciz "MACHINE: "
+shell_machine_st: .asciz "ATARI ST\n"
+shell_machine_megast: .asciz "ATARI MEGA ST\n"
+shell_machine_ste: .asciz "ATARI STE\n"
+shell_machine_megaste: .asciz "ATARI MEGA STE\n"
+shell_machine_tt: .asciz "ATARI TT\n"
+shell_machine_falcon: .asciz "ATARI FALCON\n"
+shell_cpu_clock_label: .asciz "SYSTEM CLOCK: "
+shell_cpu_mhz_text: .asciz " MHZ\n"
+shell_cpu_unknown_text: .asciz "UNKNOWN\n"
+shell_cpu_address_label: .asciz "ADDRESS BUS: "
+shell_cpu_bits_text: .asciz " BIT\n"
+shell_cpu_mmu_label: .asciz "ON-CPU MMU: "
+shell_cpu_cache_label: .asciz "ON-CPU CACHE: "
+shell_cpu_fpu_label: .asciz "FPU: "
+shell_cpu_present: .asciz "PRESENT\n"
+shell_cpu_absent: .asciz "NOT PRESENT\n"
+shell_cpu_cache_i: .asciz "INSTRUCTION\n"
+shell_cpu_cache_id: .asciz "INSTRUCTION + DATA\n"
+shell_cpu_fpu_external: .asciz "EXTERNAL 68881/68882-COMPATIBLE (TYPE UNKNOWN)\n"
+shell_cpu_fpu_integrated: .asciz "INTEGRATED\n"
+shell_cpu_unavailable_text: .asciz "CPU INFORMATION UNAVAILABLE\n"
+shell_unknown: .asciz "UNKNOWN COMMAND\n"
+shell_bad_path_text: .asciz "INVALID OR TOO LONG PATH\n"
+shell_not_found_text: .asciz "PATH NOT FOUND: "
+shell_not_directory_text: .asciz "NOT A DIRECTORY\n"
+shell_is_directory_text: .asciz "FILE IS A DIRECTORY\n"
+shell_read_error_text: .asciz "FILE READ ERROR\n"
+shell_type_usage_text: .asciz "USAGE: TYPE FILE OR CAT FILE\n"
+shell_run_usage_text: .asciz "USAGE: RUN PROGRAM.APP\n"
+shell_start_usage_text: .asciz "USAGE: START PROGRAM.APP [ARGS]\n"
+shell_start_ok_text: .asciz "PROCESS READY, PID: "
+shell_start_failed_text: .asciz "PROCESS START FAILED\n"
+shell_run_invalid_text: .asciz "INVALID OR UNSUPPORTED APP IMAGE\n"
+shell_run_no_memory_text: .asciz "NOT ENOUGH MEMORY FOR PROGRAM\n"
+shell_run_read_error_text: .asciz "PROGRAM READ ERROR\n"
+shell_run_checksum_text: .asciz "PROGRAM CHECKSUM FAILED\n"
+shell_app_fault_text: .asciz "PROGRAM ABORTED, FAULT CODE: "
+shell_drive_ready_text: .asciz "DRIVE MOUNTED\n"
+shell_drive_unavailable_text: .asciz "DRIVE NOT AVAILABLE OR NOT FAT16\n"
+shell_dir_suffix: .asciz "  <DIR>\n"
+shell_size_separator: .asciz "  "
+shell_uptime_label: .asciz "UPTIME: "
+shell_ticks_suffix: .asciz " TICKS AT 50 HZ\n"
+shell_tasks_label: .asciz "TASKS: "
+shell_jobs_label: .asciz "USER PROCESSES:\n"
+shell_name_label: .asciz "NAME "
+shell_job_separator: .asciz "  "
+shell_pid_label: .asciz "PID "
+shell_ticks_label: .asciz " cpu="
+shell_ppid_label: .asciz "  PPID "
+shell_state_label: .asciz "  STATE "
+shell_state_ready: .asciz "READY\n"
+shell_state_running: .asciz "RUNNING\n"
+shell_state_sleeping: .asciz "SLEEPING\n"
+shell_state_waiting: .asciz "WAITING\n"
+shell_state_terminated: .asciz "TERMINATED\n"
+shell_state_input: .asciz "INPUT\n"
+shell_state_suspended: .asciz "SUSPENDED\n"
+shell_state_message: .asciz "MESSAGE WAIT\n"
+shell_state_unknown: .asciz "UNKNOWN\n"
+shell_memory_label: .asciz "  MEMORY "
+shell_files_label: .asciz " BYTES  FILES "
+shell_stack_label: .asciz "  STACK "
+shell_stack_separator: .asciz "/"
+shell_cpu_ticks_label: .asciz "  CPU TICKS "
+shell_no_jobs: .asciz "NONE\n"
+shell_kill_usage_text: .asciz "USAGE: KILL PID\n"
+shell_kill_ok_text: .asciz "PROCESS TERMINATED\n"
+shell_kill_busy_text: .asciz "PROCESS CANNOT BE TERMINATED NOW\n"
+shell_kill_not_found_text: .asciz "PROCESS NOT FOUND\n"
+shell_maps_usage_text: .asciz "USAGE: MAPS PID\n"
+shell_maps_pid_label: .asciz "PROCESS MAP PID "
+shell_maps_domain_label: .asciz "  DOMAIN "
+shell_maps_text_label: .asciz "TEXT    R-X  "
+shell_maps_rodata_label: .asciz "RODATA  R--  "
+shell_maps_data_label: .asciz "DATA    RW-  "
+shell_maps_policy_label: .asciz "POLICY  R--  "
+shell_maps_bss_label: .asciz "BSS     RW-  "
+shell_maps_stack_label: .asciz "STACK   RW-  "
+shell_maps_image_label: .asciz "IMAGE: "
+shell_maps_private_text: .asciz "PRIVATE\n"
+shell_maps_shared_text: .asciz "SHARED\n"
+shell_maps_stack_used_label: .asciz "STACK USED: "
+shell_maps_bytes_text: .asciz " BYTES\n"
+shell_map_separator: .asciz " - "
+shell_hex_digits: .ascii "0123456789ABCDEF"
+shell_watchdog_usage_text: .asciz "USAGE: WATCHDOG PID CPU_TICKS (0 DISABLES)\n"
+shell_watchdog_ok_text: .asciz "PROCESS WATCHDOG UPDATED\n"
+shell_watchdog_invalid_text: .asciz "INVALID PROCESS OR WATCHDOG LIMIT\n"
+shell_fg_usage_text: .asciz "USAGE: FG PID\n"
+shell_fg_ok_text: .asciz "TERMINAL ATTACHED - PRESS A KEY\n"
+shell_fg_failed_text: .asciz "PROCESS NOT WAITING FOR INPUT\n"
+shell_bg_usage_text: .asciz "USAGE: BG PID\n"
+shell_bg_ok_text: .asciz "PROCESS RESUMED IN BACKGROUND\n"
+shell_bg_not_suspended_text: .asciz "PROCESS NOT SUSPENDED\n"
+shell_bg_not_found_text: .asciz "PROCESS NOT FOUND\n"
+shell_stop_usage_text: .asciz "USAGE: STOP PID\n"
+shell_stop_ok_text: .asciz "PROCESS SUSPENDED\n"
+shell_stop_invalid_state_text: .asciz "PROCESS CANNOT BE SUSPENDED NOW\n"
+shell_stop_not_found_text: .asciz "PROCESS NOT FOUND\n"
+shell_wait_usage_text: .asciz "USAGE: WAIT PID\n"
+shell_wait_pid_text: .asciz "PID "
+shell_wait_exit_text: .asciz " EXIT "
+shell_wait_fault_text: .asciz " FAULT "
+shell_wait_killed_text: .asciz " KILLED\n"
+shell_wait_watchdog_text: .asciz " WATCHDOG\n"
+shell_wait_running_text: .asciz "PROCESS STILL ACTIVE\n"
+shell_wait_not_found_text: .asciz "NO COMPLETION RECORD\n"
+shell_input_dropped_label: .asciz "IKBD DROPPED: "
+shell_input_pending_label: .asciz "  EVENTS PENDING: "
+shell_st_label: .asciz "ST-RAM FREE: "
+shell_tt_label: .asciz " KB\nTT-RAM FREE: "
+shell_kb_suffix: .asciz " KB\n"
+shell_keymap:
+    .byte 0,0,'1','2','3','4','5','6','7','8','9','0','-','=',0,0
+    .byte 'q','w','e','r','t','y','u','i','o','p','[',']',0,0,'a','s'
+    .byte 'd','f','g','h','j','k','l',';',39,'`',0,92,'z','x','c','v'
+    .byte 'b','n','m',',','.','/',0,'*',0,' ',0,0,0,0,0,0
+shell_shift_keymap:
+    .byte 0,0,'!','@','#','$','%','^','&','*','(',')','_','+',0,0
+    .byte 'Q','W','E','R','T','Y','U','I','O','P','{','}',0,0,'A','S'
+    .byte 'D','F','G','H','J','K','L',':','"','~',0,'|','Z','X','C','V'
+    .byte 'B','N','M','<','>','?',0,'*',0,' ',0,0,0,0,0,0
+
+    .section .bss
+    .align 2
+shell_api: .space 4
+shell_event: .space 4
+shell_input: .space 4
+shell_proc: .space 4
+shell_timer: .space 4
+shell_vfs: .space 4
+shell_service: .space 40
+shell_context_index: .space 4
+shell_context_begin:
+shell_type: .space 4
+shell_value: .space 4
+shell_keys: .space 4
+shell_cursor_tick: .space 4
+shell_cursor_visible: .space 2
+shell_shift_state: .space 2
+shell_length: .space 2
+shell_char: .space 2
+shell_prompt_buffer: .space 68
+shell_buffer: .space 64
+shell_fdd_name: .space 13
+shell_fdd_size: .space 4
+shell_fdd_attr: .space 2
+shell_fdd_buffer: .space 2048
+shell_history: .space 512
+shell_history_count: .space 1
+shell_history_next: .space 1
+shell_history_view: .space 1
+shell_foreground_attached: .space 1
+shell_pending: .space 64
+shell_pending_flag: .space 2
+shell_start_foreground: .space 1
+shell_path_retry: .space 1
+    .balign 4
+shell_current_path: .space 64
+shell_exec_path: .space 64
+shell_work_path: .space 64
+shell_file_size: .space 4
+shell_loaded_size: .space 4
+shell_stream_offset: .space 4
+shell_attributes: .space 4
+shell_cd_argument: .space 4
+shell_app_image: .space 4
+shell_app_stack: .space 4
+shell_app_result: .space 4
+shell_run_filename: .space 4
+shell_start_filename: .space 4
+shell_start_name: .space 64
+shell_start_arguments: .space 4
+shell_start_pid: .space 4
+shell_wait_status: .space 4
+shell_watchdog_pid: .space 4
+shell_job_info: .space 16
+shell_job_resources: .space 16
+shell_job_name: .space 13
+shell_jobs_found: .space 2
+shell_cpu_info: .space 12
+    .balign 4
+shell_map_info: .space 64
+shell_hex_buffer: .space 12
+    .balign 4
+shell_app_header: .space 32
+shell_st_stats: .space 16
+shell_tt_stats: .space 16
+shell_file_buffer: .space 4104
+    .balign 4
+shell_completion: .space 80
+shell_completion_leaf: .space 4
+
+    .balign 4
+shell_context_end:
+shell_contexts: .space 3*(shell_context_end-shell_context_begin)
+
+    .section .rodata
+shell_input_stats_labels:
+    .asciz "RAW="
+    .asciz " ACIA="
+    .asciz " KEY="
+    .asciz " MOUSE="
+    .asciz " QUAR="
+    .asciz " PARTIAL="

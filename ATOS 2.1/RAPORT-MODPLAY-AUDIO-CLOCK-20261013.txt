@@ -1,0 +1,60 @@
+MODPLAY / HATARI — naprawa zwalniania i przerw audio, 2026-10-13
+
+Objaw potwierdzony przed poprawką na uruchomionym Hatari:
+10,57 s czasu Maca = 5,94 s pozycji utworu; kolejny odcinek 5,54 s.
+Nie był to sam wolny wskaźnik: silnik ASND był wywoływany wyłącznie przez
+Sound_GenerateSamples, liczbą ramek wynikającą z zegara emulowanego Atari.
+Wolniejsza emulacja oznaczała mniej próbek/sekundę i dziury w wyjściu SDL.
+Komentarz, że zegar nie zależy od FPS/VBL, nie odpowiadał temu połączeniu.
+
+Naprawa w testowym Hatari:
+- Live ASND miksuje się w Audio_CallBack po odczycie pierścienia YM/DMA,
+  również w miejsca, w których zabrakło próbek Atari. Zegar ASND wynika
+  z liczby ramek pobranych przez urządzenie wyjściowe Maca.
+- Sound_GenerateSamples nie renderuje wtedy ASND: brak podwójnego miksu.
+- Odtwarzanie muzyki nie wymaga cyklicznych komend programu ani odrysowań.
+- Callback nie wykonuje I/O, nie ładuje modułów i nie czeka na mutex.
+- Tworzenie/usuwanie silnika przy zmianie rate, komendy, reset i render
+  obejmuje ten sam mutex. Wcześniej engine_ready był poza tą ochroną.
+- Diagnostyka `hatari-debug info atos_sound`: źródło zegara, rate, frames,
+  nonzero, contention, ym_missing, errors. ym_missing dotyczy wyłącznie
+  brakujących próbek starego toru Atari, a nie dziur w akceleratorze.
+- Nie zmieniałem sterownika YM2149 ani kodu audio Arkanoida.
+
+Ważny kontrakt nagrywania:
+WAV/AVI zachowuje dotychczasowy, emulowany zegar (wspólny z obrazem).
+Podczas takiego nagrywania odsłuch nadal może zwalniać, gdy emulator nie
+nadąża; zapis pozostaje zsynchronizowany z czasem filmu. Nie deklaruję tu
+naprawy wydajności nagrywania AVI. Przełączenie zegara jest pod Audio_Lock;
+czyszczony jest stary ogon mieszanego bufora, aby uniknąć podwójnego miksu.
+Przy wyłączonym backendzie audio działa dotychczasowy emulowany zegar.
+Pauza całego Hatari zatrzymuje callback i akcelerator. Samo zwolnienie CPU
+Atari już go nie zatrzymuje. Długa komenda load/seek może spowodować krótką
+kolizję, odnotowaną przez contention; callback wtedy nie czeka.
+
+Weryfikacja:
+1. ASan/UBSan: rzeczywista funkcja Audio_CallBack i adapter NF, 5 052 500
+   ramek przy 44 100 Hz i tyle samo przy 48 000 Hz. Całkowity brak próbek
+   Atari, zmienne rozmiary callbacku 997/1024. Ciągły stały sygnał PCM bez
+   przerw, dokładny GET_CLOCK. Suma YM+ASND, zawijanie pierścienia, reset,
+   tryb nagrywania renderujący dokładnie raz, nieblokująca kolizja: PASS.
+2. Pełny emulator z nowym MODPLAY.APP: MOD, oba XM i S3M; pauza,
+   REV/FF, STOP do zera, ponowne PLAY, niezerowy zapis PCM: PASS.
+   kernel_fault_vector=0, kdbg_uf_count=0. Pomiar z SDL dummy: 96,9% tempa
+   ściennego (dummy nie jest zegarem fizycznego urządzenia).
+3. Osobny pomiar widocznego Hatari z normalnym backendem Maca i XM 30ch:
+   wyniki w live-clock.json oraz live-clock.log; nie jest to test sprzętu ESP.
+4. Poprzednie testy UI/protokołu, seek i PCM: patrz RAPORT-PRZYCISKI-SEEK.txt.
+
+Artefakty:
+Hatari: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls/ATOS Tracker.app
+Obraz: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls/live/test.img
+Źródła Hatari: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-player/hatari-src
+Patch: /Users/xxx/Documents/Deepseek_test/ATOS-SOUND/reference-v1/docs/hatari-audio-clock.patch
+Test reprodukujący callback: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls/audio_callback_test.py
+Logi/manifest/testy: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls
+Aplikacja na obrazie: MODPLAY.APP i M.APP, oba po 18 020 B.
+Obraz ATOS_AKTUALNY nie jest zmieniony. Fizyczny ESP32/NetUSBee/ES8388
+nie był testowany. Sygnał i tempo sprawdzone pomiarem, odsłuch ocenia użytkownik.
+
+Pomiar z normalnym wyjściem macOS: 45.639 s czasu ściennego, 45.674 s próbek ASND (100.075%). Kolizje: 0 -> 0; błędy: 0. ym_missing wzrosło o 418238 ramek, a ASND zachował tempo.

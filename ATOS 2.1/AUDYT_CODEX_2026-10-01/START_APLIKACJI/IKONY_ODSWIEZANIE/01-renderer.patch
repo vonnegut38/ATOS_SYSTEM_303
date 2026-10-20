@@ -1,0 +1,82 @@
+--- a/include/gui_damage.h
++++ b/include/gui_damage.h
+@@ -18,7 +18,12 @@
+       damage the entire screen, so a window move repainted all 640x400 - the
+       reason dragging felt far too slow. */
+    x-=4;y-=4;r+=4;b+=4;
+-  }else if(c->kind<GUI_BG||c->kind>GUI_WINDOW)continue;
++  }else if(c->kind==GUI_ICON||c->kind==GUI_ICON_RGB){
++   /* Both renderers draw left of x and ignore the supplied w/h. */
++   unsigned len=0;while(len<12u&&c->text[len])++len;
++   x-=8;r=x+(int)(16u+len*8u);if(r<c->x+32)r=c->x+32;
++   b=y+48;
++  }else if(c->kind<GUI_BG||c->kind>GUI_BEVEL)continue;
+   if(x<0)x=0;
+   if(y<0)y=0;
+   if(r>width)r=width;
+--- a/system/kernel_graphics.c
++++ b/system/kernel_graphics.c
+@@ -915,15 +915,18 @@
+ {
+     static const uint16_t *const masks[4]={rs_iconmask0,rs_iconmask1,rs_iconmask2,rs_iconmask3};
+     static const uint16_t *const datas[4]={rs_icondata0,rs_icondata1,rs_icondata2,rs_icondata3};
+-    surface_t s;cursor_guard_t guard;unsigned len=0;int32_t w;
++    surface_t s;cursor_guard_t guard;unsigned len=0;int32_t w,cx,cy,cw,ch;
+     if(icon>3u||!label)return;
+     while(label[len]&&len<12u)++len;
+     w=(int32_t)(16+len*8u);            /* label spans ix-8 .. ix-8+len*8 */
+     s=active_surface();
+-    guard=cursor_guard_begin(x-8,y,w,48);
+-    theme_icon(&s,x-8,y,w,48,x,y,masks[icon],datas[icon],ink,paper,label,invert);
++    if(w<40)w=40;
++    cx=x-8;cy=y;cw=w;ch=48;
++    if(!clip_rect(&cx,&cy,&cw,&ch))return;
++    guard=cursor_guard_begin(cx,cy,cw,ch);
++    theme_icon(&s,cx,cy,cw,ch,x,y,masks[icon],datas[icon],ink,paper,label,invert);
+     cursor_guard_end(guard);
+-    mark_dirty(x-8,y,w,48);
++    mark_dirty(cx,cy,cw,ch);
+ }
+ 
+ /* Colour icons (system/ICONS): 32x32 indexed pixels + a 1 bpp mask, copied
+@@ -932,15 +935,19 @@
+ void kgfx_icon_color(int32_t x,int32_t y,uint8_t id,const char *label)
+ {
+     const icon_color_t *ic;surface_t s;cursor_guard_t guard;
+-    unsigned len=0;int32_t w;uint16_t px,py;const uint8_t *glyph;int32_t k;
++    unsigned len=0;int32_t w,cx,cy,cw,ch;uint16_t px,py;const uint8_t *glyph;int32_t k;
+     if(id>=ICON_COLOR_COUNT)return;
+     ic=&icon_color_table[id];
+     if(label){while(label[len]&&len<12u)++len;}
+     w=(int32_t)(16+len*8u);
+     s=active_surface();
+     if(!s.chunky)return;              /* mono: the ink/paper path still applies */
+-    guard=cursor_guard_begin(x-8,y,w,48);
++    if(w<40)w=40;
++    cx=x-8;cy=y;cw=w;ch=48;
++    if(!clip_rect(&cx,&cy,&cw,&ch))return;
++    guard=cursor_guard_begin(cx,cy,cw,ch);
+     for(py=0;py<32u;py++)for(px=0;px<32u;px++){
++        if(x+px<cx||y+py<cy||x+px>=cx+cw||y+py>=cy+ch)continue;
+         if(ic->mask[(py*32u+px)>>3]&(uint8_t)(0x80u>>(px&7u)))
+             surface_pixel_set(&s,(uint16_t)(x+px),(uint16_t)(y+py),
+                 (uint8_t)(ICON_PAL_BASE+ic->pixels[py*32u+px]));
+@@ -949,14 +956,14 @@
+     for(k=0;label&&label[k];k++){
+         glyph=emutos_system_font[(uint8_t)label[k]];
+         for(py=0;py<16u;py++)for(px=0;px<8u;px++){
+-            int32_t cx=x-8+(int32_t)k*8+(int32_t)px,cy=y+32+(int32_t)py;
+-            if(cx<x-8||cy<y||cx>=x-8+w||cy>=y+48)continue;
++            int32_t tx=x-8+(int32_t)k*8+(int32_t)px,ty=y+32+(int32_t)py;
++            if(tx<cx||ty<cy||tx>=cx+cw||ty>=cy+ch)continue;
+             if(glyph[py]&(uint8_t)(0x80u>>px))
+-                surface_pixel_set(&s,(uint16_t)cx,(uint16_t)cy,1u);
++                surface_pixel_set(&s,(uint16_t)tx,(uint16_t)ty,1u);
+         }
+     }
+     cursor_guard_end(guard);
+-    mark_dirty(x-8,y,w,48);
++    mark_dirty(cx,cy,cw,ch);
+ }
+ 
+ /* Program the shared icon palette into RAMDAC entries ICON_PAL_BASE.. */

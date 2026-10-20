@@ -1,0 +1,52 @@
+MODPLAY — przyciski i wybór pozycji, 2026-10-13
+
+Środkowy podgląd nut usunięty. Zastępują go PREV, REV, PLAY/PAUSE,
+STOP, FF, NEXT oraz klikalny pasek z czasem aktualnym i czasem całego utworu.
+PREV/NEXT: poprzedni/następny plik z biblioteki.
+REV/FF: -/+10 sekund, z ograniczeniem do początku/końca.
+Kliknięcie paska: wybrany czas, bez ponownego przesyłania pliku.
+Pauza pozostaje pauzą po przewinięciu; STOP przewija do początku.
+STOP podczas ładowania anuluje odczyt/upload; PLAY może wczytać ponownie.
+Spacja: PLAY/PAUSE, góra/dół: REV/FF, S: STOP, lewo/prawo: PREV/NEXT.
+Przełączanie Yamaha/ESP32 i wskaźniki kanałów zachowane.
+
+Wyświetlanie nadal różnicowe: tylko zmieniony fragment paska i zmienione
+słupki/teksty. Pasek/czas aktualizuje się z dokładnością do sekundy;
+wybrany myszą punkt przeliczany na milisekundy. Brak rysowania historii nut.
+
+Silnik: nowy opcjonalny AS_TRACKER_SEEK (0x33), capability bit 256.
+Request u32 absolute_ms; response u32 actual_ms, u32 duration_ms.
+Little endian, te same sesje/CRC/numery sekwencji i błędy co ASND v1.
+Wymagany kompletny załadowany dekoder. Zakres 0 <= ms < duration.
+xmp_seek_time_frame zachowuje stan pauzy/odtwarzania i usuwa stary bufor.
+Dokładność do taktu odtwarzacza, nie do pojedynczej próbki. W testach
+MOD/XM/S3M odchylenia mieściły się w 100 ms (zwykle około 0–25 ms).
+Przewijanie jest synchroniczną operacją dekodera. ESP32 wymaga osobnego
+pomiaru czasu wykonania; testy hosta nie mierzą wydajności fizycznego układu.
+STOP zachowuje metadane długości utworu zamiast zerować całą telemetrię.
+
+Yamaha: zachowane odtwarzanie MOD/PCM, pauza i STOP. Pasek pokazuje pozycję,
+ale przewijanie jest niedostępne: obecne API PCM nie udostępnia seek.
+UI mówi SEEK: ESP32 BACKEND REQUIRED. Starszy akcelerator bez nowego bitu
+nadal odtwarza moduły, lecz nie przyjmuje SEEK. Potrzebny załączony Hatari.
+
+Testy:
+- ASan/UBSan: seek 10/50/90%, pauza, zero, błędna długość i poza zakresem,
+  odtwarzanie po seek, STOP z zachowaną długością, wszystkie cztery pliki.
+- Test rzeczywistej funkcji event: kliknięcie połowy paska i przyciski
+  PLAY/STOP; REV/FF; anulowanie podczas ładowania.
+- Dotychczasowe testy Yamaha, pipeline, różnicowe wskaźniki i awarie transportu.
+- Suity starego PCM/WAV: PASS.
+- Osobny przebieg emulatora: runtime-controls.json (cztery utwory,
+  przewijanie w pauzie, STOP, PLAY, sygnał PCM, liczniki błędów).
+- Manifest: ABI/PIC/checksum i odczyt plików aplikacji z FAT.
+
+Pliki:
+Źródła aplikacji: /Users/xxx/Documents/Deepseek_test/ATOS 2.1/system/modplay.c i modplay_sound.c
+Silnik/specyfikacja: /Users/xxx/Documents/Deepseek_test/ATOS-SOUND/reference-v1/src/tracker.c i docs/TRACKER-v1.txt
+Uruchomienie: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls/ATOS Tracker.app
+Obraz: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls/live/test.img
+Raporty, testy, patch, kopie przed zmianami: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/tracker-controls
+Obraz główny ATOS_AKTUALNY niezmieniony. Brak testów sprzętowych.
+
+Dodatkowo naprawiony zegar audio emulatora: RAPORT-MODPLAY-AUDIO-CLOCK-20261013.txt.

@@ -1,0 +1,30 @@
+image: /Users/xxx/Documents/Deepseek_test/ATOS 2.0/work/atos-v2-fix.img
+[   10.5s] shot c0-baseline True
+[   28.7s] setup done
+[   39.4s] cycle 1 done
+[   50.0s] cycle 2 done
+[   60.7s] cycle 3 done
+[   71.4s] cycle 4 done
+[   82.1s] cycle 5 done
+[   92.8s] cycle 6 done
+[  103.5s] cycle 7 done
+[  107.9s] shot c8-tts1-inputstat True
+[  114.8s] cycle 8 done
+[  125.5s] cycle 9 done
+[  136.2s] cycle 10 done
+[  146.9s] cycle 11 done
+[  157.6s] cycle 12 done
+[  168.3s] cycle 13 done
+[  179.0s] cycle 14 done
+[  189.7s] cycle 15 done
+[  200.4s] cycle 16 done
+[  211.1s] cycle 17 done
+[  221.8s] cycle 18 done
+[  232.5s] cycle 19 done
+[  236.9s] shot c20-tts1-inputstat True
+[  243.7s] cycle 20 done
+[  248.4s] shot c-final-inputstat True
+[  251.2s] shot c-final-inputstat2 True
+[  253.1s] shot c-final-memory True
+[  253.1s] closing
+hatari rc= 0

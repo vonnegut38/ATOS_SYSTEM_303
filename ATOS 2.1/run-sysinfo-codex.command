@@ -1,0 +1,3 @@
+#!/bin/zsh
+# Zweryfikowany obraz ATOS z poprawkami SysInfo.
+exec /Users/xxx/Documents/Deepseek_test/atari-030-port/hatari-tf536 --machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 --tf536 on --graphics-card vofa --gfx-chip et4000 --mono --window --sound off --confirm-quit false --fast-forward off --tos '/Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/bios-sysinfo-codex.bin' --patch-tos false --ide-master '/Users/xxx/Documents/Deepseek_test/ATOS 2.1/work/atos-sysinfo-codex.img' --acsi 0=none --acsi 1=none --acsi 2=none --acsi 3=none --acsi 4=none --acsi 5=none --acsi 6=none --acsi 7=none

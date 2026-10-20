@@ -1,0 +1,296 @@
+--- a/system/kernel_video_boot.c
++++ b/system/kernel_video_boot.c
+@@ -180,16 +180,25 @@
+ int kvideo_program_mode_format(uint16_t width,uint16_t height,uint8_t bpp)
+ {
+  int index,result;const vofa_mode_info_t *m;
+- if(!vofa_io||!vofa_service||!vofa_service->mode_index||!vofa_service->mode_info)return -1;
++ if(!vofa_io||!vofa_service||!vofa_service->set_mode||!vofa_service->mode_index||!vofa_service->mode_info)return -1;
++ if(bpp!=1u&&bpp!=8u)return -2;
+  /* 800x600 and 1024x768 each exist twice (mono and 8 bpp), so the depth plus
+     the geometry chooses the entry. */
+  if(bpp==8u){
++  if(!((width==800u&&height==600u)||(width==1024u&&height==768u)||
++       (width==640u&&height==480u)))return -2;
+   index=(width==1024u&&height==768u)?(int)VOFA_MODE_1024_8:
+         (width==640u&&height==480u)?(int)VOFA_MODE_640_8:(int)VOFA_MODE_800_8;
+  }else{
+   index=vofa_service->mode_index(width,height);
+  }
+  if(index<0)return -2;
++ /* Older modules clamp unknown indices to mono 640x400. Validate the full
++    contract BEFORE touching hardware; otherwise the kernel writes chunky
++    pixels into a mono scanout and even the fallback cannot restore it. */
++ m=vofa_service->mode_info((uint8_t)index);
++ if(!m||m->width!=width||m->height!=height||
++    m->bytes!=(uint32_t)((bpp==8u)?width:((width+7u)/8u))*height)return -4;
+  result=vofa_service->set_mode(vofa_io,(uint8_t)index);
+  /* Encode the failing step so a probe can tell where a mode switch stopped:
+     -0x100 - index, -0x200 - set_mode result. */
+--- a/tests/test_video_boot.c
++++ b/tests/test_video_boot.c
+@@ -24,10 +24,11 @@
+    the VOFA.SYS fallback below is the path under test. */
+ enum module_state kernel_load_driver_module(const char name[11],uint16_t version,int prefer_tt)
+ {(void)name;(void)version;(void)prefer_tt;return MODULE_NOT_FOUND;}
+-static const vofa_mode_info_t test_mode={640u,400u,32000UL};
++static vofa_mode_info_t test_mode={640u,400u,32000UL};
++static unsigned hardware_sets;
+ static const vofa_mode_info_t *test_mode_info(uint8_t m){(void)m;return &test_mode;}
+ static int test_mode_index(uint16_t w,uint16_t h){return (w==640u&&h==400u)?0:-1;}
+-static int test_set_mode(const vofa_io_t *io,uint8_t m){(void)io;(void)m;return VOFA_OK;}
++static int test_set_mode(const vofa_io_t *io,uint8_t m){(void)io;(void)m;++hardware_sets;return VOFA_OK;}
+ enum module_state kernel_load_system_module(const char name[11],uint16_t owner,int prefer_tt)
+ {(void)name;(void)owner;(void)prefer_tt;return MODULE_READY;}
+ const void *kernel_find_service(uint32_t id,uint16_t minimum_version)
+@@ -64,6 +65,18 @@
+  assert(probes==1&&activations==1&&strstr(logtext,"640x400"));
+  /* The adopted geometry must come from the driver's mode table. */
+  assert(mode_sets==1&&mode_w==640u&&mode_h==400u&&mode_bpp==1u);
++ /* Reproduce a legacy module that aliases the new 640x480x8 index to mono.
++    Refusal must leave both hardware and software geometry untouched. */
++ hardware_sets=0;
++ assert(kvideo_program_mode_format(640,480,8)==-4);
++ assert(!hardware_sets&&mode_w==640&&mode_h==400&&mode_bpp==1);
++ assert(kvideo_program_mode_format(320,240,8)==-2&&!hardware_sets);
++ test_mode.width=640;test_mode.height=480;test_mode.bytes=38400;
++ assert(kvideo_program_mode_format(640,480,8)==-4&&!hardware_sets);
++ test_mode.bytes=307200;
++ assert(kvideo_program_mode_format(640,480,8)==0&&hardware_sets==1);
++ assert(mode_w==640&&mode_h==480&&mode_bpp==8);
++ test_mode.width=640;test_mode.height=400;test_mode.bytes=32000;
+  alloc_ok=0;run(2,0,4<<20,&timer);assert(strstr(logtext,"NO SHADOW RAM"));
+  puts("Video boot PASS: explicit opt-in, invalid config, no CPU gate, RAM/mode/timer guards and every fallback");return 0;
+ }
+--- a/apps/flashback/port/main_atos.cpp
++++ b/apps/flashback/port/main_atos.cpp
+@@ -214,6 +214,9 @@
+ 			return 0;
+ 		}
+ 	}
++	SystemStub *stub = SystemStub_ATOS_create();
++	stub->init(g_caption, 256, 224, true, kWidescreenNone, 0);
++	atos_loading("FINDING GAME DATA", 5);
+ 	if (!dataPath[0]) {
+ 		static const char *candidates[] = { "DATA", "\\GAMES\\FLASHBK\\DATA", "\\FLASHBK\\DATA", "\\FLASHBK", 0 };
+ 		for (int k = 0; candidates[k]; ++k) {
+@@ -228,6 +231,7 @@
+ 		atos_puts("FLASHBACK: no game data found.  Copy the PC DOS Flashback data (LEVEL1.*, GLOBAL.*, PERSO.*, FB_TXT.FNT, ...)\n");
+ 		atos_puts("           to \\GAMES\\FLASHBK\\DATA or pass --datapath=DIR\n");
+ 		atos_puts("           Starting the screen/joystick test instead (hold ESC to leave).\n");
++		stub->destroy();
+ 		return atos_selftest();
+ 	}
+ 	{
+@@ -238,6 +242,7 @@
+ 			g_debugMask |= DBG_FILE | DBG_GAME | DBG_RES;
+ 		}
+ 	}
++	atos_loading("CONFIGURATION", 15);
+ 	FileSystem fs(dataPath);
+ 	initOptions(&fs);
+ 	if (cutscenes == 1) {
+@@ -253,9 +258,9 @@
+ 		snprintf(b, sizeof(b), "FLASHBACK: data %s, heap %u KB\n", dataPath, (unsigned)(atos_heap_size() >> 10));
+ 		atos_puts(b);
+ 	}
+-	SystemStub *stub = SystemStub_ATOS_create();
++	atos_loading("GAME ENGINE", 25);
+ 	Game *g = new Game(stub, &fs, &fs, dataPath, levelNum, (ResourceType)version, language, kWidescreenNone, false, 0);
+-	stub->init(g_caption, g->_vid._w, g->_vid._h, true, kWidescreenNone, 0);
++	stub->setScreenSize(g->_vid._w, g->_vid._h);
+ 	g->run();
+ 	delete g;
+ 	stub->destroy();
+--- a/apps/flashback/port/systemstub_atos.cpp
++++ b/apps/flashback/port/systemstub_atos.cpp
+@@ -1,4 +1,4 @@
+-// SystemStub for ATOS on an ET4000 (VOFA) card: full screen 640x480x256,
++// SystemStub for ATOS on an ET4000 (VOFA) card: the current 8 bpp screen,
+ // the 256x224 game frame doubled to 512x448 and centred, keyboard and
+ // joystick through the ATOS key stream, no audio.
+ //
+@@ -12,6 +12,7 @@
+ #include "atos_game.h"
+ #include "atos_sys.h"
+ #include "atos_port.h"
++#include "font8.h"
+ 
+ enum {
+ 	KKEY = 0x4b4b4559u,
+@@ -50,7 +51,7 @@
+ 
+ struct SystemStub_ATOS : SystemStub {
+ 	int32_t _gfxPid, _guiPid;
+-	bool _keysOwned, _gameOn, _hidden;
++	bool _keysOwned, _gameOn, _hidden, _loading;
+ 	int _w, _h;              // game frame size
+ 	int _modeW, _modeH;      // card mode
+ 	int _scale, _dstX, _dstY;
+@@ -70,7 +71,7 @@
+ 	uint8_t _joyDirs, _keyDirs;
+ 
+ 	SystemStub_ATOS()
+-		: _gfxPid(-1), _guiPid(-1), _keysOwned(false), _gameOn(false), _hidden(false),
++		: _gfxPid(-1), _guiPid(-1), _keysOwned(false), _gameOn(false), _hidden(false), _loading(false),
+ 		  _w(0), _h(0), _modeW(0), _modeH(0), _scale(2), _dstX(0), _dstY(0),
+ 		  _screen(0), _black(0), _frame(0), _palMsg(0), _palLo(256), _palHi(-1),
+ 		  _fullDirty(true), _fadePending(false), _paletteAfterFrame(false), _lastShake(0),
+@@ -118,10 +119,14 @@
+ 	}
+ 
+ 	bool beginScreen() {
+-		int32_t r = game(ATOS_GAME_BEGIN, ((uint32_t)kScreenW << 16) | kScreenH);
++		// Keep an existing 256-colour desktop mode. The game still draws only
++		// its 512x448 viewport, so a larger border costs no per-frame transfer.
++		// A temporary WM resize otherwise reinterprets live desktop surfaces
++		// at the game pitch and corrupts their contents on return.
++		int32_t r = game(ATOS_GAME_BEGIN, 0);
+ 		if (r < 0) {
+-			// 640x480 not accepted (old VOFA.SYS?): try the current 8 bpp mode.
+-			r = game(ATOS_GAME_BEGIN, 0);
++			// A mono desktop needs a genuine 8 bpp mode switch.
++			r = game(ATOS_GAME_BEGIN, ((uint32_t)kScreenW << 16) | kScreenH);
+ 		}
+ 		if (r < 0) {
+ 			return false;
+@@ -185,6 +190,44 @@
+ 			game(ATOS_GAME_BEGIN, 0); // same owner: clears the whole screen
+ 		}
+ 		_fullDirty = true;
++	}
++
++	// Uses the ordinary validated game-frame path; no private hardware writes
++	// and no disk/font dependencies, so it can precede resource discovery.
++	void loading(const char *stage, unsigned progress) {
++		if (!_gameOn || !_screen) return;
++		_loading = true;
++		memset(_screen, 0, _w * _h);
++		memset(_pal, 0, sizeof(_pal));
++		_pal[0] = 7; _pal[1] = 12; _pal[2] = 25;
++		_pal[3] = 225; _pal[4] = 235; _pal[5] = 246;
++		_pal[6] = 64; _pal[7] = 204; _pal[8] = 220;
++		_pal[9] = 32; _pal[10] = 52; _pal[11] = 72;
++		loadingText("FLASHBACK", 72, 1);
++		loadingText("LOADING", 100, 2);
++		loadingText(stage, 146, 1);
++		const int x = 32, width = _w - 64;
++		if (progress > 100) progress = 100;
++		for (int y = 122; y < 128; ++y) {
++			memset(_screen + y * _w + x, 3, width);
++			memset(_screen + y * _w + x, 2, width * progress / 100);
++		}
++		_fadePending = _paletteAfterFrame = false;
++		_fullDirty = true;
++		markPalette(0, 255);
++		updateScreen(0);
++	}
++	void loadingText(const char *s, int y, uint8_t colour) {
++		const int n = (int)strlen(s), x = (_w - n * 8) / 2;
++		for (int i = 0; i < n; ++i) {
++			const uint8_t *glyph = emutos_font8[(uint8_t)s[i]];
++			for (int row = 0; row < 8; ++row)
++				for (int bit = 0; bit < 8; ++bit) {
++					const int px = x + i * 8 + bit, py = y + row;
++					if (px >= 0 && px < _w && py >= 0 && py < _h && (glyph[row] & (0x80 >> bit)))
++						_screen[py * _w + px] = colour;
++				}
++		}
+ 	}
+ 
+ 	void markPalette(int lo, int hi) {
+@@ -240,6 +283,7 @@
+ 		if (w <= 0 || h <= 0) {
+ 			return;
+ 		}
++		_loading = false; // the engine has supplied its first real pixels
+ 		// Engine damage includes unchanged background, inventory and repeated
+ 		// animation poses. Compare in fast RAM before expanding onto the slow
+ 		// card bus. The generic path below handles unaligned/menu rectangles.
+@@ -601,6 +645,14 @@
+ 	return g_stub;
+ }
+ 
++extern "C" int atos_loading_active(void) {
++	return g_stub && g_stub->_loading;
++}
++
++extern "C" void atos_loading(const char *stage, unsigned progress) {
++	if (g_stub) g_stub->loading(stage, progress);
++}
++
+ extern "C" void atos_port_shutdown(void) {
+ 	if (g_stub) {
+ 		g_stub->destroy();
+--- a/apps/flashback/port/atos_port.h
++++ b/apps/flashback/port/atos_port.h
+@@ -7,6 +7,8 @@
+ extern "C" {
+ #endif
+ int atos_main(void);                 /* main_atos.cpp */
++int atos_loading_active(void);
++void atos_loading(const char *stage, unsigned progress); /* startup stages, no waits */
+ void atos_port_shutdown(void);       /* gives the screen/keyboard back; idempotent */
+ void atos_log_to(const char *path);  /* console log copy, saved at exit */
+ void atos_log_flush(void);
+--- a/apps/flashback/engine/game.cpp
++++ b/apps/flashback/engine/game.cpp
+@@ -14,6 +14,7 @@
+ #include "systemstub.h"
+ #include "util.h"
+ #include "atos_profile.h"
++#include "atos_port.h"
+ 
+ Game::Game(SystemStub *stub, FileSystem *fs, FileSystem *tuneFs, const char *savePath, int level, ResourceType ver, Language lang, WidescreenMode widescreenMode, bool autoSave, uint32_t cheats)
+ 	: _cut(&_res, stub, &_vid), _menu(&_res, stub, &_vid),
+@@ -34,6 +35,7 @@
+ void Game::run() {
+ 	_randSeed = time(0);
+ 
++	atos_loading("RESOURCES", 35);
+ 	_res.init();
+ 	_res.load_TEXT();
+ 
+@@ -82,6 +84,7 @@
+ 	playCutscene(0x40);
+ 	playCutscene(0x0D);
+ 
++	atos_loading("SPRITES", 55);
+ 	// global resources
+ 	switch (_res._type) {
+ 	case kResourceTypeAmiga:
+@@ -103,6 +106,7 @@
+ 		break;
+ 	}
+ 
++	atos_loading("SOUND DATA", 80);
+ 	// sound resources
+ 	switch (_res._type) {
+ 	case kResourceTypeAmiga:
+@@ -127,6 +131,7 @@
+ 		}
+ 	}
+ 
++	atos_loading("STARTING", 100);
+ 	bool presentMenu = ((_res._type != kResourceTypeDOS) || _res.fileExists("MENU1.MAP"));
+ 	while (!_stub->_pi.quit) {
+ 		if (presentMenu) {
+--- a/apps/flashback/engine/video.cpp
++++ b/apps/flashback/engine/video.cpp
+@@ -10,6 +10,7 @@
+ #include "unpack.h"
+ #include "util.h"
+ #include "video.h"
++#include "atos_port.h"
+ #include "atos_profile.h"
+ #include "dos_sprite_cache.h"
+ 
+@@ -175,6 +176,8 @@
+ }
+ 
+ void Video::fadeOut() {
++	// Keep the startup card visible while the first real picture loads.
++	if (atos_loading_active()) return;
+ 	debug(DBG_VIDEO, "Video::fadeOut()");
+ 	if (g_options.fade_out_palette && !_stub->hasWidescreen()) {
+ 		fadeOutPalette();

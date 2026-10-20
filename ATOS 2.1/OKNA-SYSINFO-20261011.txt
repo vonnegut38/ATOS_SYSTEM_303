@@ -1,0 +1,77 @@
+OKNA + SYSINFO, 11/12.10.2026
+
+Obsługa:
+- Minus na belce zwija okno. Mały trójkąt po prawej stronie górnego paska
+  pokazuje tylko zwinięte okna bieżącego pulpitu. Kliknięcie pozycji przywraca
+  okno i fokus klawiatury. Pusta lista wyświetla informację.
+- Kwadrat na belce maksymalizuje/przywraca. Ctrl+Alt+Enter robi to samo.
+  Pasek pulpitu (16 pikseli) pozostaje dostępny. Escape należy do aplikacji.
+- SYSINFO 0.3: DEVICES / F4 przywraca zakładkę urządzeń. Up/Down przesuwa
+  wiersze, PgUp/PgDn oraz PREV/NEXT zmieniają stronę. Zakładki i przyciski
+  nie przewijają się razem z danymi.
+
+Naprawione przyczyny:
+1. wm.win[].pid zawiera wskaźnik powierzchni, a nie PID procesu. Minimalizacja
+   porównywała go z fokusem. Teraz używa window_owner_pid().
+2. Minimalizacja wcześniej wywoływała window_zoom(), które zmieniało kolejność
+   okien, i kontynuowała na starym indeksie. Minimalizacja tylko ukrywa okno;
+   zachowuje zarówno bieżący frame, jak i poprzedni rozmiar restore.
+3. Przywracanie ustawia fokus. Usunięto ponowne wm_raise na nieaktualnym
+   indeksie w kernel_wm_activate_pid().
+4. Maksymalizacja wysyła WMOV i uaktualnia zapisane żądanie geometrii.
+   Wysokość dokumentu nie znika przy powiększeniu; offset przewijania jest
+   ograniczany do zakresu. Skrót kolejkowany poza parserem INPUT.SYS,
+   powtórzenia make oraz odpowiadający break nie trafiają do aplikacji.
+5. Kliknięcia listy i jej zamknięcia nie przeciekają do klienta pod spodem.
+   Lista jest rysowana ponad dekoracjami okien.
+6. W starym wdrożonym SYSINFO brakowało DEVICES. Nowszy plik źródłowy miał
+   pomylone obszary przycisków: QUIT wywoływał REFRESH, REFRESH uruchamiał
+   benchmark, a właściwa gałąź QUIT była nieosiągalna. To naprawiono.
+   Usunięto ponowne otwieranie aplikacji po prawidłowym WCLS.
+   SYSINFO obsługuje teraz wymiary WMOV i ma zabezpieczenie zbyt małego okna.
+7. Urządzenia: ujemny wynik AUDIO_CAPS nie jest sukcesem; wykrycie NetUSBee
+   nie oznacza działającej sieci; nieweryfikowane porty oznaczone jako
+   'not queried'. Aktywna rozdzielczość pochodzi z GFX, nie starego raportu.
+
+Weryfikacja:
+- check-sysinfo (także urządzenia, błędy capabilities, paging, przyciski),
+  check-sessions, check-wm-core, check-wm-blit, check-wm-glyph: PASS.
+- test_gui_*.py: 5 PASS; test_wm_chrome.py: PASS.
+- test_window_controls.py: rzeczywiste funkcje WM + wm_core, ASan/UBSan:
+  dwa okna, fokus, obcy pulpit, zachowanie geometrii, autorepeat i dokument.
+- verify3: pełna sekwencja sterowania, debuger potwierdza flagi i geometrię.
+- verify-final: finalne binaria; ruch i kliknięcia przez emulowany IKBD/ACIA,
+  wybór zakładki, paging, lista, minimalizacja, maksymalizacja, skrót,
+  60 dodatkowych ruchów myszy, REFRESH, zamknięcie prawdziwym Escape,
+  ponowne uruchomienie i zamknięcie przyciskiem X (bez samoczynnego reopen).
+  Rozmiar pierwotny (100,65,600,470), maksymalny (0,16,800,584).
+  Końcowe liczniki: {"kernel_fault_vector": 0, "kdbg_end_status": 0, "kdbg_end_name": 1398362953, "kdbg_end_pid": 6, "kdbg_uf_count": 0, "kdbg_tos_faults": 0}
+- Pierwsza próba verify2 przerwana przez brak mapowania nazwy PageDown
+  w harnessie; poprawiono na kod 0x51. Nie był to wyjątek w ATOS.
+
+Produkcyjny build: /Users/xxx/Documents/Codex/2026-10-04/na-gorze-kolorysstycznie-kolok-przek-amae/work/window-controls/src
+KERNEL.SYS SHA256: 534ad4088599bee67eb1e4a74a83337c7d26e90ef67a399d6a528ed44f32d8d4
+SYSINFO.APP SHA256: ac5c44ff5bcabfbf930950d0f78c315b65f100a17d186a0e5860b609485dab56
+INPUT.SYS zachowany: 1038 B,
+3dd5b5e7b73bd7229a9c0303b086bf66765cafe5764157b0dacbe61879b12ca4
+Nie podmieniać go na stary moduł ze źródeł produkcyjnego forka: patrz
+../sysinfo-input-fix/input-atomic-old.S oraz raport NAPRAWA-SYSINFO-IKBD.
+
+Wdrożenie: deploy.py zmienia wyłącznie SYSTEM/KERNEL.SYS oraz
+SYSTEM/APP/SYSINFO.APP w ATOS_AKTUALNY/ATOS.img i
+ATOS_HYDRA_PROBA/ATOS_OPT.img. Porównuje wszystkie pliki FAT, zachowuje
+kopie ATOS_*-before-windows.img w tym katalogu, audytuje FAT i zapisuje
+manifesty. Dokładne wyniki instalacji: deployment.json.
+
+Źródła Deepseeka otrzymały zmiany logiczne i testy; ich poprzednia wersja
+jest w deepseek-before/. Uwaga dla przyszłych buildów: kernel_wm.c w drzewie
+Deepseeka już przed tą zmianą nie zawierał HYDRA/opt glyph z gotowego obrazu.
+Nie zastępowano tych innych fragmentów w tej rundzie. Pełny sprawdzony fork
+z HYDRA i optymalizacjami jest w podanym wyżej src; patch tej rundy:
+window-controls.patch. To ten fork należy brać za podstawę reprodukcji KERNEL.SYS i SYSINFO.APP.
+Pozostałe binaria obrazu są zachowane z poprzedniego wydania.
+
+Zakres testu aplikacyjnego: natywny SYSINFO. Nie jest to ponowny pełny audyt
+TOS/AES, audio ani benchmark gier. Maksymalizacja zmienia geometrię okna;
+klient musi reagować na WMOV, aby przebudować własny układ. Nie dodawano
+skalowania bitmap starych aplikacji.

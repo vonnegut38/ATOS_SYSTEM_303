@@ -1,0 +1,15 @@
+path = a:\gdos.fnt
+01p screen.sys ; DEFAULT
+02p acreen.sys ; low res
+03p screen.sys ; MEDIUM RESOLUTION
+04p screen.sys ; HIGH RESOLUTION
+21 fx80.sys    ; Printer is Epson FX
+attr10ep.fnt
+attr12ep.fnt
+attr18ep.fnt
+attr24ep.fnt
+31 meta.sys    ; Metafiles
+attr10mf.fnt
+attr12mf.fnt
+attr18mf.fnt
+attr24mf.fnt

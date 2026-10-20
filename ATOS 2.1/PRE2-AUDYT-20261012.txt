@@ -1,0 +1,73 @@
+PREHISTORIK 2 / ATOS — AUDYT I INTEGRACJA 2026-10-12
+
+Źródło gry: /Users/xxx/Documents/Deepseek_test/PRE2 (nowsza, zoptymalizowana
+wersja; PRE2-ATOS zawiera starszy renderer). Odbudowa lokalnym m68k-elf-gcc.
+Nie instalować całego starego obrazu dołączonego do portu: utraciłby obecne
+poprawki systemu i PCM/MODPLAY. Wdrożenie przygotowane na ATOS_AKTUALNY/ATOS.img.
+
+WYKRYTE I NAPRAWIONE W INTEGRACJI
+- Pulpit ignorował dziewiąty wpis LAUNCH.CFG: LBAR_MAX wynosiło 8.
+  Limit 16; tablice skrótów/ikon przeniesione do sterty, by uniknąć przepełnienia
+  przemieszczeń R_68K_PC16. Czytnik konfiguracji powiększony do 2048 B.
+- Starszy ICONS1 nie jest czytany przez bieżący pulpit (oczekuje ICONS2).
+  PRE2 dostaje istniejącą ikonę platformówki, ID 58, przez ICONS2.
+  Efektywny wygląd wcześniejszych ikon pozostaje domyślny jak przed instalacją.
+- Nowy skrót PRE2 w trzeciej kolumnie, pierwszy wiersz. Dotychczasowe zachowane.
+
+ZAKRES INSTALACJI
+PRE2.APP; 51 plików SQZ/TRK w GAMES/PRE2; DESKTOP.APP; LAUNCH.CFG,
+DESKTOP.CFG, ICONS.CFG. Jądro, BIOS, sterowniki, MODPLAY, Flashback i Arkanoid
+pozostają identyczne bajtowo. Kopia przed zmianą i manifest w work/pre2-audit.
+Źródło zmiany pulpitu dołączone do drzewa ATOS 2.1 z zachowaniem jego odmiennej
+nazwy motywu PETROL oraz istniejącego testowego hooka.
+
+TESTY
+- ASYSAPP0: rozmiar pliku/pamięci/stosu, suma kontrolna i polityka APW2 poprawne.
+- 5706 relokacji własnego crt0 zweryfikowanych między dwoma etapami linkowania.
+  Bezwzględne adresy są tu zamierzone: PRE2 relokuje się samo jak Flashback.
+- Baseline DESKTOP.APP odbudowany ze źródła identyczny SHA256 z produkcją;
+  zmiana pulpitu nie zastępuje go inną gałęzią systemu. Nowy pulpit nadal PIC.
+- Host: ASan + UBSan, 7000 klatek standardowej ścieżki; 16 osobnych startów
+  poziomów 1–16 po 1200 klatek. Wszystkie zakończone, bez błędów sanitizerów.
+  To nie jest osobne powtórzenie porównania z Pythonem i nie dowodzi przejścia
+  wszystkich poziomów przez gracza.
+- Nieobsługiwany przez README bezpośredni start --level=17 nie ukończył testu
+  (komunikaty GAP przy kafelkach); przerwany. Zakres argumentu wymaga walidacji.
+- Dokładne wyniki Hatari, hashe rzeczywiście testowanych plików, zrzuty oraz
+  manifest FAT znajdują się obok raportu. Należy oceniać wynik końcowego PASS,
+  nie same udane kompilacje ani pośrednie zrzuty z nieudanej automatyzacji.
+
+OTWARTE UWAGI DLA AUTORA PORTU
+1. Dźwięk jest niezaimplementowany: plat_song i plat_sfx są pustymi funkcjami.
+   README o braku PCM w ATOS jest już nieaktualne: obecny system ma PCM U8 mono
+   12288 Hz przez YM2149 (ABI 1.5). Muzyka TRK wymaga jednak dekodera/miksera;
+   dołączenie samych plików TRK jej nie uruchamia.
+2. GAME=3 przy zegarze 70 Hz oznacza tempo 23,333 klatki/s, nie 30 lub 40.
+   Nie przyspieszać samego timera bez oddzielenia symulacji od prezentacji.
+   card2x w jądrze nadal kopiuje pełne zmiany 640x400; pionowe przewijanie
+   i kurtyny mają większy koszt niż ruch duszków. Optymalizować po pomiarze,
+   z regresją Flashbacka, nie podmieniać starego jądra z pakietu gry.
+3. apply_late_breaks zeruje jednocześnie held_kbd i held_joy. Przy jednoczesnym
+   sterowaniu klawiaturą i joystickiem zwolnienie krótkiego naciśnięcia jednego
+   źródła może skasować przytrzymanie drugiego. Należy odraczać break osobno
+   dla każdego źródła. Testy niniejsze dotyczą klawiatury, nie obu naraz.
+4. Brak walidacji --level oraz część ścieżek braku pamięci/plików jedynie
+   raportują GAP. Dodać kontrolę zakresu i jawne wyjście przy błędzie danych.
+   Nie dowiedziono kompletnej zgodności całego silnika: pozostają gałęzie GAP.
+5. Tryb to natywna aplikacja ATOS na 68030/ET4000, nie program .PRG/TOS.
+
+STEROWANIE
+Spacja: przejście OLDIES / zatwierdzanie / atak. 1: nowa gra, 2: kod.
+Strzałki: ruch; góra: skok. Esc lub Alt+X: wyjście do pulpitu.
+Prezentacja tytułowa ma własną sekwencję animacji — nie każda spacja ją skraca.
+
+POTWIERDZENIE ROZGRYWKI W HATARI
+Po przejściu menu MODE / BEGINNER, w rzeczywistej sesji (flaga demo 0),
+sprawdzono strzałkę w prawo, w lewo, skok, atak, przewijanie i utratę energii.
+Zrzuty 19–22 dokumentują różne pozycje gracza; obraz nie jest tylko demem.
+Esc przywrócił pełny pulpit i paletę (zrzut 23), bez wyjątku procesora.
+Ponowny start PRE2 z ikony i ponowne wyjście także poprawne (zrzut 24).
+
+Próba dodatkowego otwarcia SysInfo po teście PRE2 jest nierozstrzygnięta:
+automatyzacja zgłosiła TOS STARTED, ale zrzut nie potwierdził okna. Nie zaliczam
+tego jako testu SysInfo; jego binarka oraz jądro nie były zmieniane.

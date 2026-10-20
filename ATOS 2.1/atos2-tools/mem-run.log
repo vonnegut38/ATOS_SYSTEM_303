@@ -1,0 +1,6 @@
+[  10.5s] shot m0-baseline True
+[  21.6s] sysinfo quit
+[  29.5s] commander quit
+[  35.0s] shot m1-after-close True
+[  35.0s] closing
+hatari rc= 0

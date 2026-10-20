@@ -1,0 +1,26 @@
+[    0.0s] image /Users/xxx/Documents/Deepseek_test/ATOS 2.0/work/atos-v2.img
+[    9.3s] shot L0-baseline True
+[   32.6s] setup done, current=2 - ruszaj mysza
+[   45.1s] cycle 1/15
+[   57.6s] cycle 2/15
+[   70.1s] cycle 3/15
+[   82.7s] cycle 4/15
+[   87.8s] shot L05-inputstat-cur0 True
+[   95.7s] cycle 5/15
+[  108.2s] cycle 6/15
+[  120.7s] cycle 7/15
+[  133.3s] cycle 8/15
+[  145.8s] cycle 9/15
+[  150.9s] shot L10-inputstat-cur0 True
+[  158.9s] cycle 10/15
+[  171.4s] cycle 11/15
+[  183.9s] cycle 12/15
+[  196.4s] cycle 13/15
+[  208.9s] cycle 14/15
+[  214.1s] shot L15-inputstat-cur0 True
+[  222.0s] cycle 15/15
+[  226.7s] shot L-final-inputstat True
+[  229.4s] shot L-final-inputstat2 True
+[  231.8s] shot L-final-memory True
+[  231.8s] closing
+hatari rc= 0

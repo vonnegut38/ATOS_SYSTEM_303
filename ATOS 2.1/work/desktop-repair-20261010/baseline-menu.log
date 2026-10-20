@@ -1,0 +1,3 @@
+installed 453292 bytes as SYSTEM/KERNEL.SYS on BGM partition at sector 1
+installed 29626 bytes as SYSTEM/APP/DESKTOP.APP on BGM partition at sector 1
+baseline-tos-menu {'kernel_fault_vector': 4, 'kernel_fault_pc': 83885938, 'kdbg_end_status': 0, 'kdbg_end_name': 0, 'kdbg_end_pc': 0, 'tos_aes_log_n': 0, 'kdbg_loop_calls': 11480, 'kernel_timer_ticks': 1830, 'gui_focus_pids': 0}
