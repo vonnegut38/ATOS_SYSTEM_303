@@ -825,7 +825,13 @@ static void fb_row(char *row,const dir_ent_t *e)
 static void fb_paint(void)
 {
     unsigned i;int16_t y=64;uint16_t doc_h;
-    fb_scrollmode=(fb_count<=FB_MAXROWS)?1u:0u;
+    /* BUG (znaleziony testem 20.10): bylo "fb_count<=FB_MAXROWS", a przy
+       stronicowaniu fb_count to ROZMIAR STRONY (FB_ROWS=10), nie caly katalog.
+       Skutek: duzy katalog byl traktowany jak "maly, przewijany" - WM dostawal
+       content_h = pelna lista, wiec pasek przewijania pokazywal sie zamiast
+       stronicowania, a klawisze stron (warunek !fb_scrollmode) nie dzialaly.
+       Decyduje LICZBA WSZYSTKICH pozycji. */
+    fb_scrollmode=(fb_total<=FB_MAXROWS)?1u:0u;
     /* Tlo musi pokryc CALY dokument, nie tylko widoczna czesc: przy przewijaniu
        odsłanialy sie wiersze rysowane na nieodmalowanym (czarnym) obszarze
        powierzchni - dol obrazu byl czarny. */
@@ -2746,6 +2752,13 @@ int app_main(void)
             else if(scan==0x3fu)script_move();
             else if(scan==0x40u)(void)gfx(28,0,0,0);   /* F6: kernel autodrag test */
             else if(scan==0x41u)fb_open_at("\\","DISK C:");   /* F7: file window (same as DISK C) */
+            /* F8 (0x43): TEST - otworz okno plikow od razu w danym katalogu.
+               Testy stronicowania nie moga zalezec od dwukliku w wiersz (okno
+               dwukliku ~0,98 s jest na granicy mozliwosci wstrzykiwania myszy
+               przez debugger) ani od zgadywania numeru wiersza.  UWAGA: ten
+               hook ZASTAPIL wczesniejszy "PTR C:" (parkowanie kursora), ktory
+               byl na tym samym klawiszu i jest teraz nieosiagalny. */
+            else if(scan==0x43u)fb_open_at("\\SYSTEM","SYSTEM (test)");
             /* F9: TEST - przelacz rozmiar ikon przez JADRO (opcode 48), dokladnie
                tak jak robi to SETTINGS.  Pulpit NIE zmienia tu icon_px sam:
                nowy rozmiar musi przyjsc z pollingii (opcode 49), wiec ten hook

@@ -1344,3 +1344,23 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    NASTEPNY KROK (najkrotsza droga do domkniecia PLIKI): wariant (c) - testowy
    hook "otworz katalog" w pulpicie (np. F8 + sciezka z LAUNCH.CFG), wtedy test
    stronicowania nie zalezy od dwukliku ani od trafiania w wiersz.
+
+10ao. PLIKI: STRONICOWANIE DZIALA - ZNALEZIONY I NAPRAWIONY BLAD (20.10):
+   BLAD (prawdziwy, w kodzie pulpitu): fb_paint() liczyl
+     fb_scrollmode=(fb_count<=FB_MAXROWS)
+   ale przy stronicowaniu fb_count to ROZMIAR STRONY (FB_ROWS=10), a nie caly
+   katalog.  Skutek: duzy katalog byl traktowany jak "maly, przewijany" -
+   dostawal content_h = pelna lista i pasek przewijania WM zamiast stron,
+   a klawisze stron (warunek !fb_scrollmode) NIGDY sie nie uruchamialy.
+   POPRAWKA: fb_scrollmode=(fb_total<=FB_MAXROWS) - decyduje LICZBA WSZYSTKICH
+   pozycji (desktop_wm.c, DESKTOP.APP 31518 B, md5 19a1b33d...).
+   DODANE WCZESNIEJ (potrzebne do testu): Right/Down = nastepna strona,
+   Left/Up = poprzednia + hook F8 (0x43) otwierajacy okno plikow od razu
+   w \SYSTEM (zastapil hook "PTR C:" na tym samym klawiszu).
+   DOWOD (zrzuty q1..q6, katalog \SYSTEM z 30 plikami wgranymi Z HOSTA przez
+   install_file.py - bez wpisywania i klikania):
+     strona1 eb5b7bac, strona2 984a1c22, strona3 ea2746fe, strona4 5b1823b7,
+     powrot (Left) = ea2746fe (strona3), powrot2 = 984a1c22 (strona2).
+   Czyli strony sie zmieniaja i powrot trafia DOKLADNIE w te same strony.
+   JAK TESTOWAC (przepis, ktory zadzialal): prepare() -> 30x install_file.py
+   "\SYSTEM\Pxx.TXT" -> boot -> F8 -> Right/Right/Left/Left + zrzuty.
