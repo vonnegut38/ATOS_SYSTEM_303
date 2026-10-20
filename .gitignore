@@ -44,3 +44,7 @@ display-demo/_claude_tmp/
 
 # Snapshot portable (git bundle) - artefakt, nie zrodlo
 *.bundle
+
+# Python (harnessy) - artefakty wykonania
+__pycache__/
+*.pyc
