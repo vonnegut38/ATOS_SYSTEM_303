@@ -2715,6 +2715,16 @@ int app_main(void)
                Right/Down walk the icon list and Enter runs the highlighted one
                through the very same icon_activate() the double click uses, so a
                TOS .PRG, a native .APP and the builtins all behave identically. */
+            /* Stronnicowanie okna plikow: DOTAD tylko "MORE >" mysza, bez powrotu
+               (trzeba bylo zamykac i otwierac okno od nowa).  Teraz Right/Down =
+               nastepna strona, Left/Up = poprzednia; przy malych katalogach
+               (fb_scrollmode) przewija WM, wiec klawisze nic nie psuja. */
+            else if(fb_open&&!fb_scrollmode&&(scan==0x4du||scan==0x50u)){
+                if(fb_more){++fb_page;fb_sel=-1;fb_page_calc();fb_paint();}
+            }
+            else if(fb_open&&!fb_scrollmode&&(scan==0x4bu||scan==0x48u)){
+                if(fb_page){--fb_page;fb_sel=-1;fb_page_calc();fb_paint();}
+            }
             else if(!fb_open&&!run_mode&&(scan==0x4du||scan==0x50u||scan==0x4bu||scan==0x48u)){
                 if(icon_count){
                     /* Repaint BOTH cells: moving the highlight without clearing

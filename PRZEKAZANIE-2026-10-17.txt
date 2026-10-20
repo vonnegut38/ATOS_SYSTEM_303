@@ -1233,3 +1233,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    Wniosek na przyszlosc: KAZDA nowa funkcja wolana z kodu wspolnego musi miec
    definicje w obu profilach albo straznik #if CONFIG_TOS - inaczej CI (a nie
    czlowiek) znajdzie to dopiero po pushu.
+
+10al. PLIKI: STRONICOWANIE KLAWISZAMI + ZNALEZIONY BLAD COPY (20.10):
+   ZMIANA (desktop_wm.c, zbudowana: DESKTOP.APP 31536 B, md5 684afed2...):
+   okno plikow mialo stronicowanie TYLKO W PRZOD (wiersz "MORE >" mysza); nie
+   bylo powrotu - trzeba bylo zamykac i otwierac okno od nowa.  Dodane:
+     Right/Down = nastepna strona, Left/Up = poprzednia
+   (tylko gdy !fb_scrollmode, czyli przy katalogach >28 pozycji; mniejsze
+   katalogi przewija WM i klawisze nic nie psuja).
+   STATUS TESTU: kod dziala/sie buduje, ale test END-TO-END NIE PRZESZEDL -
+   nie udalo sie UTWORZYC katalogu z >28 pozycjami przez wpisywanie polecen
+   w oknie terminala (patrz nizej).  Trzeba najpierw rozwiazac blad COPY.
+   NOWY ZNALEZIONY BLAD (potwierdzony dwa razy): COPY z celem ABSOLUTNYM nie
+   dziala - "copy \NOTES.TXT \TMP\B.TXT" daje INVALID PATH, a
+   "copy \NOTES.TXT TMP\A.TXT" (cel wzgledny, to samo miejsce przy cwd=\) dziala.
+   Podejrzenie: shell_build_path() albo resolve_path() dla celu absolutnego.
+   To blokuje tez test stronicowania (nie da sie napelnic katalogu).
+   JAK TESTOWAC STRONICOWANIE PO NAPRAWIE COPY: display-demo: 30x
+   "copy \NOTES.TXT P%02D.TXT" w oknie terminala (KLIK W OKNO przed pisaniem,
+   inaczej klawiatura zostaje na pulpicie), ESC, F7, potem Right/Right/Left/Left
+   - zrzuty musza sie roznic miedzy stronami i wrocic do strony 1.
+   UWAGA: klik w ikone TERMINAL to (48,190), nie (78,198) - (78,198) trafia
+   obok i terminal sie nie otwiera (tracone 2 przebiegi testu).
