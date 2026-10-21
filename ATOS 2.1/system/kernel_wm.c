@@ -11,7 +11,9 @@ static uint8_t  console_geom_valid,console_geom_tried;
 #include "kernel_wm.h"
 #include "kernel_graphics.h"
 #include "kernel_theme.h"
+#include "icons_ids.h"
 extern unsigned kernel_user_pid_terminal(uint32_t pid);
+extern int32_t kernel_spawn_user_async(const char *,const char *,const char *,uint32_t *);
 #include "font.h"
 #include "gui_draw.h"
 #include "kernel_console.h"
@@ -1022,13 +1024,32 @@ static int desk_click(int16_t mx,int16_t my)
 /* --- DOLNY PASEK (dock) -------------------------------------------------
    Nie jest stala czescia pulpitu: zwiniety to mala ikona przy LEWEJ krawedzi
    dolnej, a klik rozwija go W PRAWO.  Rysuje go WM (a nie pulpit), bo pasek
-   musi byc NAD oknami - tak samo jak gorna belka.  Sloty (skroty i uruchomione
-   aplikacje) wypelni pulpit; tu jest geometria, tlo i przelaczanie. */
+   musi byc NAD oknami - tak samo jak gorna belka.
+   LEWA strona: skroty z \SYSTEM\LAUNCH.CFG - ikona 16 px z drugiego cache'u,
+   klik uruchamia program, najechanie pokazuje etykiete nad paskiem.
+   PRAWA strona: na razie zaslepki; uruchomione aplikacje przyjda w kroku 4. */
 #define DOCK_H 24
+#define DOCK_ICON 16
+#define DOCK_SLOT 24
+#define DOCK_HAMBURGER 22
+#define DOCK_MAX_SHORT 8u
+#define DOCK_LABEL_MAX 12u
+#define DOCK_PART_NONE 0xFFu
+
+typedef struct {char label[13];char path[64];uint8_t icon;} dock_short_t;
+/* Statyczna tablica w linii (nie wskaznik): jadro ma statyczny BSS, a GUI
+   apps nie sa relokowane - patrz pulapka 4 w DOCK-STAN-I-PLAN.md. */
+static dock_short_t dock_short[DOCK_MAX_SHORT];
+static unsigned dock_short_count;
+static uint8_t dock_short_state;    /* 0 = jeszcze nie czytane, 1 = wczytane */
+static uint8_t dock_cfg[768];       /* LAUNCH.CFG jest maly; czytamy leniwie */
 static uint8_t dock_open;
-static uint8_t dock_dirty;
-static wm_rect_t dock_last;
+static uint8_t dock_press_active,dock_press_part;
+static uint8_t dock_tip_shown,dock_tip_slot;
+static wm_rect_t dock_tip_last;
+static int dock_hover_drawn=-1;     /* slot narysowany w ostatniej kompozycji */
 uint32_t kdbg_dock_click,kdbg_dock_open,kdbg_dock_draws;
+uint32_t kdbg_dock_slots,kdbg_dock_launch,kdbg_dock_rc;
 
 static int dock_height(void){return DOCK_H;}
 static void dock_geometry(wm_rect_t *r)
@@ -1037,11 +1058,247 @@ static void dock_geometry(wm_rect_t *r)
     int w=dock_open?(wm.screen_w-16):h;
     r->x=8;r->y=(int16_t)(wm.screen_h-h-2);r->w=(uint16_t)w;r->h=(uint16_t)h;
 }
+static unsigned dock_strlen(const char *text)
+{
+    unsigned n=0;while(text[n])++n;return n;
+}
+static void dock_copy(char *destination,unsigned capacity,const char *source)
+{
+    unsigned i=0;
+    while(i+1u<capacity&&source[i]){destination[i]=source[i];++i;}
+    destination[i]=0;
+}
+static char *dock_trim_left(char *text)
+{
+    while(*text==' '||*text=='\t')++text;
+    return text;
+}
+static void dock_trim_right(char *text)
+{
+    unsigned n=dock_strlen(text);
+    while(n&&(text[n-1u]==' '||text[n-1u]=='\t'||text[n-1u]=='\r'))text[--n]=0;
+}
+static int dock_ext_is(const char *path,const char *extension)
+{
+    unsigned n=dock_strlen(path),e=dock_strlen(extension),i;
+    if(e==0u||n<e)return 0;
+    for(i=0;i<e;++i){
+        char a=path[n-e+i],b=extension[i];
+        if(a>='a'&&a<='z')a=(char)(a-32);
+        if(b>='a'&&b<='z')b=(char)(b-32);
+        if(a!=b)return 0;
+    }
+    return 1;
+}
+/* Ikona wg rodzaju pliku - ten sam podzial co w pulpicie (desktop_wm.c:
+   ic_id_for), o tyle, ile potrzebuje pasek. */
+static uint8_t dock_icon_for(const char *path)
+{
+    if(dock_ext_is(path,".PRG")||dock_ext_is(path,".TOS")||
+       dock_ext_is(path,".TTP")||dock_ext_is(path,".GTP"))return (uint8_t)ICON_TOS_PRG;
+    if(dock_ext_is(path,".TXT")||dock_ext_is(path,".DOC"))return (uint8_t)ICON_PLIK_TEKSTOWY;
+    if(dock_ext_is(path,".JPG")||dock_ext_is(path,".JPEG")||dock_ext_is(path,".PNG")||
+       dock_ext_is(path,".GIF")||dock_ext_is(path,".BMP")||dock_ext_is(path,".PCX"))return (uint8_t)ICON_OBRAZ;
+    if(dock_ext_is(path,".MOD")||dock_ext_is(path,".SND")||dock_ext_is(path,".WAV")||
+       dock_ext_is(path,".YM"))return (uint8_t)ICON_MUZYKA;
+    if(dock_ext_is(path,".ZIP")||dock_ext_is(path,".LZH")||dock_ext_is(path,".ARJ")||
+       dock_ext_is(path,".RAR")||dock_ext_is(path,".GZ"))return (uint8_t)ICON_KOMPRESJA;
+    if(dock_ext_is(path,".CFG")||dock_ext_is(path,".SYS")||dock_ext_is(path,".INI"))return (uint8_t)ICON_USTAWIENIA;
+    return (uint8_t)ICON_SYSTEM;
+}
+static void dock_short_add(const char *label,const char *value)
+{
+    dock_short_t *entry;
+    unsigned n;
+    /* Builtiny pulpitu (*TERMINAL, *TRASH) nie sa plikami do spawnowania. */
+    if(dock_short_count>=DOCK_MAX_SHORT||!value[0]||value[0]=='*')return;
+    entry=&dock_short[dock_short_count];
+    dock_copy(entry->label,sizeof(entry->label),label);
+    dock_copy(entry->path,sizeof(entry->path),value);
+    entry->icon=dock_icon_for(entry->path);
+    /* Opcjonalne |NN na koncu sciezki = numer ikony z \SYSTEM\ICONS.DAT,
+       np.  COMMANDER=\SYSTEM\APP\AC.APP|72
+       Dzieki temu LAUNCH.CFG wybiera ikone bez mapy etykiet w jadrze. */
+    n=0;while(entry->path[n]&&entry->path[n]!='|')++n;
+    if(entry->path[n]=='|'){
+        const char *digit=entry->path+n+1;
+        unsigned id=0;int ok=digit[0]!=0;
+        while(*digit){if(*digit<'0'||*digit>'9'){ok=0;break;}id=id*10u+(unsigned)(*digit-'0');++digit;}
+        if(ok&&id<ICON_COLOR_COUNT){entry->icon=(uint8_t)id;entry->path[n]=0;}
+    }
+    if(!entry->path[0])return;
+    ++dock_short_count;
+}
+/* Gdy LAUNCH.CFG nie ma (albo jest pusty), pasek nie moze byc pusty: bierzemy
+   te same trzy programy, ktore pulpit ma w swojej liscie domyslnej. */
+static void dock_short_defaults(void)
+{
+    dock_short_add("COMMANDER","\\SYSTEM\\APP\\AC.APP");
+    dock_short_add("SYSINFO","\\SYSTEM\\APP\\SYSINFO.APP");
+    dock_short_add("TASKMGR","\\SYSTEM\\APP\\TASKMGR.APP");
+}
+/* Leniwie, przy pierwszym otwarciu paska: FAT jest juz gotowy, a boot nie
+   placi za czytanie pliku, ktorego zwiniety pasek nie potrzebuje. */
+static void dock_shortcuts_load(void)
+{
+    uint32_t got=0;
+    unsigned i=0;
+    char *buffer=(char *)dock_cfg;
+    if(dock_short_state)return;
+    dock_short_state=1u;
+    dock_short_count=0u;
+    if(kfat_load_path("\\SYSTEM\\LAUNCH.CFG",dock_cfg,sizeof(dock_cfg)-1u,&got)!=FAT_FILE_FOUND||got<2u){
+        dock_short_defaults();
+    }else{
+        if(got>sizeof(dock_cfg)-1u)got=sizeof(dock_cfg)-1u;
+        buffer[got]=0;
+        while(i<got){
+            char *line=buffer+i,*equals,*label,*value;
+            while(i<got&&buffer[i]!='\n')++i;
+            if(i<got)buffer[i++]='\0';
+            dock_trim_right(line);
+            label=dock_trim_left(line);
+            if(!*label||*label==';'||*label=='#')continue;
+            equals=label;while(*equals&&*equals!='=')++equals;
+            if(*equals!='=')continue;
+            *equals=0;dock_trim_right(label);
+            value=dock_trim_left(equals+1);
+            if(!*label||!*value)continue;
+            dock_short_add(label,value);
+        }
+        if(!dock_short_count)dock_short_defaults();
+    }
+    kdbg_dock_slots=(uint32_t)dock_short_count;
+}
+static int dock_path_is_tos(const char *path)
+{
+    return dock_ext_is(path,".PRG")||dock_ext_is(path,".TOS")||
+           dock_ext_is(path,".TTP")||dock_ext_is(path,".GTP");
+}
+static void dock_launch(unsigned index)
+{
+    uint32_t pid=0u;
+    int32_t result=-1;
+    if(index>=dock_short_count)return;
+    if(dock_path_is_tos(dock_short[index].path)){
+#if CONFIG_TOS
+        /* .PRG/.TOS nie maja naglowka ASYSBOOT, wiec ida przez persone TOS -
+           w wariancie async, zeby nie zablokowac petli jadra (i paska). */
+        extern int32_t kernel_tos_start_async(const char *path);
+        result=kernel_tos_start_async(dock_short[index].path);
+#else
+        result=-0x2ff;   /* profil bez persony TOS: .PRG nie ma czym uruchomic */
+#endif
+    }else{
+        result=kernel_spawn_user_async(dock_short[index].path,"","\\",&pid);
+    }
+    ++kdbg_dock_click;++kdbg_dock_launch;kdbg_dock_rc=(uint32_t)result;
+}
+static void dock_slot_rect(unsigned index,wm_rect_t *r)
+{
+    wm_rect_t d;
+    dock_geometry(&d);
+    r->x=(int16_t)(d.x+DOCK_HAMBURGER+2+(int)index*DOCK_SLOT);
+    r->y=d.y;r->w=(uint16_t)DOCK_SLOT;r->h=d.h;
+}
+/* 0 = przelacznik (hamburger / cale zwinniete pudelko), 1.. = skrot,
+   DOCK_PART_NONE = puste miejsce w pasku. */
+/* Pasek jest NIEPRZEZROCZYSTYM overlayem: klik w jego puste miejsce tez nie
+   moze przeleciec do okna pod spodem. */
+static int dock_inside(int16_t x,int16_t y)
+{
+    wm_rect_t r;
+    dock_geometry(&r);
+    return x>=r.x&&y>=r.y&&x<(int16_t)(r.x+r.w)&&y<(int16_t)(r.y+r.h);
+}
+static uint8_t dock_part_at(int16_t x,int16_t y)
+{
+    wm_rect_t r,s;unsigned i;
+    dock_geometry(&r);
+    if(!dock_inside(x,y))return DOCK_PART_NONE;
+    if(!dock_open)return 0u;
+    if(x<(int16_t)(r.x+DOCK_HAMBURGER))return 0u;
+    for(i=0;i<dock_short_count;++i){
+        dock_slot_rect(i,&s);
+        if(x>=s.x&&y>=s.y&&x<(int16_t)(s.x+s.w)&&y<(int16_t)(s.y+s.h))return (uint8_t)(1u+i);
+    }
+    return DOCK_PART_NONE;
+}
+static void dock_tip_hide(void)
+{
+    if(!dock_tip_shown)return;
+    wm_damage_add(&wm,dock_tip_last);
+    wm_force_compose=1;
+    dock_tip_shown=0u;dock_tip_slot=0xFFu;
+}
+/* Etykieta nad paskiem: rysowana tylko przy zmianie slotu (bez migania),
+   a stary prostokat oddawany jako damage, zeby tlo wrocilo po zjechaniu. */
+static void dock_tip_show(unsigned index)
+{
+    wm_fb_t d;wm_rect_t box,r,t;
+    const char *label;
+    unsigned length=0;
+    if(!wm_framebuffer||index>=dock_short_count)return;
+    if(index!=dock_tip_slot)dock_tip_hide();
+    label=dock_short[index].label;
+    while(label[length]&&length<DOCK_LABEL_MAX)++length;
+    if(!length)return;
+    dock_geometry(&r);
+    t.w=(uint16_t)(length*8u+8u);t.h=16u;
+    t.x=(int16_t)(r.x+DOCK_HAMBURGER+2+(int)index*DOCK_SLOT);
+    t.x=(int16_t)(t.x+((DOCK_SLOT-(int)t.w)/2));
+    if(t.x<1)t.x=1;
+    if((int)t.x+(int)t.w>(int)wm.screen_w-1)t.x=(int16_t)((int)wm.screen_w-1-(int)t.w);
+    t.y=(int16_t)(r.y-20);
+    if(t.y<1)t.y=1;
+    box.x=(int16_t)(t.x-1);box.y=(int16_t)(t.y-1);
+    box.w=(uint16_t)(t.w+2u);box.h=18u;
+    d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
+    d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
+    wm_fill_rect(&d,&box,WM_INK);
+    wm_fill_rect(&d,&t,WM_PAPER);
+    kgfx_text((int32_t)(t.x+4),(int32_t)t.y,label,WM_INK,WM_PAPER,0);
+    kvideo_damage(box.x,box.y,(int32_t)box.w,(int32_t)box.h);
+    dock_tip_last=box;dock_tip_shown=1u;dock_tip_slot=(uint8_t)index;
+}
+static int dock_hover_slot(void)
+{
+    uint8_t part;
+    if(!dock_open||!wm_mouse_valid)return -1;
+    part=dock_part_at((int16_t)wm_mouse_x,(int16_t)wm_mouse_y);
+    if(part>=1u&&part<=DOCK_MAX_SHORT)return (int)(part-1u);
+    return -1;
+}
+/* Zmiana slotu pod wskaznikiem musi WYMUSIC kompozycje: bez damage'u petla
+   jadra konczy sie na `if(!wm.damage_count)` i pasek nie dostalby szansy
+   przerysowac podswietlenia ani podpowiedzi (mysz nie generuje damage'u WM). */
+static void dock_hover_poll(void)
+{
+    int hover;
+    if(!dock_open)return;
+    hover=dock_hover_slot();
+    if(hover==dock_hover_drawn)return;
+    {wm_rect_t r;dock_geometry(&r);wm_damage_add(&wm,r);}
+    wm_force_compose=1;
+}
+static void dock_icon_draw(wm_fb_t *d,int16_t x,int16_t y,uint8_t icon)
+{
+    if(wm_bpp==8u&&kgfx_icons_small_ready()){
+        kgfx_icon_small_draw((int32_t)x,(int32_t)y,icon);
+        return;
+    }
+    /* Mono albo brak cache'u 16 px: maly glyph okna aplikacji. */
+    {wm_rect_t r;
+     r=(wm_rect_t){x,y,DOCK_ICON,DOCK_ICON};wm_fill_rect(d,&r,WM_INK);
+     r=(wm_rect_t){(int16_t)(x+1),(int16_t)(y+1),DOCK_ICON-2,DOCK_ICON-2};wm_fill_rect(d,&r,WM_PAPER);
+     r=(wm_rect_t){(int16_t)(x+2),(int16_t)(y+2),DOCK_ICON-4,3};wm_fill_rect(d,&r,WM_INK);}
+}
 static void dock_draw(void)
 {
-    wm_fb_t d;wm_rect_t r,c;unsigned i;int k;
+    wm_fb_t d;wm_rect_t r,c;unsigned i;int k,hover;
     if(!wm_framebuffer)return;
-    dock_geometry(&r);dock_last=r;dock_dirty=0u;++kdbg_dock_draws;
+    if(dock_open&&!dock_short_state)dock_shortcuts_load();
+    dock_geometry(&r);++kdbg_dock_draws;
     d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
     d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
     wm_fill_rect(&d,&r,(wm_bpp==8u)?NC_BLUE:WM_PAPER);
@@ -1049,10 +1306,13 @@ static void dock_draw(void)
         c=(wm_rect_t){(int16_t)(r.x+5),(int16_t)(r.y+6+k*5),12,2};
         wm_fill_rect(&d,&c,WM_PAPER);
     }
+    hover=dock_hover_slot();
+    dock_hover_drawn=hover;
     if(dock_open){
-        for(i=0;i<4u;++i){
-            c=(wm_rect_t){(int16_t)(r.x+24+(int)i*26),(int16_t)(r.y+3),20,(uint16_t)(r.h-6)};
-            wm_fill_rect(&d,&c,(wm_bpp==8u)?NC_BRIGHT:WM_INK);
+        for(i=0;i<dock_short_count;++i){
+            wm_rect_t s;dock_slot_rect(i,&s);
+            if((int)i==hover&&wm_bpp==8u)wm_fill_rect(&d,&s,NC_BRIGHT);
+            dock_icon_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4),dock_short[i].icon);
         }
         for(i=0;i<3u;++i){
             c=(wm_rect_t){(int16_t)(r.x+r.w-24-(int)i*26),(int16_t)(r.y+3),20,(uint16_t)(r.h-6)};
@@ -1060,17 +1320,40 @@ static void dock_draw(void)
         }
     }
     kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
+    if(hover>=0)dock_tip_show((unsigned)hover);
+    else dock_tip_hide();
 }
-static int dock_click(int16_t x,int16_t y)
+/* Klik dziala na PUSZCZENIU (MagiC/Win98): press tylko zapamietuje slot, a
+   akcja jest, gdy release wypadnie w tym samym slocie.  Dzieki temu "wiszący"
+   press przy starcie niczego nie przelacza (pulapka 1). */
+static int dock_press(int16_t x,int16_t y)
 {
-    wm_rect_t r,c,pt;
-    dock_geometry(&r);
-    pt=(wm_rect_t){x,y,1,1};
-    if(!wm_rect_intersect(&r,&pt,&c))return 0;
-    dock_open=(uint8_t)!dock_open;
-    dock_dirty=1u;
-    ++kdbg_dock_click;kdbg_dock_open=dock_open;
+    if(!dock_inside(x,y))return 0;
+    dock_press_active=1u;dock_press_part=dock_part_at(x,y);   /* NONE = puste pole */
     return 1;
+}
+static void dock_release(int16_t x,int16_t y)
+{
+    uint8_t part;
+    if(!dock_press_active)return;
+    dock_press_active=0u;
+    part=dock_part_at(x,y);
+    if(part!=dock_press_part)return;
+    if(part==0u){
+        wm_rect_t old_rect,new_rect;
+        dock_geometry(&old_rect);
+        dock_open=(uint8_t)!dock_open;
+        dock_geometry(&new_rect);
+        /* Zwiniete 24x24, rozwiniety caly pas: damage OBU prostokatow, bo przy
+           zamykaniu trzeba zamazac caly pasek, a przy otwieraniu domalowac go. */
+        wm_damage_add(&wm,old_rect);
+        wm_damage_add(&wm,new_rect);
+        wm_force_compose=1;
+        ++kdbg_dock_click;kdbg_dock_open=dock_open;
+        if(!dock_open){dock_tip_hide();dock_hover_drawn=-1;}
+    }else if(part<=DOCK_MAX_SHORT){
+        dock_launch((unsigned)(part-1u));
+    }
 }
 
 static void task_draw(void)
@@ -1604,13 +1887,14 @@ void kernel_wm_frame_tick(uint32_t now)
      prev_buttons=buttons;
      ++kdbg_frames;wm_dbg_mx=(uint32_t)mx;wm_dbg_my=(uint32_t)my;wm_mouse_x=mx;wm_mouse_y=my;wm_mouse_valid=1;
      cursor_sync();
+     dock_hover_poll();   /* otwarty pasek: zmiana slotu = wymus kompozycje */
      if(1){
          if((buttons&0x1u)||pressed){
              if(pressed&&!drag_active&&!rsz_active){
                  /* px,py is the recorded button-down position (see above). */
                  /* The top-bar icon / open task list consume the click first. */
                  ++wm_dbg_press;wm_dbg_pmx=(uint32_t)px;wm_dbg_pmy=(uint32_t)py;wm_dbg_press_frame=kdbg_frames;
-                 if(desk_click((int16_t)px,(int16_t)py)==0&&
+                 if(dock_press((int16_t)px,(int16_t)py)==0&&desk_click((int16_t)px,(int16_t)py)==0&&
                    task_click((int16_t)px,(int16_t)py)==0){
                      unsigned hit=wm_hit(&wm,(int16_t)px,(int16_t)py);wm_dbg_phit=hit;
                      /* Click-to-focus: the pressed window's client takes the
@@ -1792,8 +2076,8 @@ void kernel_wm_frame_tick(uint32_t now)
          }
          /* A short click may arrive entirely between frames. Process its
             recorded press above, then its release in THIS same frame. */
-         if(dock_click((int16_t)mx,(int16_t)my)){/* pasek: pelny klik = przelaczenie */}
-         if(!(buttons&0x1u)){
+                  if(!(buttons&0x1u)){
+             if(dock_press_active)dock_release((int16_t)mx,(int16_t)my);
              sb_drag_win=-1;
              if(gpress_part){
                  unsigned hit=wm_hit(&wm,(int16_t)mx,(int16_t)my);
@@ -1953,14 +2237,6 @@ void kernel_wm_frame_tick(uint32_t now)
        when covered, or while closing a popup whose save-under needs repair.
        topstrip_damaged also accounts for open task/desktop dropdowns. */
     if(topstrip_hit||task_strip_repaint){task_draw();applet_draw(now);}
-    /* Dolny pasek: rysuj PO oknach (ma byc NAD nimi).  Przerysuj, gdy zmienil
-       sie stan albo gdy jakies okno wchodzi na jego obszar. */
-    {int need=dock_dirty;wm_rect_t dr,c2;dock_geometry(&dr);
-     if(!need){unsigned di;for(di=0;di<wm.count;++di)
-         if((wm.win[di].flags&1u)&&wm_rect_intersect(&wm.win[di].frame,&dr,&c2)){need=1;break;}}
-     (void)need;
-     dock_draw();   /* co klatke: pulpit przemalowuje tlo i zmazuje pasek */
-     }
     task_strip_repaint=0u;
     /* Window decorations: border + title bar. Cheap (a few spans) and drawn
        every frame so they survive the desktop application's own painting. */
@@ -2099,6 +2375,11 @@ void kernel_wm_frame_tick(uint32_t now)
     /* Popups must remain above chrome when another window repaints. */
     if(task_list_open||desk_list_open)task_draw();
     overlay_blit();   /* menu pop-up: above window chrome, below the pointer */
+    /* Dolny pasek rysujemy NA SAMYM KONCU, po oknach, dekoracjach i menu:
+       jest overlayem NAD nimi (wymaganie), a nie elementem pulpitu.  Wczesniej
+       stal przed petla dekoracji, wiec dolna ramka/uchwyt okna zaslanialy pasek
+       i klik w slot bywal niewidoczny. */
+    dock_draw();
     /* Redraw the dashed outline on top of the freshly composed pixels. */
     {wm_fb_t d;d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
      outline_xor_active(&d);}

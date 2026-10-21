@@ -1588,3 +1588,47 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    (kgfx_icon_small_draw juz jest), (4) prawa strona: uruchomione aplikacje
    (gui_call 20/68) + zebatka + klik = foreground_user_process,
    (5) usuniecie ikon u gory (task_draw/desk_draw), gdy pasek przejmie ich role.
+
+10az. DOCK - KROK 3: SKROTY Z LAUNCH.CFG (21.10, ZROBIONE):
+   LEWA strona paska jest funkcjonalna: czyta \SYSTEM\LAUNCH.CFG, rysuje ikony
+   16 px z malego cache'u, klik uruchamia program, najechanie pokazuje etykiete
+   nad paskiem.
+   GDZIE: system/kernel_wm.c (dock_shortcuts_load, dock_short_add,
+   dock_icon_for, dock_launch, dock_tip_show/hide, dock_hover_poll,
+   dock_press/dock_release) + prototypy kgfx_*_small w
+   include/kernel_graphics.h.
+   SZCZEGOLY:
+     - parser jak launch_load() w pulpicie: ETYKIETA=sciezka, ';'/'#' komentarz,
+       '*' (builtiny pulpitu) pomijany; max 8 skrotow, etykieta do 12 znakow,
+     - ikona wg rozszerzenia (.APP -> ICON_SYSTEM, .PRG/.TOS/.TTP/.GTP ->
+       ICON_TOS_PRG, obraz/muzyka/archiwum/CFG), opcjonalne |NN na koncu
+       wartosci = numer ikony z ICONS.DAT (np. SYSINFO=...\SYSINFO.APP|24),
+     - klik na RELEASE w tym samym slocie: .APP -> kernel_spawn_user_async(),
+       .PRG/.TOS -> kernel_tos_start_async() (async; blocking zablokowalby
+       petle jadra razem z paskiem); w TOS=0 .PRG zwraca -0x2ff,
+     - hover: etykieta nad paskiem, rysowana tylko przy zmianie slotu; po
+       zjechaniu stary prostokat jako wm_damage_add, wiec tlo wraca,
+     - brak/pusty LAUNCH.CFG -> 3 domyslne skroty (COMMANDER, SYSINFO, TASKMGR),
+     - liczniki: kdbg_dock_slots, kdbg_dock_launch, kdbg_dock_rc.
+   PULAPKA (wazna): sama zmiana dock_open NIC nie przerysowuje, bo
+   kernel_wm_frame_tick() wychodzi przy !wm.damage_count, a mysz nie generuje
+   damage'u WM.  dock_release() dodaje damage starego i nowego prostokata +
+   wm_force_compose=1, a dock_hover_poll() (co klatke, po cursor_sync) wymusza
+   kompozycje przy zmianie slotu pod wskazaniem.  Bez tego open=1 bylo tylko
+   w licznikach, ekran pokazywal zwiniety pasek, a dock_short sie nie wczytywal.
+   ZMIERZONE: testowy LAUNCH.CFG (COMMANDER, *TERMINAL, SYSINFO|24, TASKMGR)
+   -> kdbg_dock_slots=3, dock_short = dokladnie 3 wpisy z ikonami 76/24/76,
+   klik w slot 0 -> kdbg_dock_launch=1, kdbg_dock_rc=0, okno AC.APP na ekranie;
+   hover rysuje "COMMANDER" (1098 roznych pikseli nad paskiem) i po zjechaniu
+   zmazuje (0 roznych); pusty klik w pasek nie zamyka i nie przechodzi do okna.
+   ZRZUTY: display-demo/dock3-closed.png, dock3-open.png, dock3-tip.png,
+   dock3-launch.png.  TEST: display-demo/test-dock-step3.py (PASS).
+   ZLOTY ZRZUT: BEZ ZMIAN - 65e67b09... BAJT W BAJT w dwoch kolejnych bootach
+   (skroty wczytuja sie dopiero po otwarciu paska).
+   Przy okazji: dock_draw() przeniesiony na SAM KONIEC kompozycji - po oknach,
+   dekoracjach i menu.  Wczesniej stal przed petla dekoracji, wiec dolna
+   ramka/uchwyt okna zaslanialy pasek.
+   KERNEL.SYS: 226482 B (TOS=1; przed krokiem 223278 B), 173136 B (TOS=0).
+   CI: lokalnie TOS=1 i TOS=0 buduja sie, check-graphics i check-video zielone.
+   NASTEPNY KROK: (4) prawa strona - uruchomione aplikacje (wm.win[] +
+   window_owner_pid), zebatka, klik = window_restore/wm_raise.

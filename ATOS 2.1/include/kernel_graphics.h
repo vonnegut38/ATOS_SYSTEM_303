@@ -64,6 +64,13 @@ void kgfx_icons_unload(void);
 void kgfx_icons_request(uint16_t px);
 /* Biezacy rozmiar ikon - tyle pikseli ma bok rysowanej ikony. */
 uint16_t kgfx_icons_size(void);
+/* Drugi cache 16 px dla dolnego paska: dekoduje sekcje 16 px z tego samego
+   bloba, trzyma ja w osobnych buforach i rysuje z niej ikony (pasek jest
+   niski, a pulpit ma wlasny rozmiar 32/48/64).  kgfx_icons_small_prepare()
+   wolac RAZ, po kgfx_icons_load(). */
+int kgfx_icons_small_prepare(const void *blob,uint32_t size);
+int kgfx_icons_small_ready(void);
+void kgfx_icon_small_draw(int32_t x,int32_t y,uint8_t id);
 /* Tryb siatki pulpitu: 0 COMPACT, 1 NORMAL, 2 WIDE. */
 void kgfx_icon_grid_set(uint8_t mode);
 uint8_t kgfx_icon_grid(void);
