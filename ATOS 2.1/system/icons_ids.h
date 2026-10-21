@@ -7,7 +7,7 @@
 #include <stdint.h>
 /* Nominalny rozmiar ikony (kontrakt rysowania w trybie mono). */
 #define ICON_SIZE 48u
-#define ICON_SIZE_COUNT 3u
+#define ICON_SIZE_COUNT 4u
 #define ICON_MAX_SIZE 64u
 #define ICON_MAX_PIXEL_BYTES (ICON_MAX_SIZE*ICON_MAX_SIZE)
 #define ICON_MAX_MASK_BYTES ((ICON_MAX_SIZE*ICON_MAX_SIZE+7u)/8u)
@@ -18,8 +18,8 @@
 typedef struct {const uint8_t *mask;const uint8_t *pixels;} icon_color_t;
 
 /* Rozmiary dostepne w ICONS.DAT (kolejnosc sekcji w pliku). */
-static const uint16_t icon_sizes[ICON_SIZE_COUNT] = { 32u, 48u, 64u };
-static const uint8_t icon_size_index_default = 1u;
+static const uint16_t icon_sizes[ICON_SIZE_COUNT] = { 16u, 32u, 48u, 64u };
+static const uint8_t icon_size_index_default = 2u;
 
 /* Stabilne ID, w tej samej kolejnosci co wpisy w ICONS.DAT. */
 enum {

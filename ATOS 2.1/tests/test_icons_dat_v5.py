@@ -79,14 +79,14 @@ class IconsDatV5(unittest.TestCase):
         magic, ver, nsizes, pal_off, tab_off = self.header()
         self.assertEqual(magic, 0x49434F4E, "magic 'ICON'")
         self.assertEqual(ver, 5, "format v5 (sekcje rozmiarow)")
-        self.assertEqual(nsizes, 3, "sekcje 32/48/64")
+        self.assertEqual(nsizes, 4, "sekcje 16/32/48/64")
         self.assertEqual(pal_off, 20, "paleta zaraz za naglowkiem")
         self.assertEqual(tab_off, 20 + 216 * 2, "tabela sekcji za paleta")
         self.assertLessEqual(tab_off + nsizes * 28, len(self.raw))
 
     def test_sections_consistent(self):
         secs = self.sections()
-        self.assertEqual([s["px"] for s in secs], [32, 48, 64])
+        self.assertEqual([s["px"] for s in secs], [16, 32, 48, 64])
         counts = {s["count"] for s in secs}
         self.assertEqual(len(counts), 1, "wszystkie sekcje maja tyle samo ikon")
         for s in secs:

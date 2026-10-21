@@ -1511,3 +1511,35 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    ZMIERZONE: okno f7d14704, klik Documents 9ad35825, Downloads b48f5bb1,
    Desktop be6ec191 - kazdy klik zmienia liste.
    ZLOTY ZRZUT: 0e821ede... BAJT W BAJT (DESKTOP.APP bb9de8c3, KERNEL bez zmian).
+
+10aw. DOCK/PASEK NA DOLE - PROJEKT I PIERWSZY KROK (20.10):
+   WYMAGANIA UZYTKOWNIKA: pasek NIE jest staly - ma byc "przezroczysty",
+   zwijany do IKONY po lewej stronie; klik rozwija go w prawo; mozna zwinaс
+   albo zostawic.  Wysokosc: podobna do gornej belki systemu (16 px) lub do
+   50% wieksza (24 px).  Lewa czesc = skroty do aplikacji (dodawanie + start),
+   prawa = ikony URUCHOMIONYCH aplikacji z malym kolkiem zebatym, najechanie
+   bez klikania pokazuje nazwe, klik przywraca okno na pierwszy plan.
+   WAZNE USTALENIE ARCHITEKTONICZNE: pasek rysowany przez PULPIT lezy POD
+   oknami (kompozytor rysuje okna wyzej), wiec bylby zaslaniany.  Gorna belka
+   jest widoczna zawsze, bo rysuje ja WM (task_draw).  Dlatego dolny pasek
+   musi rysowac WM (overlay), a pulpit tylko wypelnia jego sloty (nowe wywolanie
+   GUI: ikona + etykieta + pid/komenda + stan).
+   MECHANIZMY JUZ ISTNIEJACE (uzyc, nie wymyslac):
+     - lista uruchomionych: gui_call(20,slot,0,info,0) + gui_call(68,slot,0,name,0)
+       (tak robi TASKMGR; slotow jest 6),
+     - przywrocenie na wierzch: foreground_user_process(pid) w API modulu,
+     - skroty: LAUNCH.CFG -> tablica launch[] w pulpicie,
+     - usuniecie ikon u gory: task_draw() rysuje trojkat listy okien,
+       desk_draw() glyph dwoch monitorow (przelacznik deskow).
+   ZROBIONE W TYM KROKU (male, ale konieczne): do ICONS.DAT dodana sekcja
+   16 px (SIZES=[16,32,48,64], plik 232389 B: 16=13935, 32=38321, 48=67327,
+   64=112242 B).  Testy hosta zaktualizowane (4 sekcje, rozmiary 16/32/48/64),
+   check-graphics zielone, zloty zrzut 0e821ede... BAJT W BAJT.
+   OGRANICZENIE DO ROZWIAZANIA: jadro trzyma w RAM ikony TYLKO w jednym
+   rozmiarze (icon_px, wybierany przez SETTINGS).  Zeby pasek mial ikony 16 px,
+   a pulpit 48 px, potrzebny DRUGI cache w jadrze (np. kgfx_icons_small_request
+   + opcode), albo rysowanie 16 px przez skalowanie najblizszym sasiadem
+   (brzydkie, ale proste na prototyp).
+   NASTEPNY KROK: WM-owy dolny pasek (overlay, zwijany do ikony po lewej)
+   + drugi cache ikon 16 px; potem sloty z pulpitu (skroty), potem uruchomione
+   aplikacje z klikiem na foreground_user_process.

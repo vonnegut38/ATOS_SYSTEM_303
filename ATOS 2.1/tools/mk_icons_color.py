@@ -28,7 +28,7 @@ IDS = os.path.join(ROOT, "system", "icons_ids.h")
 SHIM = os.path.join(ROOT, "system", "icons_color.h")
 DAT = os.path.join(ROOT, "build", "system", "ICONS.DAT")
 
-SIZES = [32, 48, 64]          # kolejnosc sekcji w ICONS.DAT
+SIZES = [16, 32, 48, 64]      # kolejnosc sekcji w ICONS.DAT; 16 px dla paska na dole (dock)
 DEFAULT = 48                  # rozmiar domyslny (zrzut startowy bez zmian)
 PAL_COLORS = 216
 ALPHA_MIN = 128
