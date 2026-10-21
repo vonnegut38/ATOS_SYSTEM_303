@@ -180,6 +180,32 @@ PLASMA, MODPLAY): SYSINFO przełącza DISK→BENCHMARK, TASKMGR zamyka się
 przyciskiem X i **nie wraca**. Zrzuty: `input-1-*`, `input-4-*`,
 `input-taskmgr-closed.png`.
 
+### 2.9 Pełna skrzynka WMOV/KMOU blokowała odpowiedzi GFX (2026-10-21)
+
+**Objaw na żywo:** po kilku oknach SYSINFO wybiera zakładkę (przycisk
+wciśnięty), ale zawartość zostaje stara; TASKMGR nie reaguje na kliknięcia
+procesów/KILL/SUSPEND; okna są „aktywne”, ale martwe.
+
+**Przyczyna:** klient czeka na odpowiedź GFX/GUI, a jego skrzynka jest pełna
+**WMOV/KMOU** (ruch okien/myszy). `user_message_send` evictował tylko KMOU;
+gdy w skrzynce były WMOV, zwracał `-0x3c2`, a `GFX.APP` zapętlał się w
+`reply_send` — wstrzymując rysowanie **wszystkich** okien. Próba zmiany
+GFX.APP na „drop po 8 próbach” **popsuła boot** (utracona odpowiedź
+krytyczna), więc GFX.APP wrócił do oryginału.
+
+**Naprawa (jądro):** przy pełnej skrzynce najpierw podmieniany jest KMOU;
+jeśli go nie ma — **najstarszy komunikat, który nie jest KEXI** (lifecycle).
+Odpowiedź usługi zawsze dochodzi; ginie najwyżej WMOV/KMOU.
+
+**Zweryfikowane na żywo (1024×768, 4 aplikacje):** SYSINFO DISK→DEVICES
+przełącza treść (`live10-disk.png`, `live10-sysinfo4.png`). TASKMGR: lista
+sama się odświeża (polling), wybór wiersza trzyma się po PID
+(`live12-select.png`).
+
+**TASKMGR.APP:** `receive(...,0)` + `pause_tick` zamiast blokującego
+`receive(...,1)` — lista odświeża się ~2 Hz bez klikania; `sel_pid` zamiast
+samego indeksu, więc snapshot nie gubi zaznaczenia.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
@@ -370,6 +396,12 @@ syscalli:
     (pełna skrzynka klienta) blokował **całą** usługę GUI — okna aktywne,
     aplikacje martwe. Teraz 8 klientów i odrzucenie odpowiedzi zamiast pętli;
     test `test-dock-input.py`.
+23. **Pełna skrzynka klienta = martwe okna.** Klient czekający na odpowiedź
+    GFX/GUI nie odbiera WMOV/KMOU; gdy skrzynka się zapełni, `-0x3c2` i
+    `GFX.APP`/`GUI.APP` blokują usługę. Jądro evictuje KMOU, a gdy ich brak —
+    najstarszy **nie-KEXI** komunikat. Próba „dropu” po stronie GFX.APP psuła
+    boot (krytyczna odpowiedź); nie wracać do tego. Test: `test-dock-input.py`
+    + zrzuty `live10-*`.
 
 ---
 

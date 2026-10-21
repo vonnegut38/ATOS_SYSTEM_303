@@ -394,6 +394,21 @@ static int32_t user_message_send(uint32_t pid,const uint32_t value[4])
                 return 0;
             }
         }
+        /* Brak KMOU: pelna skrzynka moze byc zapchana WMOV/KKEY.  Odpowiedz
+           uslugi (GFX/GUI) jest krytyczna - klient czeka na nia i nie odbierze
+           niczego, dopoki jej nie dostanie.  Zastap NAJSTARSZY komunikat,
+           ktory nie jest jadrowym KEXI (lifecycle).  Bez tego GFX.APP
+           zapetlal sie na -0x3c2 i zamrazal rysowanie wszystkich okien. */
+        index=target->mailbox_head;
+        for(i=0;i<target->mailbox_count;++i){
+            message=&target->mailbox[index];
+            if(!(message->sender==0u&&message->value[0]==0x4b455849u)){
+                message->sender=current_process->pid;
+                for(j=0;j<4u;++j)message->value[j]=value[j];
+                return 0;
+            }
+            index=(uint8_t)((index+1u)%USER_MAILBOX_DEPTH);
+        }
         return -0x3c2;
     }
     message=&target->mailbox[target->mailbox_tail];message->sender=current_process->pid;

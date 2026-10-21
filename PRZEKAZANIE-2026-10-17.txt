@@ -1812,3 +1812,27 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    BAJT W BAJT (dwa booty; GUI nie rysuje sie na starcie).
    KERNEL.SYS: 232066 B (TOS=1), 178508 B (TOS=0); GUI.APP 625 B;
    TASKMGR.APP 4302 B; check-graphics i check-video zielone.
+
+10bg. PELNA SKRZYNKA WMOV/KMOU BLOKOWALA GFX (21.10, NAPRAWIONE):
+   Objaw na zywo (1024x768): SYSINFO wybiera zakladke (przycisk wcisniety),
+   ale tresc zostaje stara; TASKMGR nie reaguje na klik procesu/KILL/SUSPEND;
+   okna "aktywne", ale martwe.
+   Przyczyna: klient czeka na odpowiedz GFX/GUI, a jego skrzynka jest pelna
+   WMOV/KMOU.  user_message_send evictowal tylko KMOU; przy WMOV zwracal
+   -0x3c2, a GFX.APP petlil sie w reply_send i wstrzymywal rysowanie
+   wszystkich okien.
+   Proba zmiany GFX.APP na "drop po 8 probach" PSULA BOOT (krytyczna
+   odpowiedz); GFX.APP wrocil do oryginalu (401 B).
+   Naprawa w jadrze: przy pelnej skrzynce najpierw KMOU, potem NAJSTARSZY
+   komunikat nie-KEXI (lifecycle); odpowiedz uslugi zawsze dochodzi, ginie
+   najwyzej WMOV/KMOU.
+   TASKMGR.APP: receive(...,0)+pause_tick (lista sama ~2 Hz) oraz sel_pid
+   zamiast indeksu (snapshot nie gubi zaznaczenia).
+   ZWERYFIKOWANE NA ZYWO: SYSINFO DISK->DEVICES przy 4 aplikacjach;
+   TASKMGR lista auto-odswiezana, wiersz MODPLAY zaznaczony po 2 s.
+   Zrzuty: live10-disk.png, live10-sysinfo4.png, live12-select.png.
+   KERNEL.SYS: 232182 B (TOS=1), 178636 B (TOS=0); TASKMGR.APP 4356 B;
+   GUI.APP 625 B; GFX.APP 401 B; TOS=1/TOS=0 buduja sie.
+   UWAGA: KILL/SUSPEND i zamykanie X trzeba potwierdzic realna mysza -
+   wstrzykiwane klikniecia w X (non-client) nie domykaja gestu, a przycisk
+   KILL/SUSPEND moze trafic w zly wiersz przy stalej geometrii okna.

@@ -49,6 +49,7 @@ static int16_t wx=100,wy=80;
 static uint16_t scrw=640,scrh=400;
 static char status[79];
 static int sel=-1;
+static uint32_t sel_pid;
 
 typedef struct {uint32_t pid;uint8_t state;char name[13];
                 uint32_t cpu,priv;} proc_row;   /* cpu = %, priv = total bytes */
@@ -137,8 +138,14 @@ static void snapshot(void)
          prev_cpu[i]=c;}
     }
     first_snap=0;
-    if(sel>=(int)SLOTS)sel=-1;
-    if(sel>=0&&!rows[sel].pid)sel=-1;
+    /* Wybor trzymamy po PID, nie po indeksie: nowy/zakonczony proces zmienia
+       kolejnosc wierszy i indeks wskazywalby inny proces (albo wolny slot). */
+    if(sel_pid){
+        int found=-1;
+        for(i=0;i<SLOTS;++i)if(rows[i].pid==sel_pid){found=(int)i;break;}
+        sel=found;
+        if(found<0)sel_pid=0u;
+    }else sel=-1;
 }
 
 /* ---- drawing -------------------------------------------------------------- */
@@ -196,7 +203,7 @@ static void act_kill(void)
         r=gui_call(SYS_KILL,rows[sel].pid,0,0,0);
     }
     copytext(status,r>0?"KILLED":"KILL FAILED",79);
-    sel=-1;snapshot();paint();
+    sel=-1;sel_pid=0u;snapshot();paint();
 }
 static void act_suspend(void)
 {
@@ -222,7 +229,7 @@ static void mouse_click(int mx,int my)
     /* process rows */
     if(cy>=42&&cy<42+(int)SLOTS*(int)ROW_H){
         i=(cy-42)/(int)ROW_H;
-        if(cx>=8&&cx<(int)WW-8){sel=(rows[i].pid)?i:-1;paint();}
+        if(cx>=8&&cx<(int)WW-8){sel=(rows[i].pid)?i:-1;sel_pid=rows[i].pid;paint();}
         return;
     }
     /* bottom buttons */
@@ -237,8 +244,8 @@ static void mouse_click(int mx,int my)
 static void key_event(uint32_t scan)
 {
     if(scan==1||scan==0x44){quit=1;return;}
-    if(scan==0x48u){if(sel>0)--sel;else sel=(int)SLOTS-1;paint();return;}       /* up */
-    if(scan==0x50u){if(sel<(int)SLOTS-1)++sel;else sel=0;paint();return;}        /* down */
+    if(scan==0x48u){if(sel>0)--sel;else sel=(int)SLOTS-1;sel_pid=rows[sel].pid;paint();return;}       /* up */
+    if(scan==0x50u){if(sel<(int)SLOTS-1)++sel;else sel=0;sel_pid=rows[sel].pid;paint();return;}        /* down */
     if(scan==0x3eu){act_kill();return;}                                          /* F4 */
     if(scan==0x3fu){act_suspend();return;}                                       /* F5 */
     if(scan==0x40u){act_resume();return;}                                        /* F6 */
@@ -266,7 +273,11 @@ int app_main(void)
     snapshot();paint();
     for(;;){
         uint32_t now;int got=pend_pop(&m);
-        if(!got){got=receive(&m,1);if(got)pause_tick();}
+        /* receive(...,0) = nieblokujacy polling: receive(...,1) czekal na
+           komunikat (bez timeoutu), wiec lista procesow nie odswiezala sie
+           sama, gdy uzytkownik nic nie klikal.  Teraz co tick sprawdzamy
+           zegar i robimy snapshot ~2 Hz. */
+        if(!got){got=receive(&m,0);if(!got)pause_tick();}
         if(got&&m.sender){
             if(m.v[0]==KKEY){if(((m.v[1]>>24)&0xffu)==1u)key_event(m.v[1]&0x7fu);}
             else if(m.v[0]==KMOU){int mx=(int)(uint16_t)(m.v[1]>>16),my=(int)(uint16_t)(m.v[1]&0xffffu);
