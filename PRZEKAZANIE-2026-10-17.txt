@@ -1789,3 +1789,26 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    TESTY KONCOWE: test-dock-multi.py PASS (5 aplikacji, TASKMGR 12 slotow),
    test-dock-step3.py PASS, test-dock-menu.py PASS, test-dock-running.py PASS,
    golden 15424d43... BAJT W BAJT (dwa booty).
+
+10bf. GUI: 8 KLIENTOW + BRAK BLOKADY USLUGI (21.10, NAPRAWIONE):
+   Objaw uzytkownika: przy 3 aplikacjach okna sa aktywne, ale nie reaguja
+   (SYSINFO nie przelacza DISK/BENCHMARK/DEVICES); zamkniecie TASKMGR
+   "zatyka" i okno wraca.
+   Przyczyna: GUI.APP mial tablice applications[4] (16 B).  Pulpit + 3
+   aplikacje = 4, wiec czwarta aplikacja (np. TASKMGR otwarty przy trzech)
+   nie rejestrowala sie, ale GUI_BEGIN_KEYS i tak ustawial ja jako
+   foreground_pid.  Dodatkowo reply_send przy -0x3c2 (pelna skrzynka
+   klienta) petlil sie bez konca i blokowal CALA usluge GUI.
+   Naprawa: applications[8] (32 B), petle #7; reply_send przy -0x3c2
+   odrzuca odpowiedz i wraca do service_loop (nie blokuje innych).
+   TEST: display-demo/test-dock-input.py - 4 aplikacje (SYSINFO, TASKMGR,
+   PLASMA, MODPLAY): SYSINFO przelacza DISK->BENCHMARK, TASKMGR zamyka sie
+   X-em i NIE wraca.  Zrzuty: input-1-*.png, input-4-*.png,
+   input-taskmgr-closed.png.
+   GUI.APP: 625 B; KERNEL.SYS 232066 B (TOS=1); TASKMGR.APP 4302 B.
+   TESTY KONCOWE: test-dock-multi.py PASS (5 aplikacji), test-dock-step3.py
+   PASS, test-dock-menu.py PASS, test-dock-running.py PASS, test-dock-input.py
+   PASS (4 aplikacje: taby SYSINFO + zamkniecie TASKMGR), golden 15424d43...
+   BAJT W BAJT (dwa booty; GUI nie rysuje sie na starcie).
+   KERNEL.SYS: 232066 B (TOS=1), 178508 B (TOS=0); GUI.APP 625 B;
+   TASKMGR.APP 4302 B; check-graphics i check-video zielone.

@@ -51,7 +51,7 @@ service_loop:
 command_register:
     lea applications(%pc),%a1
     suba.l %a2,%a2
-    moveq #3,%d1
+    moveq #7,%d1
 1:  cmp.l (%a1),%d3
     beq command_ok
     tst.l (%a1)
@@ -82,7 +82,7 @@ command_unregister:
     moveq #48,%d0
     trap #0
     lea applications(%pc),%a1
-    moveq #3,%d1
+    moveq #7,%d1
 3:  cmp.l (%a1),%d3
     beq 4f
     addq.l #4,%a1
@@ -97,7 +97,7 @@ command_unregister:
     bne command_ok
     clr.l (%a2)
     lea applications(%pc),%a1
-    moveq #3,%d1
+    moveq #7,%d1
 5:  tst.l (%a1)
     bne 6f
     addq.l #4,%a1
@@ -112,7 +112,7 @@ command_foreground:
     moveq #48,%d0
     trap #0
     lea applications(%pc),%a1
-    moveq #3,%d1
+    moveq #7,%d1
 7:  cmp.l (%a1),%d3
     beq 8f
     addq.l #4,%a1
@@ -159,7 +159,7 @@ command_end_keys:
 command_kernel_exit:
     move.l 8(%a0),%d3
     lea applications(%pc),%a1
-    moveq #3,%d1
+    moveq #7,%d1
 10: cmp.l (%a1),%d3
     beq 11f
     addq.l #4,%a1
@@ -173,7 +173,7 @@ command_kernel_exit:
     bne service_loop
     clr.l (%a2)
     lea applications(%pc),%a1
-    moveq #3,%d1
+    moveq #7,%d1
 12: tst.l (%a1)
     bne 13f
     addq.l #4,%a1
@@ -199,9 +199,11 @@ reply_send:
     beq service_loop
     cmpi.l #-0x3c2,%d0          /* input burst filled receiver mailbox */
     bne service_failed
-    moveq #10,%d0
-    trap #0
-    bra reply_send
+    /* Klient nie odbiera (np. zminimalizowany/zajety): NIE blokuj uslugi
+       i pozostalych aplikacji. Odrzucamy odpowiedz, klient dostanie ja
+       przy nastepnym wywolaniu. Wczesniejsza petla "bra reply_send"
+       zamrazala caly GUI przy pelnej skrzynce jednego klienta. */
+    bra service_loop
 
 service_stop:
     moveq #0,%d1
@@ -219,6 +221,6 @@ service_name: .asciz "SYSTEM.GUI"
     .align 2
 message: .space 20
 response: .space 16
-applications: .space 16
+applications: .space 32   /* 8 klientow GUI: pulpit + 6 okien + zapas */
 foreground_pid: .space 4
 application_count: .space 4

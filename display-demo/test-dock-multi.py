@@ -23,6 +23,7 @@ st.IMG = IMG
 
 BUILD = {
     r"\SYSTEM\KERNEL.SYS": REAL + "/build/system/KERNEL.SYS",
+    r"\SYSTEM\GUI.APP": REAL + "/build/system/GUI.APP",
     r"\SYSTEM\APP\DESKTOP.APP": REAL + "/build/system/DESKTOP.APP",
     r"\SYSTEM\APP\SETTINGS.APP": REAL + "/build/system/SETTINGS.APP",
     r"\SYSTEM\GFX.APP": REAL + "/build/system/GFX.APP",

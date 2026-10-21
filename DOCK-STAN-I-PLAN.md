@@ -158,6 +158,28 @@ REFRESH pokazuje **wszystkie 5** (i 12 slotów). Zrzuty:
 lista rysowania 160; pętla zdarzeń nie gubi już odświeżania po komunikacie
 (`m.sender=0` + brak `continue`).
 
+### 2.8 GUI: 8 klientów i brak blokady usługi (2026-10-21)
+
+**Objaw:** przy 3 aplikacjach okna są aktywne, ale nie reagują na mysz
+(SYSINFO nie przełącza DISK/BENCHMARK/DEVICES); zamknięcie TASKMGR „zatyka”
+i okno wraca.
+
+**Przyczyna:** `GUI.APP` miał tablicę **4 klientów** (`applications: .space 16`).
+Pulpit + 3 aplikacje = 4, więc czwarta aplikacja (np. TASKMGR otwarty przy
+trzech) **nie rejestrowała się**, ale `GUI_BEGIN_KEYS` i tak ustawiał ją jako
+`foreground_pid`. Dodatkowo `reply_send` przy `-0x3c2` (pełna skrzynka
+klienta) zapętlał się bez końca i **blokował całą usługę GUI** — stąd aktywne
+ramki i martwe aplikacje.
+
+**Naprawa:** `applications` 4→**8** (32 B, pętle `#7`); `reply_send` przy
+`-0x3c2` **odrzuca odpowiedź** i wraca do `service_loop` zamiast blokować
+usługę.
+
+**Test:** `display-demo/test-dock-input.py` — 4 aplikacje (SYSINFO, TASKMGR,
+PLASMA, MODPLAY): SYSINFO przełącza DISK→BENCHMARK, TASKMGR zamyka się
+przyciskiem X i **nie wraca**. Zrzuty: `input-1-*`, `input-4-*`,
+`input-taskmgr-closed.png`.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
@@ -342,6 +364,12 @@ syscalli:
     `INIT.APP`, `GFX.APP`, `GUI.APP` i pulpit. Przy 6 slotach trzecia aplikacja
     dostaje `-0x391` (brak slotu). Dla 6 okien WM potrzeba 4+6=10, dlatego
     jest 12. Objaw: `kdbg_dock_rc = 0xFFFFFC6F`; test `test-dock-multi.py`.
+22. **GUI.APP ma własny limit klientów i jedną skrzynkę.** `applications[]`
+    było 4 (pulpit + 3 aplikacje); czwarta aplikacja nie rejestrowała się, ale
+    `GUI_BEGIN_KEYS` ustawiał ją jako foreground. `reply_send` przy `-0x3c2`
+    (pełna skrzynka klienta) blokował **całą** usługę GUI — okna aktywne,
+    aplikacje martwe. Teraz 8 klientów i odrzucenie odpowiedzi zamiast pętli;
+    test `test-dock-input.py`.
 
 ---
 
@@ -355,6 +383,7 @@ python3 test-dock-step3.py                  # krok 3: DOCK.CFG/LAUNCH.CFG, ikony
 python3 test-dock-menu.py                   # PPM: DODAJ PRE2, USUN COMMANDER, DOCK.CFG
 python3 test-dock-running.py                # krok 4: [>] na lewym skrócie, restore (nie spawn)
 python3 test-dock-multi.py                  # 5 aplikacji naraz (limit slotów procesów)
+python3 test-dock-input.py                  # 4 aplikacje: taby SYSINFO, zamknięcie TASKMGR
 # pasek: klik w (20, 580) zwija/rozwija; PPM otwiera menu konfiguracji.
 # Stan czytać z liczników jądra:
 #   kdbg_dock_click, kdbg_dock_open, kdbg_dock_draws,
@@ -405,6 +434,7 @@ po każdej zmianie sprawdzić oba joby.
 | `display-demo/test-dock-menu.py` | test PPM: dodaj/usuń, katalog, zapis `DOCK.CFG` |
 | `display-demo/test-dock-running.py` | test kroku 4: `[>]` na lewym skrócie, prawa tylko dla aplikacji bez skrótu |
 | `display-demo/test-dock-multi.py` | 5 aplikacji naraz: procesy, okna, podnoszenie skrótem |
+| `display-demo/test-dock-input.py` | 4 aplikacje: przełączanie tabów SYSINFO, zamykanie TASKMGR |
 | `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10bc |
 
 ---
