@@ -1476,3 +1476,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    o tym w kazdym wolajacym.  Do tego czasu: KAZDY zapis FAT w jadrze powinien
    konczyc sie kblock_cache_clear() (albo odczytem przez te sama warstwe).
    Zloty zrzut: 0e821ede... BAJT W BAJT (po poprawce).
+
+10au. MY ATARI - DOMKNIETE (20.10):
+   STAN KONCOWY (wszystko sprawdzone zrzutami):
+   - okno otwiera sie OD PIERWSZEGO nacisniecia (F8 albo ikona My Atari),
+     hash okna 73e91827 (zrzut t3-trzecie.png / n1-okno.png),
+   - kolumna boczna: C:, D:, separator, Documents, Downloads, Desktop,
+   - klik w kazda pozycje zmienia liste: \USERS 73e91827 -> Documents 50315fa8
+     -> Downloads b515be64 -> Desktop 3e8a0b00,
+   - katalogi \USERS\DOCUMENT|DOWNLOAD|DESKTOP powstaja przy starcie pulpitu
+     (potwierdzone w obrazie demo-mya5.img).
+   JAK DOSZLISMY DO TEGO (kolejne pulapki, kazda kosztowala przebieg):
+   1) tablica wskaznikow na literaly w GUI app = adresy z linkowania -> tablice
+      znakow w linii,
+   2) mkdir w obrebie obslugi klawisza: 4 syscalle zapisu FAT blokowaly
+      otwarcie okna - okno wstawalo dopiero za 3. nacisnieciem,
+   3) mkdir PRZED wczytaniem LAUNCH.CFG/ikon psul zloty zrzut (pulpit dostawal
+      niepelna liste ikon, brakowalo SETTINGS) - teraz mkdir jest w app_main
+      PO load_dyn_icons(), a zloty zrzut jest 0e821ede... BAJT W BAJT.
+   KERNEL.SYS bez zmian wzgledem zweryfikowanego stanu (2af687e5), cala zmiana
+   jest w DESKTOP.APP (996cb3c5).
+   ZOSTAJE KOSMETYKA: ikony w kolumnie bocznej (dysk/folder) i podswietlenie
+   wybranej pozycji - kwestia gustu, nie funkcji.

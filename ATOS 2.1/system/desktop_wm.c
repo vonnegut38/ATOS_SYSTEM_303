@@ -1089,7 +1089,10 @@ static int fb_load(const char *path)
 static void fb_open_at(const char *path,const char *title);
 static int ma_refresh(void);
 static void ma_path(char *out,unsigned i);
-/* "My Atari": otwiera okno plikow w trybie z kolumna boczna. */
+/* "My Atari": otwiera okno plikow w trybie z kolumna boczna.
+   Katalogi profilu powstaja TU (przy pierwszym otwarciu), a nie przy starcie
+   systemu: dzieki temu sciezka bootu jest nietknieta (zloty zrzut), a mkdir
+   idzie przez syscall jadra, ktory sam pilnuje spojnosci cache. */
 static void fb_browser_open(void)
 {
     ++kdbg_mya_calls;
@@ -2522,6 +2525,14 @@ int app_main(void)
 
     ic_load();                       /* type->icon mapping (\SYSTEM\ICONS.CFG) */
     load_dyn_icons();                /* per-app foo.png icons */
+    /* Katalogi profilu \USERS\DOCUMENT|DOWNLOAD|DESKTOP.  Tworzone TU, czyli
+       PO wczytaniu configu i ikon: zapis do FAT przed tymi odczytami psul
+       zloty zrzut (pulpit dostawal niepelna liste ikon).  Dzieki temu sciezka
+       otwarcia okna "My Atari" jest juz krotka i okno wstaje od pierwszego
+       klawisza. */
+    {unsigned u;
+     (void)gui_call(50,0,0,(void *)"\\USERS",0);
+     for(u=0;u<3u;++u)(void)gui_call(50,0,0,(void *)user_short_paths[u],0);}
 
     /* Load resources before taking the screen: keep the boot logo visible. */
     if(gfx(GFX_DESKTOP,0,0,0)){

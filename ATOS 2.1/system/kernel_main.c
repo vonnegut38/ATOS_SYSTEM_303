@@ -483,29 +483,6 @@ void kernel_main(const boot_handoff_t *h)
          {unsigned s;for(s=1;s<SESSION_COUNT;s++){(void)kfat_select_session(s);
           if(kblock_select(kpart_boot_device()))(void)kfat_mount(kpart_boot_start(),kpart_boot_id());}
           (void)kfat_select_session(0);}
-         /* Profil uzytkownika: \USERS\DOCUMENTS|DOWNLOADS|DESKTOP.  Tworzone w
-            JADRZE (a nie syscallem z pulpitu), bo to musi dzialac zawsze;
-            kfat_mkdir_path jest idempotentny, wiec powtorka nic nie psuje. */
-         if(state==FAT_MOUNTED){
-             /* UWAGA: FAT 8.3 = max 8 znakow w nazwie.  "DOCUMENTS" (9) i
-                "DOWNLOADS" (9) NIE przechodza - dlatego katalogi nazywaja sie
-                DOCUMENT i DOWNLOAD, a pelne nazwy ("Documents", "Downloads")
-                sa tylko etykietami w kolumnie bocznej pulpitu. */
-             static const char *const prof[4]={"\\USERS","\\USERS\\DOCUMENT",
-                                               "\\USERS\\DOWNLOAD","\\USERS\\DESKTOP"};
-             unsigned pi;
-             for(pi=0;pi<4u;++pi){
-                 (void)kfat_mkdir_path(prof[pi]);
-                 /* Kolejne mkdir w tym samym katalogu gubily wpisy (widac bylo
-                    tylko ostatni): po kazdym tworzeniu czyscimy cache blokow,
-                    zeby nastepne wywolanie czytalo swieza zawartosc katalogu. */
-                 kblock_cache_clear();
-             }
-             /* Po utworzeniu katalogow profilu wyczysc cache JESZCZE RAZ: bez
-                tego pulpit wczytywal LAUNCH.CFG z niepelna lista ikon (brak
-                SETTINGS) i zloty zrzut startowy sie roznil. */
-             kblock_cache_clear();
-         }
          if(state==FAT_MOUNTED){fat_mounted=1;boot_loaded("FAT");}
          else boot_fail("FAT",fat_fail_reason(state));}
     }else{
