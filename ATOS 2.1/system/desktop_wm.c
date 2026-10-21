@@ -94,7 +94,7 @@ static uint8_t fb_open,fb_more,fb_sort,fb_scrollmode;
    katalogow uzytkownika (\USERS\Documents itd.).  Klik w pozycje kolumny
    laduje jej zawartosc w czesci plikowej. */
 #define SIDE_W 132
-#define SIDE_ROW 20
+#define SIDE_ROW_MIN 20
 #define SIDE_TOP 4
 static uint8_t fb_browser;
 /* Diagnostyka okna "My Atari" (odczyt memdumpem po symbolach). */
@@ -241,7 +241,13 @@ static void add(uint16_t kind,int16_t x,int16_t y,uint16_t w,uint16_t h,uint16_t
    dzieki temu pulpit dostaje OBA w jednym odpytaniu (opcode 49) i przelicza
    uklad bez czytania plikow.  Wszystkie miejsca (rysowanie, hit test,
    uszkodzenia, przyciaganie, picker) licza z TYCH SAMYCH zmiennych. */
-static int16_t icon_px=GUI_ICON_COLOR_SIZE;  /* bok rysowanej ikony (z jadra) */
+static int16_t icon_px=GUI_ICON_COLOR_SIZE;
+/* Wiersz kolumny bocznej miesci ikone (dysk/folder) w biezacym rozmiarze. */
+static int side_row_h(void)
+{
+    int h=(int)icon_px+4;
+    return h<SIDE_ROW_MIN?SIDE_ROW_MIN:h;
+}  /* bok rysowanej ikony (z jadra) */
 static uint8_t grid_mode=0u;                 /* 0 COMPACT (domyslnie), 1 NORMAL, 2 WIDE */
 static const uint8_t grid_gap_px[3]={0u,8u,24u};
 static int16_t cell_w=(GUI_ICON_COLOR_SIZE+52),cell_h=(GUI_ICON_COLOR_SIZE+20);
@@ -835,6 +841,7 @@ static void fb_row(char *row,const dir_ent_t *e)
     if(e->attributes&FB_ATTR_DIR){row[13]='<';row[14]='D';row[15]='I';row[16]='R';row[17]='>';}
     else fb_num(row+20,e->size,10u);
 }
+static void fb_side_sync(void);
 static void fb_paint(void)
 {
     unsigned i;int16_t y=64;uint16_t doc_h;
@@ -859,20 +866,24 @@ static void fb_paint(void)
         unsigned idx=0;int16_t sy=SIDE_TOP;
         add(GUI_FILL,0,0,SIDE_W,doc_h,1,0);
         add(GUI_FILL,(int16_t)(SIDE_W-2),0,2,doc_h,0,0);      /* separator */
-        /* dyski */
-        for(i=0;i<ma_count&&i<6u;++i,++idx,sy=(int16_t)(sy+SIDE_ROW)){
+        int rh=side_row_h();
+        /* dyski: ikona napedu + litera */
+        for(i=0;i<ma_count&&i<6u;++i,++idx,sy=(int16_t)(sy+rh)){
+            uint8_t icon=(i==0u)?(uint8_t)ICON_DYSK_C:(uint8_t)ICON_DYSKIETKA;
             char lbl[8];lbl[0]=(char)('C'+(int)i);lbl[1]=':';lbl[2]=0;
-            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),SIDE_ROW-2,0,0);
-            add(GUI_TEXT,8,(int16_t)(sy+2),0,0,0,lbl);
+            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),(uint16_t)(rh-2),0,0);
+            add(GUI_ICON_RGB,6,sy,(uint16_t)icon_px,(uint16_t)icon_px,icon,"");
+            add(GUI_TEXT,8+icon_px,(int16_t)(sy+(icon_px>20?(icon_px-16)/2:2)),0,0,0,lbl);
             if((int)idx==fb_side_sel){list[n-1u].color=1;list[n-1u].background=0;}
         }
-        /* separator + skroty do katalogow uzytkownika */
+        /* separator + skroty do katalogow uzytkownika (ikona folderu) */
         sy=(int16_t)(sy+4);
         add(GUI_FILL,6,sy,(uint16_t)(SIDE_W-18),1,0,0);
         sy=(int16_t)(sy+6);
-        for(i=0;i<3u;++i,++idx,sy=(int16_t)(sy+SIDE_ROW)){
-            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),SIDE_ROW-2,0,0);
-            add(GUI_TEXT,8,(int16_t)(sy+2),0,0,0,user_short_labels[i]);
+        for(i=0;i<3u;++i,++idx,sy=(int16_t)(sy+rh)){
+            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),(uint16_t)(rh-2),0,0);
+            add(GUI_ICON_RGB,6,sy,(uint16_t)icon_px,(uint16_t)icon_px,(uint8_t)ICON_FOLDER,"");
+            add(GUI_TEXT,8+icon_px,(int16_t)(sy+(icon_px>20?(icon_px-16)/2:2)),0,0,0,user_short_labels[i]);
             if((int)idx==fb_side_sel){list[n-1u].color=1;list[n-1u].background=0;}
         }
     }
@@ -925,6 +936,7 @@ static void fb_paint(void)
         (void)gfx(29,(uint32_t)(uint16_t)(fb_wh-16),0,FBW);
     }
     kdbg_mya_items=n;kdbg_mya_files=fb_count;
+    fb_side_sync();
 }
 /* ---- SETUP window: resolution selector -------------------------------- */
 /* A normal decorated WM window (handle 5).  The compositor owns the frame and
@@ -1093,10 +1105,32 @@ static void ma_path(char *out,unsigned i);
    Katalogi profilu powstaja TU (przy pierwszym otwarciu), a nie przy starcie
    systemu: dzieki temu sciezka bootu jest nietknieta (zloty zrzut), a mkdir
    idzie przez syscall jadra, ktory sam pilnuje spojnosci cache. */
+/* Ustawia podswietlenie kolumny na pozycji odpowiadajacej biezacej sciezce:
+   korzen dysku (C:\, D:\) albo katalog uzytkownika.  Bez tego po wejsciu do
+   katalogu nic nie bylo podswietlone. */
+static void fb_side_sync(void)
+{
+    unsigned i;int sel=-1;
+    if(!fb_browser)return;
+    for(i=0;i<ma_count&&i<6u;++i){
+        char p[8];
+        ma_path(p,i);
+        /* porownaj bez koncowego backslasha: fb_path bywa "C:\" albo "\" */
+        if(p[0]=='\\'&&fb_path[0]=='\\'&&fb_path[1]==0){sel=(int)i;break;}
+        if(p[0]&&p[0]!='\\'&&fb_path[0]==p[0]&&fb_path[1]==':'&&fb_path[2]==0){sel=(int)i;break;}
+    }
+    if(sel<0)for(i=0;i<3u;++i){
+        unsigned k=0;
+        while(fb_path[k]&&user_short_paths[i][k]&&fb_path[k]==user_short_paths[i][k])++k;
+        if(!fb_path[k]&&!user_short_paths[i][k]){sel=(int)(ma_count+i);break;}
+    }
+    if(sel>=0)fb_side_sel=sel;
+}
 static void fb_browser_open(void)
 {
     ++kdbg_mya_calls;
-    fb_browser=1u;fb_side_sel=0;
+    fb_browser=1u;fb_side_sel=-1;   /* nic nie podswietlone, dopoki sciezka nie
+                                       odpowiada pozycji kolumny (np. \USERS) */
     if(ma_refresh())ma_count=0;
     fb_ww=(uint16_t)(420+SIDE_W);fb_wh=380;   /* kolumna + dotychczasowa lista */
     fb_open_at("\\USERS","My Atari");
@@ -1105,7 +1139,8 @@ static void fb_browser_open(void)
 /* Klik w kolumne boczna: 0..ma_count-1 = dyski, dalej 3 skroty uzytkownika. */
 static int fb_side_click(int sx,int sy)
 {
-    int idx=(sy-SIDE_TOP)/SIDE_ROW;
+    int rh=side_row_h();
+    int idx=(sy-SIDE_TOP)/rh;
     if(!fb_browser||sx<0||sx>=(int)SIDE_W||sy<SIDE_TOP)return 0;
     if(idx<0)return 0;
     fb_side_sel=idx;
