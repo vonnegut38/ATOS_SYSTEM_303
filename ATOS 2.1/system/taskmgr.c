@@ -292,10 +292,12 @@ int app_main(void)
         }
         m.sender=0;
         if(quit)break;
-        /* live refresh ~2 Hz (takze po komunikacie; wczesniej "continue"
-           potrafil wiecznie pomijac odswiezanie przy zaleglym senderze) */
+        /* Odswiezanie ~0,5 Hz (bylo ~2 Hz): pelny snapshot 12 slotow i
+           pelny paint przy 2 Hz obciazaly jednowatkowa usluge GUI i mysz
+           zwalniala przy TASKMGR + SYSINFO.  Klikniecia i WCLS obslugujemy
+           w kazdej iteracji. */
         now=(uint32_t)hires();
-        if((uint32_t)(now-last_refresh)>=6144u){last_refresh=now;snapshot();paint();}
+        if((uint32_t)(now-last_refresh)>=24576u){last_refresh=now;snapshot();paint();}
     }
     if(fullscreen){(void)gui_op(GUI_END_KEYS);(void)gfx(GFX_RESTORE,0,0,0);}
     return 0;

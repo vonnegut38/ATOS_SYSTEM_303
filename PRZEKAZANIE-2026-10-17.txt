@@ -1858,3 +1858,14 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    analiza na podstawie zrodel; jesli maja byc recenzowane, doslac.
    DO ZROBIENIA: usunac aktywne odpytywanie TASKMGR, odmalowywac tylko
    zmienione wiersze, ograniczyc odswiezanie zminimalizowanych okien.
+
+10bi. TASKMGR 2 Hz -> 0,5 Hz (21.10, PO OBJAWIE "MYSZ ZWALNIA"):
+   Przy TASKMGR + SYSINFO pelny snapshot 12 slotow (ok. 36 wywolan GUI)
+   i pelny paint co 0,5 s (2 Hz) obciazaly jednowatkowa usluge GUI; mysz
+   zwalniala, a taby SYSINFO/TASKMGR nie reagowaly.  Proba calkowicie
+   blokujacego receive(&m,1) nie obudzila WCLS (test zamkniecia FAIL),
+   wiec zostaje polling, ale odswiezanie rzadsze: prog 6144 -> 24576
+   (~0,5 Hz).  Klikniecia/WCLS w kazdej iteracji.
+   TEST: test-dock-input.py PASS (taby + WCLS launch 4->5).
+   TASKMGR.APP 4346 B.  Docelowo: usunac polling calkiem / odmalowywac
+   tylko zmienione wiersze / ograniczyc odswiezanie zminimalizowanych.

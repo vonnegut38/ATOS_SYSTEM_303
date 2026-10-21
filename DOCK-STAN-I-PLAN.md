@@ -202,9 +202,13 @@ przełącza treść (`live10-disk.png`, `live10-sysinfo4.png`). TASKMGR: lista
 sama się odświeża (polling), wybór wiersza trzyma się po PID
 (`live12-select.png`).
 
-**TASKMGR.APP:** `receive(...,0)` + `pause_tick` zamiast blokującego
-`receive(...,1)` — lista odświeża się ~2 Hz bez klikania; `sel_pid` zamiast
-samego indeksu, więc snapshot nie gubi zaznaczenia.
+**TASKMGR.APP:** `receive(...,0)` + `pause_tick` — lista odświeża się bez
+klikania; `sel_pid` zamiast indeksu, więc snapshot nie gubi zaznaczenia.
+**21.10 (później):** pełny snapshot 12 slotów i pełny paint przy **2 Hz**
+obciążały jednowątkową usługę GUI — przy TASKMGR + SYSINFO mysz zwalniała,
+a taby nie reagowały. Odświeżanie zredukowane do **0,5 Hz** (24576 jednostek
+`hires`); kliknięcia i WCLS obsługiwane w każdej iteracji. Docelowo: tylko
+zmienione wiersze / timer zamiast pollingu.
 
 ### 2.10 Audyt 21.10: receive/TASKMGR i priorytety IPC
 
