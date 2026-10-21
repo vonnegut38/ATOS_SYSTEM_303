@@ -1454,3 +1454,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    DECYZJA: odlozone przez uzytkownika ("na razie zostawmy").  Zeby wrocic:
    zaczac od etapu 1 (odczyt), najlepiej razem z testem hosta na obrazie
    utworzonym przez mtools z dlugimi nazwami.
+
+10at. MY ATARI: OKNO DZIALA + ZNALEZIONY BUG CACHE FAT (20.10, ZAMKNIETE):
+   OKNO (zrzut display-demo/d1-po-f8.png): "My Atari" ma kolumne boczna
+   (C:, D:, separator, Documents / Downloads / Desktop) i liste plikow.
+   KLIK W POZYCJE KOLUMNY DZIALA: sprawdzone kolejno \USERS -> C: ->
+   Documents -> Desktop -> Downloads, kazdy klik zmienia liste (rozne hashe:
+   db44368d, ac88d388, 50315fa8, 3e8a0b00, b515be64).
+   PRZYCZYNA wczesniejszego "skroty sie nie rysuja": tablica WSKAZNIKOW na
+   literaly (const char *const) - GUI apps nie sa relokowane, wiec wskazniki
+   trzymaly adresy z linkowania.  Poprawka: tablice znakow w linii
+   (user_short_labels[3][12], user_short_paths[3][18]).
+   DRUGI, WAZNIEJSZY BUG (zlapany zlotym zrzutem): po utworzeniu katalogow
+   \USERS przy starcie pulpit wczytywal LAUNCH.CFG z NIEAKTUALNEGO cache blokow
+   - lista ikon była niepelna (brak SETTINGS), wiec zloty zrzut sie roznil.
+   To samo tlumaczy wczesniejsze "z 4 mkdir przezyl tylko DESKTOP": kolejne
+   wywolania czytaly nieodswiezony katalog.  POPRAWKA na teraz:
+   kblock_cache_clear() po calej serii mkdir w kernel_main (i miedzy nimi).
+   DO ZROBIENIA DOCELOWO: uniewaznianie cache w SAMYM sterowniku FAT
+   (kfat_mkdir_path/kfat_copy_path po tx_commit), zeby nie trzeba bylo pamietac
+   o tym w kazdym wolajacym.  Do tego czasu: KAZDY zapis FAT w jadrze powinien
+   konczyc sie kblock_cache_clear() (albo odczytem przez te sama warstwe).
+   Zloty zrzut: 0e821ede... BAJT W BAJT (po poprawce).

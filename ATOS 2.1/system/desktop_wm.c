@@ -97,6 +97,8 @@ static uint8_t fb_open,fb_more,fb_sort,fb_scrollmode;
 #define SIDE_ROW 20
 #define SIDE_TOP 4
 static uint8_t fb_browser;
+/* Diagnostyka okna "My Atari" (odczyt memdumpem po symbolach). */
+uint32_t kdbg_mya_calls,kdbg_mya_open,kdbg_mya_items,kdbg_mya_files;
 static int fb_side_sel;
 /* UWAGA: GUI apps NIE sa relokowane, wiec tablica WSKAZNIKOW na literaly
    trzymalaby adresy z czasu linkowania (wskazywalyby w nic).  Dlatego znaki
@@ -922,6 +924,7 @@ static void fb_paint(void)
         /* Za duzo wierszy na powierzchnie: stronnicowanie "MORE >". */
         (void)gfx(29,(uint32_t)(uint16_t)(fb_wh-16),0,FBW);
     }
+    kdbg_mya_items=n;kdbg_mya_files=fb_count;
 }
 /* ---- SETUP window: resolution selector -------------------------------- */
 /* A normal decorated WM window (handle 5).  The compositor owns the frame and
@@ -1089,10 +1092,12 @@ static void ma_path(char *out,unsigned i);
 /* "My Atari": otwiera okno plikow w trybie z kolumna boczna. */
 static void fb_browser_open(void)
 {
+    ++kdbg_mya_calls;
     fb_browser=1u;fb_side_sel=0;
     if(ma_refresh())ma_count=0;
     fb_ww=(uint16_t)(420+SIDE_W);fb_wh=380;   /* kolumna + dotychczasowa lista */
     fb_open_at("\\USERS","My Atari");
+    kdbg_mya_open=((uint32_t)fb_open)|((uint32_t)fb_ww<<8)|((uint32_t)fb_wh<<24);
 }
 /* Klik w kolumne boczna: 0..ma_count-1 = dyski, dalej 3 skroty uzytkownika. */
 static int fb_side_click(int sx,int sy)

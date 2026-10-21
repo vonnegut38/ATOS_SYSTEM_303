@@ -501,6 +501,10 @@ void kernel_main(const boot_handoff_t *h)
                     zeby nastepne wywolanie czytalo swieza zawartosc katalogu. */
                  kblock_cache_clear();
              }
+             /* Po utworzeniu katalogow profilu wyczysc cache JESZCZE RAZ: bez
+                tego pulpit wczytywal LAUNCH.CFG z niepelna lista ikon (brak
+                SETTINGS) i zloty zrzut startowy sie roznil. */
+             kblock_cache_clear();
          }
          if(state==FAT_MOUNTED){fat_mounted=1;boot_loaded("FAT");}
          else boot_fail("FAT",fat_fail_reason(state));}
