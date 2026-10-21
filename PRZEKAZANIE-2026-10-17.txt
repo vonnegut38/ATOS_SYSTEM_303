@@ -1432,3 +1432,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
       tabelami czy limit PC-relative).  Diagnostyka: kdbg_desk_ok/fail po F8.
    b) Dwuklik w ikone "My Atari" nadal nie jest pewny (ograniczenie
       wstrzykiwania myszy) - dlatego testowy hook F8.
+
+10as. DLUGIE NAZWY (LFN) - ROZWAZONE, ODLOZONE (20.10):
+   PYTANIE uzytkownika: dorobic "driver" do dlugich nazw, np. 16+3 zamiast 8+3?
+   WNIOSEK: NIE robic wlasnego schematu 16+3 - katalog jest czytany takze przez
+   Hatari/TOS, mtools/mkfs na PC i nasze tools/img_*.py, wiec niestandardowe
+   wpisy bylyby dla nich smieciami, a koszt ten sam co standard.
+   ZAMIENNIK: VFAT Long File Names (wpisy 0x0F + suma kontrolna krotkiej nazwy).
+   Zaleta: krotka nazwa zostaje jako alias (DOCUME~1), wiec DOS/TOS dalej widzi
+   sensowna nazwe, a Windows/Linux/macOS pokazuja pelna.
+   KOSZT (oszacowany): ~1-2 dni, bo nazwa jest w ABI
+   (atos_app_dir_entry_t.name[13] -> [64]) i w kilku miejscach wyswietlania:
+   pulpit (fb_row + kolumny), shell "dir", TRASH, COMMANDER, plus tools/img_*.
+   ETAPY: (1) ODCZYT ~3-4 h (parsowanie 0x0F, pelne nazwy, otwieranie po dlugiej
+   nazwie - zyskuja tez obrazy przygotowane na PC), (2) ZAPIS ~3-4 h (tworzenie
+   LFN + unikalny alias przy mkdir/copy, usuwanie/przenoszenie z lancuchem).
+   UWAGA: LFN jest UTF-16, a renderer jest 8-bitowy - na start tylko ASCII.
+   STAN NA TERAZ (bez ryzyka): na dysku \USERS\DOCUMENT, \USERS\DOWNLOAD,
+   \USERS\DESKTOP, a "Documents"/"Downloads"/"Desktop" to etykiety w kolumnie
+   bocznej okna My Atari.  W pełni zgodne ze wszystkim.
+   DECYZJA: odlozone przez uzytkownika ("na razie zostawmy").  Zeby wrocic:
+   zaczac od etapu 1 (odczyt), najlepiej razem z testem hosta na obrazie
+   utworzonym przez mtools z dlugimi nazwami.
