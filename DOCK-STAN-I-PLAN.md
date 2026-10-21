@@ -138,6 +138,26 @@ i `[>]` na hamburgerze. Zrzuty: `display-demo/dockrun-left-badge.png`,
   numer desku nie jest już rysowany.
 - Złoty zrzut: **`15424d43…`** (górna belka bez ikon).
 
+### 2.7 Więcej niż 2 aplikacje — limit slotów procesów (2026-10-21)
+
+**Objaw:** trzecia aplikacja z rzędu nie startowała; `kdbg_dock_rc` =
+`0xFFFFFC6F` = **`-0x391`** (brak wolnego slotu w `process_table`).
+Przy `USER_PROCESS_SLOTS=6` cztery sloty zajmują usługi startowe (`INIT.APP`,
+`GFX.APP`, `GUI.APP`) i pulpit, więc dla aplikacji zostawały tylko **2**.
+
+**Naprawa:** `USER_PROCESS_SLOTS=12` (4 + 6 okien WM + 2 zapasu na procesy
+potomne). BSS rośnie o ~5,3 KB; nie zmienia zrzutu startowego.
+
+**Test:** `display-demo/test-dock-multi.py` odpala z paska **5 aplikacji**
+(COMMANDER, SYSINFO, TASKMGR, PLASMA, MODPLAY): każda `rc=0`, `launch=1..5`,
+`left_running=5`; klik w SYSINFO podnosi jego okno (`restore=1`), a TASKMGR po
+REFRESH pokazuje **wszystkie 5** (i 12 slotów). Zrzuty:
+`display-demo/multi-5apps.png`, `multi-raise-sysinfo.png`, `multi-taskmgr.png`.
+
+**TASKMGR.APP:** `SLOTS` 6→**12**, wiersz 16 px (12 wierszy w oknie 480×320),
+lista rysowania 160; pętla zdarzeń nie gubi już odświeżania po komunikacie
+(`m.sender=0` + brak `continue`).
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
@@ -318,6 +338,10 @@ syscalli:
     otwierają listy w pustym prawym górnym rogu. Jeśli mają zniknąć całkiem,
     usunąć też te funkcje (maszyneria listy może zostać). Nie malować tła pod
     ikonami — belkę rysuje pulpit; `task_draw` ma tylko dokładać dropdowny.
+21. **`USER_PROCESS_SLOTS` to nie „ile aplikacji”.** Cztery sloty zjadają
+    `INIT.APP`, `GFX.APP`, `GUI.APP` i pulpit. Przy 6 slotach trzecia aplikacja
+    dostaje `-0x391` (brak slotu). Dla 6 okien WM potrzeba 4+6=10, dlatego
+    jest 12. Objaw: `kdbg_dock_rc = 0xFFFFFC6F`; test `test-dock-multi.py`.
 
 ---
 
@@ -330,6 +354,7 @@ python3 test-icons-size.py boot48           # ikony 48 px, pomiar
 python3 test-dock-step3.py                  # krok 3: DOCK.CFG/LAUNCH.CFG, ikony, hover, start
 python3 test-dock-menu.py                   # PPM: DODAJ PRE2, USUN COMMANDER, DOCK.CFG
 python3 test-dock-running.py                # krok 4: [>] na lewym skrócie, restore (nie spawn)
+python3 test-dock-multi.py                  # 5 aplikacji naraz (limit slotów procesów)
 # pasek: klik w (20, 580) zwija/rozwija; PPM otwiera menu konfiguracji.
 # Stan czytać z liczników jądra:
 #   kdbg_dock_click, kdbg_dock_open, kdbg_dock_draws,
@@ -379,6 +404,7 @@ po każdej zmianie sprawdzić oba joby.
 | `display-demo/test-dock-step3.py` | test kroku 3: otwarcie, `dock_short`, ikony, hover, start z paska |
 | `display-demo/test-dock-menu.py` | test PPM: dodaj/usuń, katalog, zapis `DOCK.CFG` |
 | `display-demo/test-dock-running.py` | test kroku 4: `[>]` na lewym skrócie, prawa tylko dla aplikacji bez skrótu |
+| `display-demo/test-dock-multi.py` | 5 aplikacji naraz: procesy, okna, podnoszenie skrótem |
 | `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10bc |
 
 ---
@@ -395,7 +421,10 @@ po każdej zmianie sprawdzić oba joby.
       po prawej; lewy skrót nigdy nie tworzy drugiej kopii
       (`test-dock-running.py` zielony),
 - [x] ikony u góry (task/desk) usunięte; dropdowny zostają jako ukryty hit-test (krok 5),
-- [x] złoty zrzut stabilny w dwóch kolejnych bootach: **`5c1e5546…`** BAJT W BAJT
-      (jasnoszary pasek; zmiana koloru była świadoma),
+- [x] **5 aplikacji naraz** (COMMANDER, SYSINFO, TASKMGR, PLASMA, MODPLAY):
+      `rc=0`, `left_running=5`, podnoszenie skrótem działa
+      (`test-dock-multi.py` zielony),
+- [x] złoty zrzut stabilny w dwóch kolejnych bootach: **`15424d43…`** BAJT W BAJT
+      (jasnoszary pasek, górna belka bez task/desk),
 - [ ] CI zielone (TOS=1 i TOS=0) — lokalnie oba profile budują się i testy
       hosta przechodzą; workflow trzeba potwierdzić na GitHubie.

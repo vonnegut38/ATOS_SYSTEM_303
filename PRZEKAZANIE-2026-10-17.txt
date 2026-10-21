@@ -1767,3 +1767,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
      task_click() i desk_click(); maszyneria listy moze zostac.
    PLAN 5 KROKOW: GOTOWY.  Zostaje kosmetyka (separator lewa/prawa, menu
    aplikacji na PPM prawej ikony) i potwierdzenie CI na GitHubie.
+
+10be. WIELE OKIEN: LIMIT SLOTOW PROCESOW 6 -> 12 (21.10, NAPRAWIONE):
+   Objaw zgloszony przez uzytkownika: trzecia aplikacja z rzedu nie startowala.
+   Przyczyna: kdbg_dock_rc = 0xFFFFFC6F = -0x391 (brak wolnego slotu procesu).
+   Przy USER_PROCESS_SLOTS=6 cztery sloty zajmuja stale: INIT.APP, GFX.APP,
+   GUI.APP i DESKTOP.APP, wiec dla aplikacji zostawaly tylko DWA.
+   Naprawa: USER_PROCESS_SLOTS=12 (4 stale + 6 okien WM + 2 zapasu na procesy
+   potomne).  BSS rosnie o ~5,3 KB; zrzut startowy bez zmian (15424d43).
+   TEST: display-demo/test-dock-multi.py - 5 aplikacji naraz z paska
+   (COMMANDER, SYSINFO, TASKMGR, PLASMA, MODPLAY): kazda launch=1..5 i rc=0,
+   left_running=5, right_running=0; klik w lewy skrot SYSINFO podnosi okno
+   (restore=1).  TASKMGR.APP: SLOTS 6->12, wiersz 16 px (12 wierszy w oknie
+   480x320), lista rysowania 160; petla zdarzen nie gubi odswiezania
+   (m.sender=0, bez "continue").  Po REFRESH lista pokazuje wszystkie 5
+   aplikacji (AC, SYSINFO, TASKMGR, PLASMA, MODPLAY) + wolne sloty.
+   Zrzuty: display-demo/multi-5apps.png, multi-raise-sysinfo.png,
+   multi-taskmgr.png (oraz multi-1..5-*.png).
+   KERNEL.SYS: 232066 B (TOS=1), 178508 B (TOS=0); TASKMGR.APP 4302 B;
+   TOS=1/TOS=0 buduja sie, check-graphics i check-video zielone.
+   TESTY KONCOWE: test-dock-multi.py PASS (5 aplikacji, TASKMGR 12 slotow),
+   test-dock-step3.py PASS, test-dock-menu.py PASS, test-dock-running.py PASS,
+   golden 15424d43... BAJT W BAJT (dwa booty).

@@ -68,7 +68,9 @@ void kernel_fault_report(void (*puts)(const char *),void (*put_u32)(uint32_t))
    the 1 MB ST quota, so a plain 4 MB ST cannot be drained by one game. */
 #define USER_MEMORY_QUOTA_TT (16u*1024u*1024u)
 #define USER_FAST_RAM_BASE 0x01000000u
-#define USER_PROCESS_SLOTS 6u
+/* 4 slots sa zajete od bootu (INIT, GFX, GUI + pulpit), a WM miesci do 6
+   okien aplikacji: 4+6=10, wiec 12 daje jeszcze zapas na procesy potomne. */
+#define USER_PROCESS_SLOTS 12u
 #define USER_MAILBOX_CLIENT_DEPTH 4u
 #define USER_MAILBOX_INPUT_DEPTH 6u
 #define USER_MAILBOX_DEPTH 8u

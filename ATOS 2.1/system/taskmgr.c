@@ -36,11 +36,12 @@
 #define SYS_SUSP 72u
 #define SYS_RSME 73u
 
-#define SLOTS 6u
+#define SLOTS 12u   /* == USER_PROCESS_SLOTS w kernel_exception.c */
+#define ROW_H 16u   /* 12 wierszy miesci sie w oknie 480x320 */
 
 static gui_message_t m;
 static int32_t gfx_pid,gui_pid;
-static gui_draw_t list[80];
+static gui_draw_t list[160];
 static unsigned n;
 static uint8_t quit,fullscreen,chunky;
 static unsigned prev_left;
@@ -160,10 +161,10 @@ static void paint(void)
     add(GUI_TEXT,220,22,0,0,chunky?0u:0u,"STATE");
     add(GUI_TEXT,300,22,0,0,chunky?0u:0u,"CPU%");
     add(GUI_TEXT,380,22,0,0,chunky?0u:0u,"RAM");
-    add(GUI_FRAME,8,38,WW-16,128,0,0);
+    add(GUI_FRAME,8,38,WW-16,SLOTS*ROW_H+8u,0,0);
     for(i=0;i<SLOTS;++i){
-        char s[32];y=44+(int)i*20;
-        if((int)i==sel){add(GUI_FILL,12,y-2,WW-24,18,chunky?3u:0u,0);}
+        char s[32];y=44+(int)i*(int)ROW_H;
+        if((int)i==sel){add(GUI_FILL,12,y-2,WW-24,14,chunky?3u:0u,0);}
         if(!rows[i].pid){
             add(GUI_TEXT,16,y,0,0,chunky?0u:0u,"(free)");
             continue;
@@ -219,8 +220,8 @@ static void mouse_click(int mx,int my)
     int i;
     if(cy<0||cx<0||cx>=(int)(fullscreen?scrw:WW))return;
     /* process rows */
-    if(cy>=42&&cy<42+6*20){
-        i=(cy-42)/20;
+    if(cy>=42&&cy<42+(int)SLOTS*(int)ROW_H){
+        i=(cy-42)/(int)ROW_H;
         if(cx>=8&&cx<(int)WW-8){sel=(rows[i].pid)?i:-1;paint();}
         return;
     }
@@ -264,18 +265,21 @@ int app_main(void)
     }
     snapshot();paint();
     for(;;){
-        uint32_t now;
-        if(!pend_pop(&m)&&receive(&m,1)){pause_tick();}
-        if(m.sender)continue;
-        if(m.v[0]==KKEY){if(((m.v[1]>>24)&0xffu)==1u)key_event(m.v[1]&0x7fu);}
-        else if(m.v[0]==KMOU){int mx=(int)(uint16_t)(m.v[1]>>16),my=(int)(uint16_t)(m.v[1]&0xffffu);
-            unsigned buttons=(m.v[2]>>24)&7u;
-            if((buttons&1u)&&!prev_left)mouse_click(mx,my);
-            prev_left=buttons&1u;}
-        else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)(m.v[1]&0xffffu);}
-        else if(m.v[0]==WCLS)quit=1;
+        uint32_t now;int got=pend_pop(&m);
+        if(!got){got=receive(&m,1);if(got)pause_tick();}
+        if(got&&m.sender){
+            if(m.v[0]==KKEY){if(((m.v[1]>>24)&0xffu)==1u)key_event(m.v[1]&0x7fu);}
+            else if(m.v[0]==KMOU){int mx=(int)(uint16_t)(m.v[1]>>16),my=(int)(uint16_t)(m.v[1]&0xffffu);
+                unsigned buttons=(m.v[2]>>24)&7u;
+                if((buttons&1u)&&!prev_left)mouse_click(mx,my);
+                prev_left=buttons&1u;}
+            else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)(m.v[1]&0xffffu);}
+            else if(m.v[0]==WCLS)quit=1;
+        }
+        m.sender=0;
         if(quit)break;
-        /* live refresh ~2 Hz */
+        /* live refresh ~2 Hz (takze po komunikacie; wczesniej "continue"
+           potrafil wiecznie pomijac odswiezanie przy zaleglym senderze) */
         now=(uint32_t)hires();
         if((uint32_t)(now-last_refresh)>=6144u){last_refresh=now;snapshot();paint();}
     }
