@@ -209,15 +209,19 @@ class Session:
         return False
 
     def click_fast(self, x, y, settle=0.05):
-        """Klik: press, KROTKA przerwa (emulator musi ruszyc, inaczej pump widzi
-        tylko koncowy stan i nie ma zbocza press), release.  ~0,4 s na klik."""
-        self.inject_nowait(x, y, 1)
-        time.sleep(0.08)
-        self.inject_nowait(x, y, 0)
+        """Klik z POTWIERDZENIEM kazdego zdarzenia (~0,6 s).
+
+        Wersja bez ack (inject_nowait) okazala sie NIEPEWNA: oba zapisy trafialy,
+        zanim pump (50 Hz) zdazyl zobaczyc stan, wiec zbocze press ginalo i klik
+        nie docieral.  Dla dwukliku liczy sie odstep MIEDZY klikami (drugi press
+        zaraz po pierwszym release), a nie czas pojedynczego zdarzenia.
+        """
+        self.inject(x, y, 1)
+        self.inject(x, y, 0)
         time.sleep(settle)
 
     def dbl_fast(self, x, y, settle=1.2):
-        self.click_fast(x, y, 0.06)
+        self.click_fast(x, y, 0.0)      # drugi klik zaraz po pierwszym
         self.click_fast(x, y, settle)
 
     def screen_text(self, wait=1.0):

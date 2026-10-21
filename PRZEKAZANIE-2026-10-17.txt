@@ -1402,3 +1402,33 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
      - pulpit jako calosc (ikony, okna, paski) nadal najlatwiej weryfikowac
        zrzutem + pomiarem pikseli (tak robia istniejace harnessy).
    NIE ZMIENIANO KODU - to rozpoznanie, zeby nie tracic czasu na zly trop.
+
+10ar. MY ATARI: KATALOGI USERS + OKNO PRZEGLADARKI (20.10, CZESCIOWO):
+   ZADANIE: \\USERS z podkatalogami Documents/Downloads/Desktop + okno "My Atari"
+   z kolumna boczna (dyski + skroty) i lista plikow po wybraniu pozycji.
+   ZROBIONE I SPRAWDZONE:
+   1) Katalogi profilu tworzy JADRO przy starcie (kernel_main.c, po mountcie
+      FAT, kfat_mkdir_path x4 + kblock_cache_clear miedzy nimi).
+      POTWIERDZONE w obrazie: \USERS zawiera DOCUMENT, DOWNLOAD, DESKTOP.
+   2) WAZNE ODKRYCIE: FAT 8.3 = MAX 8 ZNAKOW w nazwie.  "DOCUMENTS" i
+      "DOWNLOADS" maja po 9, wiec mkdir je ODRZUCAL (powstawal tylko DESKTOP).
+      Dlatego katalogi nazywaja sie DOCUMENT i DOWNLOAD, a pelne nazwy sa
+      etykietami w kolumnie bocznej.
+   3) Okno: tryb przegladarki w oknie plikow (fb_browser) - kolumna boczna
+      SIDE_W=132 (dyski C:, D:, ... potem separator i 3 skroty), lista
+      przesunieta o SIDE_W, okno szersze (420+SIDE_W).  Klik w dysk/skrot
+      laduje katalog.  Ikona "My Atari" (builtin 5) i hook F8 otwieraja
+      przegladarke.  Stare okno listy dyskow (ma_paint/ma_click/ma_open_it)
+      USUNIETE (bylo martwe, a jego kod przeszkadzal w limicie PC-relative).
+   4) ZRZUT DOWODOWY z pierwszej dzialajacej wersji (display-demo/z1-browser.png
+      z przebiegu przed poprawka tabel): okno "My Atari", kolumna z C: i D:,
+      lista \USERS z DESKTOP/DOCUMENT/DOWNLOAD.
+   NIEDOKONCZONE (nastepny krok, ~30 min):
+   a) W pierwszej wersji SKROTY sie nie rysowaly: tablica "const char *const"
+      trzymala adresy z linkowania, a GUI apps NIE sa relokowane (ta sama
+      pulapka, co w module shella).  Zamienione na tablice znakow w linii
+      (user_short_labels[3][12], user_short_paths[3][18]) - ale PO tej zmianie
+      hook F8 przestal otwierac okno (trzeba ustalic: crash w paintcie z nowymi
+      tabelami czy limit PC-relative).  Diagnostyka: kdbg_desk_ok/fail po F8.
+   b) Dwuklik w ikone "My Atari" nadal nie jest pewny (ograniczenie
+      wstrzykiwania myszy) - dlatego testowy hook F8.

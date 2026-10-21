@@ -88,6 +88,23 @@ static void win_clamp(uint16_t *w,uint16_t *h,unsigned minw,unsigned minh)
     if(*h>mh)*h=(uint16_t)mh;
 }
 static uint8_t fb_open,fb_more,fb_sort,fb_scrollmode;
+/* --- Tryb "My Atari": kolumna boczna (dyski + skroty) + lista plikow -----
+   Wlaczany ikona "My Atari" (builtin 5).  W tym trybie okno jest szersze,
+   a po lewej rysujemy kolumne: dyski C:, D:, ... a pod nimi skroty do
+   katalogow uzytkownika (\USERS\Documents itd.).  Klik w pozycje kolumny
+   laduje jej zawartosc w czesci plikowej. */
+#define SIDE_W 132
+#define SIDE_ROW 20
+#define SIDE_TOP 4
+static uint8_t fb_browser;
+static int fb_side_sel;
+/* UWAGA: GUI apps NIE sa relokowane, wiec tablica WSKAZNIKOW na literaly
+   trzymalaby adresy z czasu linkowania (wskazywalyby w nic).  Dlatego znaki
+   sa WPISANE W TABLICE, jak w innych miejscach tego projektu. */
+static const char user_short_labels[3][12]={"Documents","Downloads","Desktop"};
+/* Sciezki 8.3 (FAT): DOCUMENT/DOWNLOAD, bo "DOCUMENTS"/"DOWNLOADS" maja
+   9 znakow i mkdir ich nie przyjmie. */
+static const char user_short_paths[3][18]={"\\USERS\\DOCUMENT","\\USERS\\DOWNLOAD","\\USERS\\DESKTOP"};
 static char fb_path[64],fb_title[24];
 static dir_ent_t *fb_all;      /* whole directory, sorted in place */
 static unsigned fb_total,fb_count,fb_page;
@@ -119,15 +136,10 @@ static dir_ent_t tr_ents[TR_MAX],tr_inner[2];
 
 /* ---- My Atari window (handle 6): the drives C:, D: and HDD partitions ----
    A "Computer" folder that replaces the separate DISK C / DISK D icons. */
-#define MAW 6u
-#define MA_ROW_H ((int)icon_px+4)          /* one drive icon per row */
-static int16_t ma_wx=140,ma_wy=64;
-static uint16_t ma_ww=340,ma_wh=300;
-static uint8_t ma_open;
-static int ma_sel=-1;
+/* Stare okno "My Atari" (lista dyskow) zastapione przegladarka z kolumna
+   boczna w oknie plikow; zostaja tylko dane potrzebne do listy dyskow. */
 static system_report_t ma_info;
 static unsigned ma_count;
-static char ma_msg[32];
 
 #define MENU_X 8
 #define MENU_Y 18
@@ -627,7 +639,6 @@ static void spawn_run(void)
 
 static void fb_paint(void);
 static void tr_paint(void);
-static void ma_paint(void);
 /* Defined with the SETUP dialog, after its state is declared. */
 static int video_try(uint16_t w,uint16_t h,uint8_t depth)
 {
@@ -825,13 +836,14 @@ static void fb_row(char *row,const dir_ent_t *e)
 static void fb_paint(void)
 {
     unsigned i;int16_t y=64;uint16_t doc_h;
+    int16_t ox=(int16_t)(fb_browser?SIDE_W:0);   /* przesuniecie listy w prawo */
+    fb_scrollmode=(fb_total<=FB_MAXROWS)?1u:0u;
     /* BUG (znaleziony testem 20.10): bylo "fb_count<=FB_MAXROWS", a przy
        stronicowaniu fb_count to ROZMIAR STRONY (FB_ROWS=10), nie caly katalog.
        Skutek: duzy katalog byl traktowany jak "maly, przewijany" - WM dostawal
        content_h = pelna lista, wiec pasek przewijania pokazywal sie zamiast
        stronicowania, a klawisze stron (warunek !fb_scrollmode) nie dzialaly.
        Decyduje LICZBA WSZYSTKICH pozycji. */
-    fb_scrollmode=(fb_total<=FB_MAXROWS)?1u:0u;
     /* Tlo musi pokryc CALY dokument, nie tylko widoczna czesc: przy przewijaniu
        odsłanialy sie wiersze rysowane na nieodmalowanym (czarnym) obszarze
        powierzchni - dol obrazu byl czarny. */
@@ -840,14 +852,36 @@ static void fb_paint(void)
     if(doc_h<(uint16_t)(fb_wh-16))doc_h=(uint16_t)(fb_wh-16);
     n=0;
     add(GUI_FILL,0,0,fb_ww,doc_h,1,0);
+    /* ---- kolumna boczna (tylko tryb "My Atari") ---- */
+    if(fb_browser){
+        unsigned idx=0;int16_t sy=SIDE_TOP;
+        add(GUI_FILL,0,0,SIDE_W,doc_h,1,0);
+        add(GUI_FILL,(int16_t)(SIDE_W-2),0,2,doc_h,0,0);      /* separator */
+        /* dyski */
+        for(i=0;i<ma_count&&i<6u;++i,++idx,sy=(int16_t)(sy+SIDE_ROW)){
+            char lbl[8];lbl[0]=(char)('C'+(int)i);lbl[1]=':';lbl[2]=0;
+            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),SIDE_ROW-2,0,0);
+            add(GUI_TEXT,8,(int16_t)(sy+2),0,0,0,lbl);
+            if((int)idx==fb_side_sel){list[n-1u].color=1;list[n-1u].background=0;}
+        }
+        /* separator + skroty do katalogow uzytkownika */
+        sy=(int16_t)(sy+4);
+        add(GUI_FILL,6,sy,(uint16_t)(SIDE_W-18),1,0,0);
+        sy=(int16_t)(sy+6);
+        for(i=0;i<3u;++i,++idx,sy=(int16_t)(sy+SIDE_ROW)){
+            if((int)idx==fb_side_sel)add(GUI_FILL,2,sy,(uint16_t)(SIDE_W-8),SIDE_ROW-2,0,0);
+            add(GUI_TEXT,8,(int16_t)(sy+2),0,0,0,user_short_labels[i]);
+            if((int)idx==fb_side_sel){list[n-1u].color=1;list[n-1u].background=0;}
+        }
+    }
     /* Path bar: sunken, so it reads as a field and not as a stray white strip. */
-    add(GUI_BEVEL,4,2,(uint16_t)(fb_ww-10),18,0,0);
+    add(GUI_BEVEL,(int16_t)(4+ox),2,(uint16_t)(fb_ww-10-ox),18,0,0);
     list[n-1u].reserved=1;
-    add(GUI_TEXT,8,3,0,0,0,fb_path);
+    add(GUI_TEXT,(int16_t)(8+ox),3,0,0,0,fb_path);
     /* Sort bar, right under the title bar. */
     for(i=0;i<3u;++i){
         const char *lbl=(i==0u)?"NAME":(i==1u)?"DATE":"TYPE";
-        int16_t bx=(int16_t)(4+(int)i*58);
+        int16_t bx=(int16_t)(4+ox+(int)i*58);
         add(GUI_BEVEL,bx,22,54,18,0,0);
         if(fb_sort==(uint8_t)i){
             list[n-1u].reserved=1;                 /* pressed */
@@ -856,29 +890,29 @@ static void fb_paint(void)
         add(GUI_TEXT,(int16_t)(bx+11),23,0,0,0,lbl);
         if(fb_sort==(uint8_t)i){list[n-1u].color=1;list[n-1u].background=0;}
     }
-    add(GUI_FILL,4,42,(uint16_t)(fb_ww-10),1,0,0);
-    add(GUI_TEXT,8,45,0,0,0,"NAME");
-    add(GUI_TEXT,8+26*8,45,0,0,0,"SIZE");
-    add(GUI_TEXT,8+32*8,45,0,0,0,"DATE");
+    add(GUI_FILL,(int16_t)(4+ox),42,(uint16_t)(fb_ww-10-ox),1,0,0);
+    add(GUI_TEXT,(int16_t)(8+ox),45,0,0,0,"NAME");
+    add(GUI_TEXT,(int16_t)(8+ox+26*8),45,0,0,0,"SIZE");
+    add(GUI_TEXT,(int16_t)(8+ox+32*8),45,0,0,0,"DATE");
     {char r0[34];unsigned k;
      for(k=0;k<31u;++k)r0[k]=' ';
      r0[31]=0;
      r0[0]='.';r0[1]='.';r0[13]='<';r0[14]='D';r0[15]='I';r0[16]='R';r0[17]='>';
-     add(GUI_TEXT,8,y,0,0,0,r0);
+     add(GUI_TEXT,(int16_t)(8+ox),y,0,0,0,r0);
      y=(int16_t)(y+FB_ROW_H);}
     for(i=0;i<fb_count;++i){
         char row[34],date[18];
         const dir_ent_t *e=&fb_all[fb_scrollmode?i:(fb_page*FB_ROWS+i)];
         fb_row(row,e);
         fb_date(date,e->datetime);
-        if((int)(i+1)==fb_sel)add(GUI_FILL,4,y,(uint16_t)(fb_ww-8),FB_ROW_H-2,0,0);
-        add(GUI_TEXT,8,y,0,0,0,row);
+        if((int)(i+1)==fb_sel)add(GUI_FILL,(int16_t)(4+ox),y,(uint16_t)(fb_ww-8-ox),FB_ROW_H-2,0,0);
+        add(GUI_TEXT,(int16_t)(8+ox),y,0,0,0,row);
         if((int)(i+1)==fb_sel){list[n-1u].color=1;list[n-1u].background=0;}
-        add(GUI_TEXT,8+32*8,y,0,0,0,date);
+        add(GUI_TEXT,(int16_t)(8+ox+32*8),y,0,0,0,date);
         if((int)(i+1)==fb_sel){list[n-1u].color=1;list[n-1u].background=0;}
         y=(int16_t)(y+FB_ROW_H);
     }
-    if(fb_more)add(GUI_TEXT,8,y,0,0,0,"MORE >");
+    if(fb_more)add(GUI_TEXT,(int16_t)(8+ox),y,0,0,0,"MORE >");
     (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,FBW);
     if(fb_scrollmode){
         /* Cala lista w powierzchni: wysokosc tresci = realna wysokosc listy,
@@ -1047,6 +1081,36 @@ static int fb_load(const char *path)
     fb_sort_all();
     fb_page_calc();
     return fb_total!=0u;
+}
+/* deklaracje wprzod: te funkcje sa zdefiniowane dalej w pliku */
+static void fb_open_at(const char *path,const char *title);
+static int ma_refresh(void);
+static void ma_path(char *out,unsigned i);
+/* "My Atari": otwiera okno plikow w trybie z kolumna boczna. */
+static void fb_browser_open(void)
+{
+    fb_browser=1u;fb_side_sel=0;
+    if(ma_refresh())ma_count=0;
+    fb_ww=(uint16_t)(420+SIDE_W);fb_wh=380;   /* kolumna + dotychczasowa lista */
+    fb_open_at("\\USERS","My Atari");
+}
+/* Klik w kolumne boczna: 0..ma_count-1 = dyski, dalej 3 skroty uzytkownika. */
+static int fb_side_click(int sx,int sy)
+{
+    int idx=(sy-SIDE_TOP)/SIDE_ROW;
+    if(!fb_browser||sx<0||sx>=(int)SIDE_W||sy<SIDE_TOP)return 0;
+    if(idx<0)return 0;
+    fb_side_sel=idx;
+    if(idx<(int)ma_count){
+        char path[8];
+        ma_path(path,(unsigned)idx);
+        fb_open_at(path,"My Atari");
+    }else{
+        unsigned k=(unsigned)(idx-(int)ma_count);
+        if(k<3u)fb_open_at(user_short_paths[k],"My Atari");
+        else return 0;
+    }
+    return 1;
 }
 static void fb_open_at(const char *path,const char *title)
 {
@@ -1328,66 +1392,6 @@ static void ma_path(char *out,unsigned i)
     if(letter=='C'){out[0]='\\';out[1]=0;}
     else{out[0]=letter;out[1]=':';out[2]='\\';out[3]=0;}
 }
-static void ma_paint(void)
-{
-    unsigned i;int16_t y=28;
-    n=0;
-    add(GUI_FILL,0,0,ma_ww,(uint16_t)(ma_wh-16),1,0);
-    add(GUI_TEXT,8,4,0,0,0,"MY ATARI - DRIVES");
-    if(ma_msg[0])add(GUI_TEXT,152,4,0,0,0,ma_msg);
-    if(!ma_count)add(GUI_TEXT,16,40,0,0,0,"NO DRIVES FOUND");
-    for(i=0;i<ma_count&&i<6u;++i){
-        char row[26];unsigned k;
-        uint8_t icon=(i==0u)?(uint8_t)ICON_DYSK:(uint8_t)ICON_DYSKIETKA;
-        row[0]=(char)('C'+(int)i);row[1]=':';
-        for(k=2;k<24u;++k)row[k]=' ';
-        for(k=0;k<4u&&ma_info.volume[i].id[k];++k)row[2+k]=ma_info.volume[i].id[k];
-        row[24]=0;
-        if((int)i==ma_sel){add(GUI_FILL,4,y,(uint16_t)(ma_ww-8),(uint16_t)(MA_ROW_H-2),0,0);}
-        add(GUI_ICON_RGB,8,y,(uint16_t)icon_px,(uint16_t)icon_px,icon,"");
-        list[n-1u].reserved=0;
-        add(GUI_TEXT,48,(int16_t)(y+8),0,0,0,row);
-        if((int)i==ma_sel){list[n-1u].color=1;list[n-1u].background=0;}
-        y=(int16_t)(y+MA_ROW_H);
-    }
-    add(GUI_TEXT,8,(int16_t)(ma_wh-28),0,0,0,"DBL-CLICK = OPEN DRIVE");
-    (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,MAW);
-    (void)gfx(29,(uint32_t)(uint16_t)(ma_wh-16),0,MAW);
-}
-static int ma_row_at(int my)
-{
-    int sy=my-(int)ma_wy-16;
-    if(!ma_open||sy<28)return -1;
-    return (sy-28)/MA_ROW_H;
-}
-static void ma_open_it(void)
-{
-    /* Wysokosc okna zalezy od rozmiaru ikony (wiersz = icon_px+4), inaczej przy
-       64 px trzy ostatnie napedz znikalyby pod dolna krawedzia. */
-    ma_wh=(uint16_t)(28+(int)MA_ROW_H*6+56);
-    if((int)ma_wh>(int)SCRH-32)ma_wh=(uint16_t)((int)SCRH-32);
-    ma_wx=(int16_t)(((int)SCRW-(int)ma_ww)/2);if(ma_wx<16)ma_wx=16;
-    ma_wy=(int16_t)(((int)SCRH-(int)ma_wh)/2);if(ma_wy<16)ma_wy=16;
-    (void)gfx(GFX_WINDOW,((uint32_t)(uint16_t)ma_wx<<16)|(uint16_t)ma_wy,
-              ((uint32_t)ma_ww<<16)|ma_wh,MAW);
-    (void)gfx(21,(uint32_t)(uintptr_t)"MY ATARI",0,MAW);
-    ma_open=1;ma_sel=-1;ma_msg[0]=0;
-    if(ma_refresh())copytext(ma_msg,"NO DRIVE INFO",sizeof(ma_msg));
-    ma_paint();
-}
-static void ma_click(int mx,int my)
-{
-    int row=ma_row_at(my);(void)mx;
-    /* A drive list has nothing to "select": one click opens the drive. */
-    if(row>=0&&(unsigned)row<ma_count){
-        char path[8],title[13];
-        ma_path(path,(unsigned)row);
-        title[0]=(char)('C'+(int)row);title[1]=':';
-        {unsigned k;for(k=0;k<4u&&ma_info.volume[row].id[k];++k)title[2+k]=ma_info.volume[row].id[k];title[2+k]=0;}
-        fb_open_at(path,title);
-    }
-}
-
 /* ---- right-click context menu + info popup (Windows-style) -------------- */
 static void ctx_arrange(void)
 {
@@ -2226,7 +2230,7 @@ static void icon_activate(int idx)
     if(icons[idx].builtin==1u){(void)gfx(GFX_CONSOLE_SHOW,0,0,0);
         copytext(status,"TERMINAL",sizeof(status));paint();return;}
     if(icons[idx].builtin==2u){tr_open_it();return;}
-    if(icons[idx].builtin==5u){ma_open_it();return;}    /* My Atari: drives */
+    if(icons[idx].builtin==5u){fb_browser_open();return;} /* My Atari: dyski + skroty + pliki */
     if(icons[idx].li>=0)launch_run((unsigned)icons[idx].li);
 }
 
@@ -2705,14 +2709,6 @@ int app_main(void)
                 else if(scan==0x1cu)tr_restore();                                            /* enter */
                 else if(scan==0x53u)tr_delete();                                             /* delete */
                 else{trash_open=0;(void)gfx(GFX_WINDOW,0u,0u,TRW);}                          /* escape hides */
-            }else if(ma_open&&(scan==0x48u||scan==0x50u||scan==0x1cu||scan==0x01u)){
-                if(scan==0x48u){if(ma_sel>0)--ma_sel;else if(ma_count)ma_sel=0;ma_paint();}   /* up */
-                else if(scan==0x50u){if(ma_sel<(int)ma_count-1)++ma_sel;ma_paint();}          /* down */
-                else if(scan==0x1cu&&ma_sel>=0){char p[8],t[13];
-                    ma_path(p,(unsigned)ma_sel);
-                    t[0]=(char)('C'+ma_sel);t[1]=':';t[2]=0;
-                    fb_open_at(p,t);}                                                         /* enter */
-                else{ma_open=0;(void)gfx(GFX_WINDOW,0u,0u,MAW);}                              /* escape */
             }else if(icp_open&&scan==0x01u){icp_open=0;(void)gfx(GFX_WINDOW,0u,0u,ICPW);paint();}
             /* Keyboard launcher.  A double click needs precision AND speed: on a
                coarse grid, or with an awkward pointer, the first click lands
@@ -2751,14 +2747,14 @@ int app_main(void)
             else if(scan==0x3eu)script_menu();
             else if(scan==0x3fu)script_move();
             else if(scan==0x40u)(void)gfx(28,0,0,0);   /* F6: kernel autodrag test */
-            else if(scan==0x41u)fb_open_at("\\","DISK C:");   /* F7: file window (same as DISK C) */
+            else if(scan==0x41u){fb_browser=0u;fb_open_at("\\","DISK C:");}   /* F7: file window */
             /* F8 (0x43): TEST - otworz okno plikow od razu w danym katalogu.
                Testy stronicowania nie moga zalezec od dwukliku w wiersz (okno
                dwukliku ~0,98 s jest na granicy mozliwosci wstrzykiwania myszy
                przez debugger) ani od zgadywania numeru wiersza.  UWAGA: ten
                hook ZASTAPIL wczesniejszy "PTR C:" (parkowanie kursora), ktory
                byl na tym samym klawiszu i jest teraz nieosiagalny. */
-            else if(scan==0x43u)fb_open_at("\\SYSTEM","SYSTEM (test)");
+            else if(scan==0x43u)fb_browser_open();   /* F8: przegladarka "My Atari" */
             /* F9: TEST - przelacz rozmiar ikon przez JADRO (opcode 48), dokladnie
                tak jak robi to SETTINGS.  Pulpit NIE zmienia tu icon_px sam:
                nowy rozmiar musi przyjsc z pollingii (opcode 49), wiec ten hook
@@ -2786,7 +2782,6 @@ int app_main(void)
             mode_query();bg_dirty=1;paint();
             if(fb_open)fb_paint();
             if(trash_open)tr_paint();
-            if(ma_open)ma_paint();
             continue;
         }
         if(m.v[0]==WMOV){
@@ -2808,10 +2803,6 @@ int app_main(void)
                 int resized=(nw&&nh&&(nw!=tr_ww||nh!=tr_wh));
                 tr_wx=nx;tr_wy=ny;
                 if(resized){tr_ww=nw;tr_wh=nh;tr_paint();desktop_save_quiet();}
-            }else if(wh==MAW&&ma_open){
-                int resized=(nw&&nh&&(nw!=ma_ww||nh!=ma_wh));
-                ma_wx=nx;ma_wy=ny;
-                if(resized){ma_ww=nw;ma_wh=nh;ma_paint();}
             }else if(wh==ICPW&&icp_open){
                 int resized=(nw&&nh&&(nw!=icp_ww||nh!=icp_wh));
                 icp_wx=nx;icp_wy=ny;
@@ -2823,7 +2814,6 @@ int app_main(void)
             /* The compositor closed one of our windows (X gadget). */
             if(m.v[1]==FBW)fb_open=0;
             else if(m.v[1]==TRW)trash_open=0;
-            else if(m.v[1]==MAW)ma_open=0;
             else if(m.v[1]==ICPW)icp_open=0;
             continue;
         }
@@ -2898,9 +2888,6 @@ int app_main(void)
             /* TRASH is the newest of the app's windows: test it first. */
             else if(trash_open&&mx>=tr_wx&&mx<tr_wx+(int)tr_ww&&
                     my>=tr_wy+16&&my<tr_wy+(int)tr_wh){tr_click(mx,my);}
-            /* My Atari: the drive list. */
-            else if(ma_open&&mx>=ma_wx&&mx<ma_wx+(int)ma_ww&&
-                    my>=ma_wy+16&&my<ma_wy+(int)ma_wh){ma_click(mx,my);}
             /* Icon picker (ICON CHANGE). */
             else if(icp_open&&mx>=icp_wx&&mx<icp_wx+(int)icp_ww&&
                     my>=icp_wy+16&&my<icp_wy+(int)icp_wh){icp_click(mx,my);}
@@ -2909,8 +2896,9 @@ int app_main(void)
                directory, not just the visible page. */
             else if(fb_open&&mx>=fb_wx&&mx<fb_wx+(int)fb_ww&&
                     my>=fb_wy+16&&my<fb_wy+(int)fb_wh){
-                int srt=fb_sort_at(mx,my);
-                if(srt>=0){
+                int srt=-1;
+                if(fb_browser&&fb_side_click(mx-(int)fb_wx,my-(int)fb_wy-16)){fb_paint();}
+                else if((srt=fb_sort_at(mx,my))>=0){
                     if(fb_sort!=(uint8_t)srt){
                         fb_sort=(uint8_t)srt;
                         fb_sort_all();fb_page=0;fb_page_calc();fb_paint();
