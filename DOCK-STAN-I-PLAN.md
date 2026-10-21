@@ -103,25 +103,29 @@ USUN COMMANDER = 3 (`remove=1`, `save_rc=0`); `DOCK.CFG` po zakończeniu:
 (`LAUNCH.CFG`). To świadome rozdzielenie — pulpit ma własne builtiny
 `*TERMINAL`/`*TRASH`, których nie chcemy nadpisywać.
 
-### 2.5 Uruchomione aplikacje na prawej stronie (krok 4, 2026-10-21)
+### 2.5 Znaczek `[>]` na lewym skrócie (krok 4, 2026-10-21)
+
+Po uwadze użytkownika: naturalne miejsce znacznika „program działa” to **ikona
+skrótu po lewej**, a nie osobny duplikat po prawej. Prawa strona została tylko
+dla aplikacji **bez skrótu** (np. uruchomionych z pulpitu/shellu).
 
 | element | szczegóły |
 |---|---|
-| lista | `dock_run_build()`: okna z `wm.win[]` **bieżącej sesji**; najpierw zminimalizowane (`flags&8`), potem widoczne (`flags&1`), od wierzchu Z; pomija tło pulpitu (`flags&4`), konsolę (pid 0) i pid pulpitu; maks. 5 pozycji |
-| ikona/etykieta | `kernel_user_pid_name(pid)` → nazwa 8.3 → `dock_catalog_icon_name()`/`dock_catalog_label_name()`; TOS async (`TOS_ASYNC_PID`) → `ICON_TOS_PRG` + tytuł okna; nieznane → `ICON_SYSTEM` |
-| znaczek | `dock_badge_draw()`: 7×7 czarna plakietka z białą zębatką 5×5 w prawym górnym rogu ikony. Przy **zwiniętym** pasku ta sama zębatka na hamburgerze — tylko gdy jest **zminimalizowana** aplikacja (`dock_run_hidden`) |
+| lista | `dock_run_build()`: okna z `wm.win[]` **bieżącej sesji**; najpierw zminimalizowane (`flags&8`), potem widoczne (`flags&1`), od wierzchu Z; pomija tło pulpitu (`flags&4`), konsolę (pid 0) i pid pulpitu |
+| dopasowanie | nazwa procesu 8.3 (`kernel_user_pid_name`) → `dock_short_for_name()` porównuje ją z bazą ścieżki skrótu. Trafienie: `dock_short_running[i]=1` i **znaczek na lewym skrócie**, bez duplikatu po prawej. Brak trafienia: pozycja na prawej (maks. 5). TOS async (`TOS_ASYNC_PID`) → pierwszy skrót `.PRG` + `ICON_TOS_PRG` |
+| znaczek | `dock_badge_draw()`: 7×7 czarna plakietka z białą strzałką `>` (5×5) w prawym górnym rogu ikony — czytelnie `[>]`. Rysowany na lewym skrócie działającej aplikacji **i** na prawej ikonie bez skrótu. Przy zwiniętym pasku ta sama plakietka na hamburgerze, gdy **cokolwiek** jest zminimalizowane (`dock_hidden_any`) |
 | klik w ikonę | `kernel_wm_activate_pid(pid)` — zdejmuje minimalizację / podnosi okno i daje fokus; **nie spawnuje** drugiej kopii |
 | lewy skrót | `dock_launch()` najpierw `kernel_user_find_running_app(path,&session)`; gdy program już działa: przełącza sesję (jeśli inna) i `kernel_wm_activate_pid(pid)`. TOS: `kernel_tos_async_owns(TOS_ASYNC_PID)` + `kernel_wm_activate_pid(TOS_ASYNC_PID)` |
-| liczniki | `kdbg_dock_running` (ile pozycji na prawej), `kdbg_dock_restore` (ile przywróceń) |
+| liczniki | `kdbg_dock_left_running` (ile lewych skrótów ma `[>]`), `kdbg_dock_running` (ile pozycji tylko po prawej), `kdbg_dock_restore` (przywrócenia) |
 | test | `display-demo/test-dock-running.py` |
 
-**Zmierzone (PLASMA):** start lewym skrótem → `launch=1`, `rc=0`; minimalizacja
-(hook `kdbg_test_minimize`) → `kdbg_dock_running=1`; klik w prawą ikonę →
-`kdbg_dock_restore=1`; ponowna minimalizacja + klik w **lewy** skrót →
-`launch` nadal 1, `restore=2` (żadnej drugiej kopii); zwinięty pasek →
-`open=0`, `running=1` i zębatka na hamburgerze. Zrzuty:
-`display-demo/dockrun-min.png`, `dockrun-restored.png`,
-`dockrun-restored-by-shortcut.png`, `dockrun-closed.png`.
+**Zmierzone:** SYSINFO (ma lewy skrót) start → minimalizacja → `left_running=1`,
+`right_running=0`; klik w lewy skrót → `launch` nadal 1, `restore=1`. PLASMA
+(bez skrótu) uruchomiona hookiem testowym → minimalizacja → `right_running=1`,
+`left_running=1`; klik w prawą ikonę → `restore=2`. Zwinięty pasek → `open=0`
+i `[>]` na hamburgerze. Zrzuty: `display-demo/dockrun-left-badge.png`,
+`dockrun-left-restored.png`, `dockrun-right-badge.png`,
+`dockrun-right-restored.png`, `dockrun-closed.png`.
 
 ---
 
@@ -197,28 +201,32 @@ zostawała zwinięta ikonka, a `dock_short` w ogóle się nie wczytywał.
   tytuł, czarne napisy, ikony 16 px przy pozycjach, podświetlenie wiersza pod
   myszą. Test: `display-demo/test-dock-menu.py`.
 
-### Krok 4 — uruchomione aplikacje (prawa strona) — **ZROBIONE (2026-10-21)**
+### Krok 4 — `[>]` na skrócie działającej aplikacji — **ZROBIONE (2026-10-21)**
 
-Tak jak zakładał plan, całość w jądrze, bez nowych syscalli:
+Po uwadze użytkownika znacznik „program działa” trafił na **lewy skrót**;
+prawa strona jest tylko dla aplikacji bez skrótu. Całość w jądrze, bez nowych
+syscalli:
 
-- lista z `wm.win[]` (a nie z `process_table[]`): okno ma już pid właściciela
-  (`window_owner_pid`), flagi widoczności/minimalizacji i tytuł; proces daje
-  nazwę 8.3 (`kernel_user_pid_name`, nowy publiczny wrapper w
-  `kernel_exception.c`), a nazwa — ikonę z `dock_catalog[]`.
-- **przywrócenie**: `kernel_wm_activate_pid(pid)` — zdejmuje minimalizację
-  (`window_restore`) albo podnosi okno (`wm_raise`) i ustawia fokus.
-  **Nie ma drugiego spawnu.**
-- **zębatka**: `dock_badge_draw()` — 7×7 czarna plakietka + biała zębatka 5×5
-  w prawym górnym rogu ikony; przy zwiniętym pasku ta sama zębatka na
-  hamburgerze, gdy coś jest zminimalizowane.
-- kolejność: zminimalizowane od wierzchu Z, potem widoczne; maks. 5 slotów,
-  od prawej krawędzi w lewo.
+- lista z `wm.win[]`: okno ma pid właściciela (`window_owner_pid`), flagi
+  widoczności/minimalizacji i tytuł; proces daje nazwę 8.3
+  (`kernel_user_pid_name`, publiczny wrapper w `kernel_exception.c`), a nazwa
+  — ikonę z `dock_catalog[]`.
+- **dopasowanie**: `dock_short_for_name()` porównuje nazwę procesu z bazą
+  ścieżki skrótu. Trafienie → `dock_short_running[i]=1` i `[>]` na lewym
+  skrócie; **bez duplikatu po prawej**. Brak trafienia → pozycja na prawej
+  (maks. 5, zminimalizowane najpierw). TOS async → pierwszy skrót `.PRG`.
+- **przywrócenie**: `kernel_wm_activate_pid(pid)` — `window_restore` /
+  `wm_raise` + fokus. **Nie ma drugiego spawnu.**
+- **znaczek**: `dock_badge_draw()` — 7×7 czarna plakietka + biała strzałka
+  `>`; przy zwiniętym pasku ta sama plakietka na hamburgerze, gdy **cokolwiek**
+  jest zminimalizowane (`dock_hidden_any`).
 - **lewy skrót też nie tworzy kopii**: `dock_launch()` pyta
-  `kernel_user_find_running_app(path,&session)` (publiczny wrapper istniejącego
-  `user_find_running_app`), przełącza sesję gdy trzeba i przywraca okno. Dla
-  `.PRG` sprawdzany jest `kernel_tos_async_owns(TOS_ASYNC_PID)`.
-- hook testowy `kdbg_test_minimize=1` minimalizuje wierzchnie okno — tylko po
-  to, by test nie musiał trafiać w mały gadżet okna.
+  `kernel_user_find_running_app(path,&session)`, przełącza sesję gdy trzeba
+  i przywraca okno. Dla `.PRG` sprawdzany jest
+  `kernel_tos_async_owns(TOS_ASYNC_PID)`.
+- hooki testowe: `kdbg_test_minimize=1` minimalizuje wierzchnie okno,
+  `kdbg_test_spawn=1` uruchamia PLASMA (aplikację bez skrótu) na potrzeby
+  testu prawej strony. W produkcji nikt ich nie ustawia.
 
 ### Krok 5 — usunięcie ikon u góry
 
@@ -280,9 +288,14 @@ Tak jak zakładał plan, całość w jądrze, bez nowych syscalli:
 17. **Prawa lista: filtruj sesję i pid pulpitu.** Bez filtra
     `wm.win[].session` i `kernel_desktop_active_pid()` na pasku pojawiałoby się
     okno plików pulpitu i okna z innych desktopów.
-18. **Hook `kdbg_test_minimize`** (test-only): minimalizuje wierzchnie okno,
-    żeby test nie musiał trafiać w 15×13 gadżet minimalizacji. W produkcji
-    nikt go nie ustawia. Analogicznie `kdbg_test_mouse`.
+18. **Najpierw dopasuj okno do lewego skrótu.** `dock_short_for_name()`
+    porównuje nazwę procesu 8.3 z bazą ścieżki skrótu. Trafienie = `[>]` na
+    lewym skrócie i **zero duplikatu po prawej**; dopiero reszta idzie na
+    prawą. Bez tego użytkownik widzi dwie ikony tej samej aplikacji.
+19. **Hooki testowe** (test-only): `kdbg_test_minimize=1` minimalizuje
+    wierzchnie okno (test nie trafia w 15×13 gadżet), `kdbg_test_spawn=1`
+    uruchamia PLASMA bez skrótu (test prawej strony). W produkcji nikt ich nie
+    ustawia. Analogicznie `kdbg_test_mouse`.
 
 ---
 
@@ -294,13 +307,13 @@ python3 test-wall-custom.py golden          # zrzut startowy == 5c1e5546…
 python3 test-icons-size.py boot48           # ikony 48 px, pomiar
 python3 test-dock-step3.py                  # krok 3: DOCK.CFG/LAUNCH.CFG, ikony, hover, start
 python3 test-dock-menu.py                   # PPM: DODAJ PRE2, USUN COMMANDER, DOCK.CFG
-python3 test-dock-running.py                # krok 4: minimalizacja, zębatka, restore (nie spawn)
+python3 test-dock-running.py                # krok 4: [>] na lewym skrócie, restore (nie spawn)
 # pasek: klik w (20, 580) zwija/rozwija; PPM otwiera menu konfiguracji.
 # Stan czytać z liczników jądra:
 #   kdbg_dock_click, kdbg_dock_open, kdbg_dock_draws,
 #   kdbg_dock_slots, kdbg_dock_launch, kdbg_dock_rc,
 #   kdbg_dock_menu, kdbg_dock_add, kdbg_dock_remove, kdbg_dock_save_rc,
-#   kdbg_dock_running, kdbg_dock_restore
+#   kdbg_dock_left_running, kdbg_dock_running, kdbg_dock_restore
 ```
 
 `test-dock-step3.py` sprawdza też **pamięć jądra**: `dock_short` (etykiety,
@@ -312,11 +325,13 @@ Zrzuty: `dock3-closed/open/tip/launch.png`.
 COMMANDER i po zamknięciu Hatari czyta `\SYSTEM\DOCK.CFG` z obrazu. Zrzuty:
 `dockmenu-main/add/added/removed/empty.png`.
 
-`test-dock-running.py` uruchamia PLASMA, minimalizuje ją hookiem
-`kdbg_test_minimize`, sprawdza ikonę z zębatką (`kdbg_dock_running=1`), klik w
-nią (`kdbg_dock_restore=1`), potem lewy skrót przy zminimalizowanej aplikacji
-(`launch` nadal 1, `restore=2`) i zębatkę na zwiniętym hamburgerze. Zrzuty:
-`dockrun-min/restored/restored-by-shortcut/closed.png`.
+`test-dock-running.py`: SYSINFO ma lewy skrót — po minimalizacji dostaje
+`[>]` (`kdbg_dock_left_running=1`, `kdbg_dock_running=0`), klik w lewy skrót
+przywraca (`launch` nadal 1, `restore=1`). PLASMA nie ma skrótu — hook
+`kdbg_test_spawn` uruchamia ją, po minimalizacji trafia na prawą
+(`kdbg_dock_running=1`), klik w prawą ikonę przywraca (`restore=2`). Na końcu
+`[>]` na zwiniętym hamburgerze. Zrzuty:
+`dockrun-left-badge/left-restored/right-badge/right-restored/closed.png`.
 
 Szybkie wstrzykiwanie myszy (7× szybsze niż stare): `Session.inject(x,y,btn)`
 — jeden zapis do `kdbg_test_mouse` (patrz `10am`); `click_fast/dbl_fast` na
@@ -341,8 +356,8 @@ po każdej zmianie sprawdzić oba joby.
 | `display-demo/stress_atos.py` | harness: `Session`, `inject`, `click_fast`, `rd32`, `screen_text` |
 | `display-demo/test-dock-step3.py` | test kroku 3: otwarcie, `dock_short`, ikony, hover, start z paska |
 | `display-demo/test-dock-menu.py` | test PPM: dodaj/usuń, katalog, zapis `DOCK.CFG` |
-| `display-demo/test-dock-running.py` | test kroku 4: minimalizacja, zębatka, restore z prawej i z lewego skrótu |
-| `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10bb |
+| `display-demo/test-dock-running.py` | test kroku 4: `[>]` na lewym skrócie, prawa tylko dla aplikacji bez skrótu |
+| `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10bc |
 
 ---
 
@@ -353,9 +368,10 @@ po każdej zmianie sprawdzić oba joby.
       klik uruchamia, najechanie pokazuje nazwę (`test-dock-step3.py` zielony),
 - [x] **PPM na pasku: menu „ADD ITEM...”/„REMOVE: ...”/„CLOSE”**,
       zapis do `DOCK.CFG` i natychmiastowe odświeżenie (`test-dock-menu.py` zielony),
-- [x] **prawa strona: ikony uruchomionych aplikacji + mała zębatka**, najechanie
-      pokazuje nazwę, klik przywraca okno (a nie uruchamia kopii); lewy skrót
-      też przywraca, gdy program już działa (`test-dock-running.py` zielony),
+- [x] **`[>]` na lewym skrócie działającej aplikacji** (widocznej lub
+      zminimalizowanej), klik przywraca okno; aplikacje bez skrótu mają `[>]`
+      po prawej; lewy skrót nigdy nie tworzy drugiej kopii
+      (`test-dock-running.py` zielony),
 - [ ] ikony u góry (task/desk) usunięte (krok 5),
 - [x] złoty zrzut stabilny w dwóch kolejnych bootach: **`5c1e5546…`** BAJT W BAJT
       (jasnoszary pasek; zmiana koloru była świadoma),

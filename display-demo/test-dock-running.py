@@ -40,17 +40,16 @@ BUILD = {
     r"\SYSTEM\APP\PLASMA.APP": REAL + "/build/system/PLASMA.APP",
 }
 
-LAUNCH = """; test prawej strony paska
+LAUNCH = """; test znaczkow: SYSINFO ma skrot (lewy), PLASMA tylko jako proces
 COMMANDER=\\SYSTEM\\APP\\AC.APP
 SYSINFO=\\SYSTEM\\APP\\SYSINFO.APP|24
 TASKMGR=\\SYSTEM\\APP\\TASKMGR.APP
-PLASMA=\\SYSTEM\\APP\\PLASMA.APP
 """
 
 CANONICAL = open(DEMO + "/desktop-cfg-wzor.txt").read()
 
 HAMBURGER = (20, 580)
-PLASMA_SLOT = (115, 586)      # lewy slot 3: x=104..127
+SYSINFO_SLOT = (67, 586)       # lewy slot 1: x=56..79
 RIGHT_ICON = (776, 586)       # prawy slot 0 (800 px): x=764..787
 AWAY = (400, 300)
 
@@ -100,65 +99,80 @@ def main():
         print("czekam 70 s na boot...", flush=True)
         time.sleep(70)
 
-        # otworz pasek i uruchom PLASMA lewym skrotem (slot 3)
+        # otworz pasek i uruchom SYSINFO lewym skrotem (slot 1)
         session.click_fast(*HAMBURGER)
         time.sleep(0.8)
-        session.click_fast(*PLASMA_SLOT)
+        session.click_fast(*SYSINFO_SLOT)
         time.sleep(4.0)
         launched = wait_counter(session, "kdbg_dock_launch", 1)
         rc = session.rd32("kdbg_dock_rc")
-        print("start PLASMA: launch=%s rc=%s" % (launched, rc), flush=True)
+        print("start SYSINFO: launch=%s rc=%s" % (launched, rc), flush=True)
         if launched != 1 or rc != 0:
-            print("BLAD: PLASMA nie wystartowala", flush=True)
+            print("BLAD: SYSINFO nie wystartowal", flush=True)
             ok = False
         session.inject(*AWAY, 0)
         time.sleep(0.4)
-        session.shot("dockrun-launched")
 
-        # minimalizacja okna -> prawa strona paska
-        minimize_top(session)
-        running = wait_counter(session, "kdbg_dock_running", 1)
-        print("po minimalizacji: kdbg_dock_running=%s" % running, flush=True)
-        if running != 1:
-            print("BLAD: brak ikony uruchomionej aplikacji na pasku", flush=True)
-            ok = False
-        session.shot("dockrun-min")
-
-        # klik w prawa ikone = przywrocenie
-        session.click_fast(*RIGHT_ICON)
-        time.sleep(1.0)
-        restored = wait_counter(session, "kdbg_dock_restore", 1)
-        print("klik w prawa ikone: kdbg_dock_restore=%s" % restored, flush=True)
-        if restored != 1:
-            print("BLAD: klik w ikone nie przywrocil okna", flush=True)
-            ok = False
-        session.inject(*AWAY, 0)
-        time.sleep(0.4)
-        session.shot("dockrun-restored")
-
-        # znow minimalizuj i kliknij LEWY skrot: ma przywrocic, nie odpalac kopii
+        # minimalizacja SYSINFO: znaczek [>] na LEWYM skrocie, nie po prawej
         minimize_top(session)
         time.sleep(0.5)
-        session.click_fast(*PLASMA_SLOT)
-        time.sleep(1.0)
-        restore2 = wait_counter(session, "kdbg_dock_restore", 2)
-        launch2 = session.rd32("kdbg_dock_launch")
-        print("klik w lewy skrot: launch=%s restore=%s" % (launch2, restore2), flush=True)
-        if restore2 != 2 or launch2 != 1:
-            print("BLAD: lewy skrot uruchomil druga kopie zamiast przywrocic", flush=True)
+        left = wait_counter(session, "kdbg_dock_left_running", 1)
+        right = session.rd32("kdbg_dock_running")
+        print("po minimalizacji SYSINFO: left_running=%s right_running=%s" % (left, right), flush=True)
+        if left != 1 or right != 0:
+            print("BLAD: znaczek nie trafil na lewy skrot", flush=True)
             ok = False
-        session.shot("dockrun-restored-by-shortcut")
+        session.shot("dockrun-left-badge")
 
-        # zwin pasek przy zminimalizowanej aplikacji: zebatka na hamburgerze
+        # klik w LEWY skrot = przywrocenie (bez drugiej kopii)
+        session.click_fast(*SYSINFO_SLOT)
+        time.sleep(1.0)
+        restored = wait_counter(session, "kdbg_dock_restore", 1)
+        launch2 = session.rd32("kdbg_dock_launch")
+        print("klik w lewy skrot: launch=%s restore=%s" % (launch2, restored), flush=True)
+        if restored != 1 or launch2 != 1:
+            print("BLAD: lewy skrot uruchomil kopie zamiast przywrocic", flush=True)
+            ok = False
+        session.inject(*AWAY, 0)
+        time.sleep(0.4)
+        session.shot("dockrun-left-restored")
+
+        # PLASMA bez skrotu na lewo: spawn hookiem, minimalizacja, prawa ikona
+        session.cmd("hatari-debug w l 0x%x 0x00000001" % st.S["kdbg_test_spawn"])
+        time.sleep(3.0)
+        minimize_top(session)
+        time.sleep(0.5)
+        right = wait_counter(session, "kdbg_dock_running", 1)
+        left = session.rd32("kdbg_dock_left_running")
+        print("PLASMA bez skrotu: left_running=%s right_running=%s" % (left, right), flush=True)
+        if right != 1 or left != 1:
+            print("BLAD: aplikacja bez skrotu nie trafila na prawa strone", flush=True)
+            ok = False
+        session.inject(*AWAY, 0)
+        time.sleep(0.4)
+        session.shot("dockrun-right-badge")
+
+        # klik w prawa ikone = przywrocenie PLASMA
+        session.click_fast(*RIGHT_ICON)
+        time.sleep(1.0)
+        restored = wait_counter(session, "kdbg_dock_restore", 2)
+        print("klik w prawa ikone: kdbg_dock_restore=%s" % restored, flush=True)
+        if restored != 2:
+            print("BLAD: prawa ikona nie przywrocila okna", flush=True)
+            ok = False
+        session.shot("dockrun-right-restored")
+
+        # zminimalizuj obie i zwin pasek: [>] na hamburgerze
+        minimize_top(session)
+        time.sleep(0.3)
         minimize_top(session)
         time.sleep(0.5)
         session.click_fast(*HAMBURGER)
         time.sleep(0.8)
         opened = session.rd32("kdbg_dock_open")
-        running = session.rd32("kdbg_dock_running")
-        print("pasek zamkniety: open=%s running=%s" % (opened, running), flush=True)
-        if opened != 0 or running != 1:
-            print("BLAD: zwiniety pasek nie raportuje dzialajacej aplikacji", flush=True)
+        print("pasek zamkniety: open=%s" % opened, flush=True)
+        if opened != 0:
+            print("BLAD: pasek nie zamknal sie", flush=True)
             ok = False
         session.shot("dockrun-closed")
     finally:

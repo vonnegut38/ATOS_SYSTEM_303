@@ -1071,7 +1071,9 @@ static int dock_hover_drawn=-1;     /* slot narysowany w ostatniej kompozycji */
 typedef struct {uint32_t pid;uint8_t win,icon;char label[13];} dock_run_t;
 static dock_run_t dock_run[DOCK_MAX_RUN];
 static unsigned dock_run_count;
-static unsigned dock_run_hidden;   /* ile z nich jest zminimalizowanych */
+static unsigned dock_hidden_any;   /* wszystkie zminimalizowane okna (lewe+prawe) */
+static uint8_t dock_short_running[DOCK_MAX_SHORT];
+static unsigned dock_left_running;
 static uint8_t dock_menu_open,dock_menu_mode,dock_menu_page;
 static uint8_t dock_menu_slot,dock_menu_rows;
 static int dock_menu_hover=-1;
@@ -1083,7 +1085,8 @@ uint32_t kdbg_dock_click,kdbg_dock_open,kdbg_dock_draws;
 uint32_t kdbg_dock_slots,kdbg_dock_launch,kdbg_dock_rc;
 uint32_t kdbg_dock_menu,kdbg_dock_add,kdbg_dock_remove;
 uint32_t kdbg_dock_save_rc,kdbg_dock_menu_draws;
-uint32_t kdbg_dock_restore,kdbg_dock_running;
+uint32_t kdbg_dock_restore,kdbg_dock_running,kdbg_dock_left_running;
+uint32_t kdbg_test_spawn;           /* hook testowy: 1 = uruchom PLASMA poza skrotami */
 uint32_t kdbg_test_minimize;        /* hook testowy: 1 = zminimalizuj wierzchnie okno */
 
 static int dock_height(void){return DOCK_H;}
@@ -1388,53 +1391,83 @@ static void dock_run_rect(unsigned index,wm_rect_t *r)
     r->x=(int16_t)(d.x+d.w-4-(int)(index+1u)*DOCK_SLOT);
     r->y=d.y;r->w=(uint16_t)DOCK_SLOT;r->h=d.h;
 }
+static int dock_short_for_name(const char *name)
+{
+    unsigned i;
+    if(!name||!name[0])return -1;
+    for(i=0;i<dock_short_count;++i){
+        const char *base=dock_short[i].path;unsigned j=0;
+        while(base[j])++j;
+        while(j&&base[j-1]!='\\'&&base[j-1]!='/')--j;
+        if(dock_path_equal(base+j,name))return (int)i;
+    }
+    return -1;
+}
+static int dock_short_for_tos(void)
+{
+    unsigned i;
+    for(i=0;i<dock_short_count;++i)
+        if(dock_path_is_tos(dock_short[i].path))return (int)i;
+    return -1;
+}
 static void dock_run_add(unsigned win)
 {
-    dock_run_t *e;
-    uint32_t pid;char name[13];const char *label;int icon;
-    if(dock_run_count>=DOCK_MAX_RUN)return;
+    uint32_t pid;char name[13];const char *label;int icon,si;uint8_t hidden;
     pid=window_owner_pid(win);
     if(!pid||pid==kernel_desktop_active_pid())return;
     if(wm.win[win].session!=(uint8_t)ksessions_current())return;
-    e=&dock_run[dock_run_count];
-    icon=-1;name[0]=0;
+    hidden=(uint8_t)((wm.win[win].flags&8u)!=0u);
+    if(hidden)++dock_hidden_any;
+    icon=-1;name[0]=0;label=0;si=-1;
     if(pid==(uint32_t)TOS_ASYNC_PID){
         icon=(int)ICON_TOS_PRG;
-        dock_copy(e->label,sizeof(e->label),wm.win[win].title[0]?wm.win[win].title:"TOS");
+        label=wm.win[win].title[0]?wm.win[win].title:"TOS";
+        si=dock_short_for_tos();
     }else{
         (void)kernel_user_pid_name(pid,name);
         icon=dock_catalog_icon_name(name);
         label=dock_catalog_label_name(name);
-        if(label)dock_copy(e->label,sizeof(e->label),label);
-        else if(name[0])dock_label_from_name(e->label,sizeof(e->label),name);
-        else dock_copy(e->label,sizeof(e->label),wm.win[win].title[0]?wm.win[win].title:"APP");
+        si=dock_short_for_name(name);
     }
-    if(icon<0)icon=(int)ICON_SYSTEM;
-    e->pid=pid;e->win=(uint8_t)win;e->icon=(uint8_t)icon;
-    if(wm.win[win].flags&8u)++dock_run_hidden;
-    ++dock_run_count;
+    if(si>=0){
+        /* Aplikacja ma skrot po lewej: znaczek [>] na TYM skrocie, bez
+           duplikatu po prawej. */
+        if(!dock_short_running[si]){dock_short_running[si]=1u;++dock_left_running;}
+        return;
+    }
+    if(dock_run_count>=DOCK_MAX_RUN)return;
+    {dock_run_t *e=&dock_run[dock_run_count];
+     if(icon<0)icon=(int)ICON_SYSTEM;
+     if(label)dock_copy(e->label,sizeof(e->label),label);
+     else if(name[0])dock_label_from_name(e->label,sizeof(e->label),name);
+     else dock_copy(e->label,sizeof(e->label),wm.win[win].title[0]?wm.win[win].title:"APP");
+     e->pid=pid;e->win=(uint8_t)win;e->icon=(uint8_t)icon;
+     ++dock_run_count;}
 }
-/* Lista prawej strony: najpierw zminimalizowane (ukryte), potem widoczne,
-   zawsze od wierzchu Z.  Jedna pozycja na okno; max 5. */
+/* Prawa strona: tylko aplikacje BEZ skrotu po lewej (zminimalizowane najpierw,
+   potem widoczne).  Skroty z lewej dostaja znaczek [>] i nie sa duplikowane. */
 static void dock_run_build(void)
 {
     unsigned i;
-    dock_run_count=0u;dock_run_hidden=0u;
+    dock_run_count=0u;dock_hidden_any=0u;dock_left_running=0u;
+    for(i=0;i<dock_short_count;++i)dock_short_running[i]=0u;
     for(i=wm.count;i--;)
         if((wm.win[i].flags&8u)&&!(wm.win[i].flags&4u))dock_run_add(i);
     for(i=wm.count;i--;)
         if((wm.win[i].flags&1u)&&!(wm.win[i].flags&8u)&&!(wm.win[i].flags&4u))dock_run_add(i);
     kdbg_dock_running=(uint32_t)dock_run_count;
+    kdbg_dock_left_running=(uint32_t)dock_left_running;
 }
 /* Mala zebatka w prawym gornym rogu ikony - "program dziala". */
 static void dock_badge_draw(wm_fb_t *d,int16_t x,int16_t y)
 {
-    static const uint8_t gear[5]={0x15,0x1F,0x0E,0x1F,0x15};
+    /* [>] - mala plakietka "program dziala": czarna ramka + biala strzalka. */
+    static const uint8_t arrow[5]={0x04,0x02,0x1F,0x02,0x04};
     wm_rect_t r;unsigned row,col;
     r=(wm_rect_t){(int16_t)(x+DOCK_ICON-7),y,7,7};
     wm_fill_rect(d,&r,WM_INK);
     for(row=0;row<5u;++row)for(col=0;col<5u;++col)
-        if(gear[row]&(uint8_t)(0x10u>>col)){
+        if(arrow[row]&(uint8_t)(0x10u>>col)){
             r=(wm_rect_t){(int16_t)(x+DOCK_ICON-6+(int16_t)col),(int16_t)(y+1+(int16_t)row),1,1};
             wm_fill_rect(d,&r,WM_PAPER);
         }
@@ -1780,18 +1813,20 @@ static void dock_draw(void)
             wm_rect_t s;dock_slot_rect(i,&s);
             if((int)i==hover&&wm_bpp==8u)wm_fill_rect(&d,&s,NC_BRIGHT);
             dock_icon_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4),dock_short[i].icon);
+            /* [>] na skrocie programu, ktory juz dziala (widoczny lub
+               zminimalizowany) - klik przywroci okno, nie uruchomi kopii. */
+            if(dock_short_running[i])dock_badge_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4));
         }
-        /* Prawa strona: uruchomione aplikacje.  Ikona + mala zebatka =
-           "program dziala" (takze gdy okno jest zminimalizowane). */
+        /* Prawa strona: aplikacje BEZ skrotu po lewej.  [>] = program dziala. */
         for(i=0;i<dock_run_count;++i){
             wm_rect_t s;dock_run_rect(i,&s);
             if(hover==100+(int)i&&wm_bpp==8u)wm_fill_rect(&d,&s,NC_BRIGHT);
             dock_icon_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4),dock_run[i].icon);
             dock_badge_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4));
         }
-    }else if(dock_run_hidden){
-        /* Zwiniety pasek: mala zebatka na hamburgerze, gdy jakas aplikacja jest
-           UKRYTA (zminimalizowana) - np. MODPLAY zwiniety do paska. */
+    }else if(dock_hidden_any){
+        /* Zwiniety pasek: [>] na hamburgerze, gdy jakas aplikacja jest UKRYTA
+           (zminimalizowana) - np. MODPLAY zwiniety do paska. */
         dock_badge_draw(&d,(int16_t)(r.x+8),(int16_t)r.y);
     }
     kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
@@ -2323,6 +2358,12 @@ void kernel_wm_frame_tick(uint32_t now)
             if((wm.win[mi].flags&1u)&&!(wm.win[mi].flags&4u)){window_minimize(mi);break;}
         }
         kdbg_test_minimize=0u;
+    }
+    /* Hook testowy: uruchom PLASMA poza skrotami paska (test prawej strony). */
+    if(kdbg_test_spawn){
+        uint32_t tp=0u;
+        (void)kernel_spawn_user_async("\\SYSTEM\\APP\\PLASMA.APP","","\\",&tp);
+        kdbg_test_spawn=0u;
     }
     /* TOS/desktop mode: no text console at all. The desktop is graphics only
        (background + application windows); the shell lives in the console

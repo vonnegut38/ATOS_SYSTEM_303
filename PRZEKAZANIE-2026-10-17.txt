@@ -1723,3 +1723,30 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    check-video zielone.
    NASTEPNY KROK: (5) usuniecie ikon task/desk u gory (task_draw/desk_draw),
    gdy pasek przejmie ich role.
+
+10bc. DOCK - ZNACZEK [>] NA LEWYM SKROCIE (21.10, ZROBIONE; poprawia 10bb):
+   Uwaga uzytkownika: zamiast osobnej ikony po prawej lepiej dac maly znaczek
+   [>] na ikonie skrotu po lewej.  Wdrozone:
+     - dock_short_running[] + dock_short_for_name(): okno dopasowywane do
+       skrotu po nazwie procesu 8.3; trafienie = [>] na LEWYM skrocie i BRAK
+       duplikatu po prawej,
+     - prawa strona tylko dla aplikacji BEZ skrotu (np. uruchomionych z
+       pulpitu, TOS) - max 5; dock_badge_draw() rysuje teraz 7x7 czarna
+       plakietke z biala strzalka ">" (zamiast zebatki),
+     - zwiniety pasek: [>] na hamburgerze, gdy COKOLWIEK jest zminimalizowane
+       (dock_hidden_any, niezaleznie od lewej/prawej),
+     - klik w lewy skrot / prawa ikone: kernel_wm_activate_pid(); zero
+       drugiego spawnu,
+     - hooki testowe: kdbg_test_minimize (minimalizacja), kdbg_test_spawn
+       (PLASMA bez skrotu, do testu prawej strony).
+   LICZNIKI: kdbg_dock_left_running, kdbg_dock_running (tylko prawa),
+   kdbg_dock_restore.
+   ZMIERZONE (test-dock-running.py, PASS): SYSINFO (lewy skrot) ->
+   minimalizacja: left_running=1, right_running=0; klik w lewy skrot:
+   launch=1 (bez kopii), restore=1.  PLASMA bez skrotu (hook kdbg_test_spawn)
+   -> minimalizacja: left_running=1, right_running=1; klik w prawa ikone:
+   restore=2.  Zwiniety pasek: open=0 i [>] na hamburgerze.
+   ZRZUTY: display-demo/dockrun-left-badge.png, dockrun-left-restored.png,
+   dockrun-right-badge.png, dockrun-right-restored.png, dockrun-closed.png.
+   KERNEL.SYS: 232754 B (TOS=1), 179196 B (TOS=0); TOS=1/TOS=0 buduja sie, check-graphics i
+   check-video zielone; step3/menu/golden do potwierdzenia po regenracji.
