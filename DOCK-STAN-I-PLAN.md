@@ -43,7 +43,7 @@ rozmiaru głównego. Wywołane **raz**, w gałęzi sukcesu ładowania ikon w
 |---|---|
 | stałe/stan | `#define DOCK_H 24`, `static uint8_t dock_open`; liczniki `kdbg_dock_click`, `kdbg_dock_open`, `kdbg_dock_draws` |
 | geometria | `dock_geometry()`: `y = screen_h - 26`, `x = 8`; zwinięty `w = 24`, rozwinięty `w = screen_w - 16` |
-| rysowanie | `dock_draw()`: tło **`DOCK_BG` = indeks 15 palety (`#AAAAAA`, jasny szary)** w 8bpp / `WM_PAPER` (mono), „hamburger" (3 kreski, czarne na szarym); od kroku 3 po lewej skróty, po prawej 3 zaślepki (uruchomione aplikacje — krok 4) |
+| rysowanie | `dock_draw()`: tło **`DOCK_BG` = indeks 15 palety (`#AAAAAA`, jasny szary)** w 8bpp / `WM_PAPER` (mono), „hamburger" (3 kreski, czarne na szarym); po lewej skróty (krok 3), po prawej ikony uruchomionych aplikacji z zębatką (krok 4) |
 | przełączanie | `dock_press()`/`dock_release()`: press zapamiętuje slot, akcja przy **puszczeniu** w tym samym slocie |
 | kolejność kompozycji | **na samym końcu** `kernel_wm_frame_tick()` — po oknach, dekoracjach i menu, przed kursorem → pasek jest NAD nimi; rysowany **co klatkę** (pulpit przemalowuje tło i zmazywał pasek) |
 
