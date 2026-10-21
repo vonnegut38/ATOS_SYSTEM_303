@@ -1126,7 +1126,7 @@ static int dock_path_equal(const char *a,const char *b)
 /* Katalog programow i gier: JEDNO miejsce, ktore daje kazdemu programowi
    wlasna, sensowna ikone (wczesniej kazdy .APP dostawal ten sam ICON_SYSTEM
    i pasek wygladal jak rząd jednakowych zebow).  Ten sam katalog jest zrodlem
-   listy "DODAJ POZYCJE..." w menu kontekstowym paska. */
+   listy "ADD ITEM..." w menu kontekstowym paska. */
 typedef struct {const char *label;const char *path;uint8_t icon;} dock_catalog_t;
 static const dock_catalog_t dock_catalog[]={
     {"COMMANDER","\\SYSTEM\\APP\\AC.APP",(uint8_t)ICON_NC},
@@ -1407,8 +1407,8 @@ static void dock_icon_draw(wm_fb_t *d,int16_t x,int16_t y,uint8_t icon)
      r=(wm_rect_t){(int16_t)(x+2),(int16_t)(y+2),DOCK_ICON-4,3};wm_fill_rect(d,&r,WM_INK);}
 }
 /* --- Menu kontekstowe paska (PPM) ----------------------------------------
-   PPM na pasku otwiera popup: dla slotu "USUN: <nazwa>", zawsze "DODAJ
-   POZYCJE..." (katalog programow/gier) i "ZAMKNIJ".  Pozycje dodane/usuniete
+   PPM na pasku otwiera popup: dla slotu "REMOVE: <name>", zawsze "ADD
+   ITEM..." (katalog programow/gier) i "CLOSE".  Pozycje dodane/usuniete
    laduja w \SYSTEM\DOCK.CFG, wiec LAUNCH.CFG pulpitu zostaje nietkniety. */
 static int dock_short_has_path(const char *path)
 {
@@ -1439,17 +1439,17 @@ static void dock_menu_build_main(void)
     dock_menu_rows=0u;
     if(dock_menu_slot<dock_short_count){
         char text[24];unsigned i=0;
-        const char *prefix="USUN: ";
+        const char *prefix="REMOVE: ";
         while(prefix[i]&&i+1u<sizeof(text)){text[i]=prefix[i];++i;}
         dock_copy(text+i,sizeof(text)-i,dock_short[dock_menu_slot].label);
         dock_menu_row(dock_menu_rows++,DOCK_MENU_REMOVE,dock_menu_slot,
                       dock_short[dock_menu_slot].icon,text);
     }
     if(dock_short_count<DOCK_MAX_SHORT)
-        dock_menu_row(dock_menu_rows++,DOCK_MENU_ADD,0u,0xFFu,"DODAJ POZYCJE...");
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_ADD,0u,0xFFu,"ADD ITEM...");
     else
-        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"PASEK PELNY (8 POZ.)");
-    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"ZAMKNIJ");
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"DOCK FULL (8 ITEMS)");
+    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"CLOSE");
 }
 static void dock_menu_build_add(void)
 {
@@ -1462,7 +1462,7 @@ static void dock_menu_build_add(void)
     page=dock_menu_page;
     dock_menu_rows=0u;
     if(!n){
-        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"BRAK NOWYCH POZYCJI");
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"NO NEW ITEMS");
     }else{
         start=page*DOCK_MENU_PAGE;
         for(i=start;i<n&&i<start+DOCK_MENU_PAGE;++i){
@@ -1472,10 +1472,10 @@ static void dock_menu_build_add(void)
         }
     }
     if(pages>1u){
-        if(page+1u<pages)dock_menu_row(dock_menu_rows++,DOCK_MENU_NEXT,0u,0xFFu,"DALEJ >");
-        if(page>0u)dock_menu_row(dock_menu_rows++,DOCK_MENU_PREV,0u,0xFFu,"< WSTECZ");
+        if(page+1u<pages)dock_menu_row(dock_menu_rows++,DOCK_MENU_NEXT,0u,0xFFu,"MORE >");
+        if(page>0u)dock_menu_row(dock_menu_rows++,DOCK_MENU_PREV,0u,0xFFu,"< BACK");
     }
-    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"ANULUJ");
+    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"CANCEL");
 }
 static void dock_menu_build(void)
 {
@@ -1601,7 +1601,7 @@ static void dock_menu_paint(void)
     title=box;title.h=DOCK_MENU_TITLE;
     wm_fill_rect(&d,&title,(wm_bpp==8u)?NC_BLUE:WM_INK);
     kgfx_text((int32_t)title.x+4,(int32_t)title.y,
-              dock_menu_mode?"DODAJ POZYCJE":"PASEK - KONFIGURACJA",
+              dock_menu_mode?"ADD ITEM":"DOCK - SETTINGS",
               WM_PAPER,(wm_bpp==8u)?NC_BLUE:WM_INK,0);
     top=(int32_t)title.y+DOCK_MENU_TITLE;
     for(i=0;i<dock_menu_rows;++i){

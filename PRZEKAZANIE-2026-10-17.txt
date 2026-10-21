@@ -1647,13 +1647,13 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
      PLASMA=ICON_OBRAZ, ARKANOID=ICON_ARKANOID, FLASHBACK=ICON_PLATFORMOWE,
      SYSTOS=ICON_TOS_PRG, MODPLAY=ICON_MUZYKA, PRE2=ICON_GRY,
      SETTINGS, GFXBENCH, COMMAND, NOTE, MEMTEST, DIRTEST, FILETEST...
-   Ten sam katalog jest zrodlem listy "DODAJ POZYCJE...".  Nieznane sciezki:
+   Ten sam katalog jest zrodlem listy "ADD ITEM...".  Nieznane sciezki:
    fallback wg rozszerzenia; opcjonalne |NN nadal nadpisuje ikone.
    MENU PPM:
-     - PPM na slocie: "USUN: <nazwa>", "DODAJ POZYCJE...", "ZAMKNIJ";
-       PPM na pustym pasku: "DODAJ POZYCJE...", "ZAMKNIJ" (bez USUN),
+     - PPM na slocie: "REMOVE: <name>", "ADD ITEM...", "CLOSE";
+       PPM na pustym pasku: "ADD ITEM...", "CLOSE" (bez REMOVE),
      - lista dodawania: katalog bez pozycji juz obecnych, 7 na strone,
-       "DALEJ >" / "< WSTECZ" / "ANULUJ", ikony 16 px przy pozycjach,
+       "MORE >" / "< BACK" / "CANCEL", ikony 16 px przy pozycjach,
      - zapis do \SYSTEM\DOCK.CFG (WLASNY plik paska; LAUNCH.CFG pulpitu
        zostaje nietkniety, wiec builtiny *TERMINAL/*TRASH sa bezpieczne),
        po zapisie kblock_cache_clear() + natychmiastowy reload paska,
@@ -1664,6 +1664,9 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    menu paska otwieralo sie menu kontekstowe pulpitu.  Przy otwartym menu
    kernel_wm_dock_at() zwraca 1 dla KAZDEGO punktu (modalne), a klik poza menu
    tylko je zamyka - nie klika okna pod spodem.
+   UI MENU: po angielsku (DOCK - SETTINGS / REMOVE / ADD ITEM / CLOSE /
+   MORE / BACK / CANCEL / NO NEW ITEMS / DOCK FULL) - spojnie z reszta
+   systemu; lokalizacja (PL itd.) pozniej, bez warstwy tlumaczen na razie.
    LICZNIKI: kdbg_dock_menu, kdbg_dock_add, kdbg_dock_remove,
    kdbg_dock_save_rc, kdbg_dock_menu_draws.
    ZMIERZONE (test-dock-menu.py, PASS): start 3 pozycje (ikony 50/24/40) ->
@@ -1671,7 +1674,7 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    PPM -> USUN COMMANDER: slots=3, remove=1, save_rc=0; DOCK.CFG po zamknieciu
    emulatora: SYSINFO|24, TASKMGR|40, PRE2|22 (bez COMMANDER).  test-dock-step3.py
    nadal PASS (ikony 50/24/40).  Zrzuty: dockmenu-main/add/added/removed.png.
-   KERNEL.SYS: 230622 B (TOS=1), ~176 KB (TOS=0); TOS=1/TOS=0 buduja sie,
+   KERNEL.SYS: 230586 B (TOS=1), 177096 B (TOS=0); TOS=1/TOS=0 buduja sie,
    check-graphics i check-video zielone.
    PLIKI: system/kernel_wm.c (dock_catalog, dock_menu_*, dock_shortcuts_save/
    reload), system/kernel_exception.c (dock_wm_capture), include/kernel_wm.h

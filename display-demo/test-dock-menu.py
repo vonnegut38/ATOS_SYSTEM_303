@@ -3,11 +3,11 @@
 
 Na kopii obrazu testowego sprawdza:
 
-  1. PPM na slocie otwiera menu "USUN: <nazwa> / DODAJ POZYCJE... / ZAMKNIJ"
+  1. PPM na slocie otwiera menu "REMOVE: <name> / ADD ITEM... / CLOSE"
      rysowane przez WM (a nie menu kontekstowe pulpitu pod spodem),
-  2. "DODAJ POZYCJE..." pokazuje katalog programow/gier; wybor PRE2 dodaje
+  2. "ADD ITEM..." pokazuje katalog programow/gier; wybor PRE2 dodaje
      pozycje, zapisuje \\SYSTEM\\DOCK.CFG i natychmiast odswieza pasek,
-  3. "USUN: COMMANDER" usuwa pozycje i zapisuje plik,
+  3. "REMOVE: COMMANDER" usuwa pozycje i zapisuje plik,
   4. po restarcie (sprawdzane zawartoscia DOCK.CFG) lista jest ta sama,
   5. kazdy program ma wlasna ikone z katalogu (COMMANDER=NC, TASKMGR=sliders,
      PRE2=joystick - nie jeden wspolny ząb).
@@ -140,7 +140,7 @@ def main():
             print("BLAD: PPM nie otworzyl menu", flush=True)
             ok = False
 
-        # 3. DODAJ POZYCJE... -> katalog
+        # 3. ADD ITEM... -> katalog
         session.click_fast(*ROW_ADD)
         time.sleep(0.6)
         session.shot("dockmenu-add")
@@ -172,7 +172,7 @@ def main():
         slots = wait_counter(session, "kdbg_dock_slots", 3)
         removed = session.rd32("kdbg_dock_remove")
         save_rc = session.rd32("kdbg_dock_save_rc")
-        print("po USUN: slots=%s remove=%s save_rc=%s" % (slots, removed, save_rc), flush=True)
+        print("po REMOVE: slots=%s remove=%s save_rc=%s" % (slots, removed, save_rc), flush=True)
         if slots != 3 or removed != 1 or save_rc != 0:
             print("BLAD: usuniecie COMMANDER nie zadzialalo", flush=True)
             ok = False
@@ -184,7 +184,7 @@ def main():
                 ok = False
         session.shot("dockmenu-removed")
 
-        # 6. PPM w puste miejsce: menu bez USUN, tylko DODAJ/ZAMKNIJ
+        # 6. PPM w puste miejsce: menu bez REMOVE, tylko ADD/CLOSE
         right_click(session, *EMPTY)
         session.shot("dockmenu-empty")
         session.click_fast(*ROW_CLOSE)

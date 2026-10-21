@@ -79,10 +79,14 @@ dopiero po otwarciu, więc boot jest stabilny).
 
 ### 2.4 Menu kontekstowe paska (PPM, 2026-10-21)
 
+> UI paska jest **po angielsku** (spójnie z resztą systemu: FILE, SETTINGS,
+> RUN...). Lokalizacja (PL i inne języki) przyjdzie później — na razie nie
+> dodajemy warstwy tłumaczeń do menu.
+
 | element | szczegóły |
 |---|---|
-| otwarcie | **prawy przycisk** na pasku (zwiniętym lub otwartym) → popup nad paskiem; PPM na slocie daje dodatkowo „USUN: &lt;nazwa&gt;” |
-| pozycje | „USUN: &lt;nazwa&gt;” (tylko slot), „DODAJ POZYCJE...” (katalog), „ZAMKNIJ”; w liście dodawania: przewijanie „DALEJ &gt;”/„&lt; WSTECZ” i „ANULUJ” |
+| otwarcie | **prawy przycisk** na pasku (zwiniętym lub otwartym) → popup nad paskiem; PPM na slocie daje dodatkowo „REMOVE: &lt;name&gt;” |
+| pozycje | „REMOVE: &lt;name&gt;” (tylko slot), „ADD ITEM...” (katalog), „CLOSE”; w liście dodawania: przewijanie „MORE &gt;”/„&lt; BACK” i „CANCEL” |
 | katalog | `dock_catalog[]` — 16 programów/gier; lista pokazuje tylko nieobecne na pasku, z ikonami |
 | zapis | `\SYSTEM\DOCK.CFG` (własny plik paska; **`LAUNCH.CFG` pulpitu zostaje nietknięty**), po zapisie `kblock_cache_clear()` i natychmiastowy reload — pasek zmienia się od razu |
 | modalność | przy otwartym menu `kernel_wm_dock_at()` zwraca 1 dla **każdego** punktu; router (`kernel_exception.c`, `dock_wm_capture`) zjada zdarzenie, więc klik poza menu tylko je zamyka i nie klika okna pod spodem |
@@ -132,7 +136,7 @@ Tak jak zalecał plan; poniżej stan faktyczny:
 - Ikona: **katalog `dock_catalog[]`** (ścieżka→ikona) daje każdemu programowi
   i grze własną ikonę; dla nieznanych ścieżek fallback wg rozszerzenia.
   **`|NN`** na końcu wartości nadpisuje ikonę numerem z `ICONS.DAT`, np.
-  `SYSINFO=…\SYSINFO.APP|24`. Ten sam katalog zasila listę „DODAJ POZYCJE...”.
+  `SYSINFO=…\SYSINFO.APP|24`. Ten sam katalog zasila listę „ADD ITEM...”.
 - Klik: press zapamiętuje slot, **release w tym samym slocie** uruchamia.
   `.APP` → `kernel_spawn_user_async()`; `.PRG/.TOS/.TTP/.GTP` →
   `kernel_tos_start_async()` (wersja async; `kernel_tos_run_program()`
@@ -159,13 +163,13 @@ zostawała zwinięta ikonka, a `dock_short` w ogóle się nie wczytywał.
 ### Krok 3b — menu kontekstowe paska (PPM) — **ZROBIONE (2026-10-21)**
 
 - PPM na pasku: `dock_right_click()` → `dock_menu_open_at()`. Na slocie menu ma
-  „USUN: &lt;nazwa&gt;”, zawsze „DODAJ POZYCJE...” (katalog) i „ZAMKNIJ”.
+  „REMOVE: &lt;name&gt;”, zawsze „ADD ITEM...” (katalog) i „CLOSE”.
 - PPM jest **modalne**: `kernel_wm_dock_at()` zwraca 1 dla każdego punktu, gdy
   menu jest otwarte, a router w `system/kernel_exception.c`
   (`dock_wm_capture`) zjada zdarzenie — menu pulpitu pod spodem się nie otwiera,
   a klik poza menu tylko je zamyka.
-- „DODAJ POZYCJE...” listuje katalog bez pozycji już obecnych, 7 na stronę
-  (`DALEJ >` / `< WSTECZ` / `ANULUJ`). Dodanie/Usunięcie zapisuje
+- „ADD ITEM...” listuje katalog bez pozycji już obecnych, 7 na stronę
+  (`MORE >` / `< BACK` / `CANCEL`). Dodanie/Usunięcie zapisuje
   **`\SYSTEM\DOCK.CFG`** i natychmiast przeładowuje pasek
   (`dock_shortcuts_save/reload`). `LAUNCH.CFG` pulpitu zostaje nietknięty.
 - Po zapisie `kblock_cache_clear()` — bez tego następny odczyt widzi stary plik
@@ -300,7 +304,7 @@ po każdej zmianie sprawdzić oba joby.
 - [x] pasek zwinięty = ikona po lewej; klik rozwija w prawo i zwija z powrotem,
 - [x] lewa strona: ≥3 skróty z `DOCK.CFG`/`LAUNCH.CFG`, **unikalne ikony 16 px**,
       klik uruchamia, najechanie pokazuje nazwę (`test-dock-step3.py` zielony),
-- [x] **PPM na pasku: menu „DODAJ POZYCJE...”/„USUN: ...”/„ZAMKNIJ”**,
+- [x] **PPM na pasku: menu „ADD ITEM...”/„REMOVE: ...”/„CLOSE”**,
       zapis do `DOCK.CFG` i natychmiastowe odświeżenie (`test-dock-menu.py` zielony),
 - [ ] prawa strona: ikony uruchomionych aplikacji + mała zębatka, najechanie
       pokazuje nazwę, klik przywraca okno na pierwszy plan (krok 4),
