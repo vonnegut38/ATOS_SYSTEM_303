@@ -27,7 +27,9 @@ FIFO = "/tmp/wall.fifo"
 # przy starcie nie zmienial stanu i nie rozjezdzal zrzutu.
 # 21.10: tlo paska zmienione na jasnoszare (indeks 15 palety) na prosbe
 # uzytkownika - swiadoma zmiana UI, nowy wzorzec 5c1e5546...
-REF = "5c1e5546f36edd91147a84a4c943193f2ef294f669705c3d64a0e4d0443a3e08"
+# 21.10 (krok 5): usuniete ikony task/desk z gornej belki - kolejna swiadoma
+# zmiana UI; nowy wzorzec 15424d43...
+REF = "15424d438fbb7cb55e8ccab85469a07d27ea279f89373a17ba47008d5f1c325f"
 
 BUILD = {
     r"\SYSTEM\KERNEL.SYS": REAL + "/build/system/KERNEL.SYS",

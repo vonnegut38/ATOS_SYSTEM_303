@@ -701,8 +701,6 @@ void kernel_wm_set_title(uint32_t pid,uint16_t handle,const char *title)
         task_draw();     /* refresh only the top-bar task strip, not the screen */
         return;}}
 }
-static unsigned task_minimized_count(void)
-{unsigned i,n=0;for(i=0;i<wm.count;++i)if((wm.win[i].flags&8u)&&wm.win[i].session==ksessions_current())++n;return n;}
 static void task_icon_rect(wm_rect_t *r)
 {r->x=(int16_t)(wm.screen_w-66-TASK_ICON_W-2);r->y=1;r->w=TASK_ICON_W;r->h=TASK_ICON_H;}
 static void task_list_geometry(void)
@@ -941,22 +939,6 @@ static void desk_icon_rect(wm_rect_t *r)
     r->x=(int16_t)(wm.screen_w-66-TASK_ICON_W-2-4-(int)r->w);
     r->y=1;
 }
-/* Two overlapping monitors.  The front screen stays paper so the glyph reads on
-   both the light CLASSIC bar and the dark STEEL one. */
-static void desk_glyph(wm_fb_t *d,int16_t x,int16_t y)
-{
-    wm_rect_t r;
-    /* Back monitor, upper right. */
-    r.x=(int16_t)(x+9);r.y=y;r.w=13;r.h=8;wm_fill_rect(d,&r,WM_INK);
-    r.x=(int16_t)(x+10);r.y=(int16_t)(y+1);r.w=11;r.h=6;wm_fill_rect(d,&r,WM_PAPER);
-    r.x=(int16_t)(x+13);r.y=(int16_t)(y+8);r.w=5;r.h=1;wm_fill_rect(d,&r,WM_INK);
-    /* Front monitor, lower left, overlapping.  The dark strip near its bottom
-       reads as a task bar, which is what makes the pair look like desktops. */
-    r.x=x;r.y=(int16_t)(y+4);r.w=14;r.h=10;wm_fill_rect(d,&r,WM_INK);
-    r.x=(int16_t)(x+1);r.y=(int16_t)(y+5);r.w=12;r.h=8;wm_fill_rect(d,&r,WM_PAPER);
-    r.x=(int16_t)(x+1);r.y=(int16_t)(y+10);r.w=12;r.h=2;wm_fill_rect(d,&r,WM_INK);
-    r.x=(int16_t)(x+4);r.y=(int16_t)(y+14);r.w=6;r.h=1;wm_fill_rect(d,&r,WM_INK);
-}
 /* The bar and its drop-downs live in the framebuffer, outside the window-chrome
    clip deco_pixel enforces, so use the kernel text writer the task list uses. */
 /* opaque=1 paints the glyph background as well; the desktop NUMBER must be see
@@ -973,21 +955,6 @@ static void desk_list_geometry(void)
     desk_list_rect.h=(uint16_t)(desk_row_count*DESK_ROW_H+2u);
     desk_list_rect.x=(int16_t)(wm.screen_w-DESK_LIST_W-2);
     desk_list_rect.y=(int16_t)(DESK_ICON_H+4);
-}
-/* Repaint the icon (and its number) in the top bar. */
-static void desk_draw(void)
-{
-    wm_fb_t d;wm_rect_t r;unsigned n=desk_count(),cur=ksessions_current();
-    if(!wm_framebuffer)return;
-    d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
-    d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
-    desk_icon_rect(&r);
-    desk_glyph(&d,r.x,r.y);
-    if(n>1u){
-        char num[2];num[0]=(char)('1'+cur);num[1]=0;
-        desk_text((int16_t)(r.x+DESK_ICON_W+1),0,num,WM_INK,WM_PAPER,0);   /* transparent */
-    }
-    kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
 }
 /* Consume a click on the icon or the open list.  1 = handled. */
 static int desk_click(int16_t mx,int16_t my)
@@ -1893,17 +1860,9 @@ static void task_draw(void)
     if(!wm_framebuffer)return;
     task_build_rows();
     d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
-    task_icon_rect(&r);
-    /* Small downward triangle, with an inset border while open. */
-    wm_fill_rect(&d,&r,WM_PAPER);
-    for(k=0;k<5u;++k){t=(wm_rect_t){(int16_t)(r.x+3+k),(int16_t)(r.y+4+k),(uint16_t)(10-2*k),1};
-        wm_fill_rect(&d,&t,WM_INK);}
-    if(task_list_open||task_minimized_count()){
-        t=(wm_rect_t){r.x,(int16_t)(r.y+r.h-1),r.w,1};wm_fill_rect(&d,&t,WM_INK);}
-    kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
-    /* Desktop switcher: the two-monitor glyph, with the desktop number once
-       there is more than one. */
-    desk_draw();
+    /* Gorna belka nie rysuje juz ikon task/desk - pasek na dole przejmuje ich
+       role.  Zostaje tylko maszyneria dropdownow (hit-test + listy), na wypadek
+       gdy ktos w przyszlosci podepnie je pod inny skrot/menu. */
 
     if(desk_list_open){
         /* The desktop drop-down lives in the framebuffer just like the task

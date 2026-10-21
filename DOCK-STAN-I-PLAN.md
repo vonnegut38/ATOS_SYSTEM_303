@@ -127,19 +127,32 @@ i `[>]` na hamburgerze. Zrzuty: `display-demo/dockrun-left-badge.png`,
 `dockrun-left-restored.png`, `dockrun-right-badge.png`,
 `dockrun-right-restored.png`, `dockrun-closed.png`.
 
+### 2.6 Górna belka bez ikon task/desk (krok 5, 2026-10-21)
+
+- `task_draw()` **nie rysuje już** trójkąta listy okien ani podkreślenia;
+  `desk_draw()` i `desk_glyph()` zostały **usunięte**.
+- Zostaje **maszyneria dropdownów** (`task_click`, `desk_click`, rysowanie list
+  w `task_draw`) wraz z hit-testem — na wypadek podpięcia pod inny skrót/menu.
+  W praktyce obszar w prawym górnym rogu jest pusty (niewidoczny hotspot).
+- Przełączanie desków: `Shift+Alt+F10` oraz menu sesji (prawy przycisk);
+  numer desku nie jest już rysowany.
+- Złoty zrzut: **`15424d43…`** (górna belka bez ikon).
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
 
 **Zrobione** (było na tej liście): skróty z `LAUNCH.CFG`/`DOCK.CFG`, unikalne
 ikony 16 px, klik uruchamiający, podpowiedź z nazwą, menu PPM z dodawaniem/
-usuwaniem pozycji, **prawa strona z uruchomionymi aplikacjami i przywracaniem**.
+usuwaniem pozycji, prawa strona z aplikacjami bez skrótu, **`[>]` na lewych
+skrótach**, **usunięte ikony task/desk u góry**.
 
-1. **Usunięcie ikon u góry** — `task_draw()` (trójkąt listy okien) i
-   `desk_draw()` (glyph dwóch monitorów) nadal się rysują (krok 5).
-2. **Kosmetyka** — brak wyraźnego podziału lewa/prawa; prawa ikona jest bardzo
+1. **Kosmetyka** — brak wyraźnego podziału lewa/prawa; prawa ikona jest bardzo
    blisko krawędzi; można dodać separator i menu aplikacji (close/minimize) pod
    PPM na prawej ikonie.
+2. **Ukryte hotspoty** — task/desk dropdowny nadal działają w pustym prawym
+   górnym rogu; jeśli mają zniknąć całkiem, usunąć też `task_click`/`desk_click`
+   (maszyneria zostaje w kodzie na przyszłość).
 
 ---
 
@@ -228,12 +241,15 @@ syscalli:
   `kdbg_test_spawn=1` uruchamia PLASMA (aplikację bez skrótu) na potrzeby
   testu prawej strony. W produkcji nikt ich nie ustawia.
 
-### Krok 5 — usunięcie ikon u góry
+### Krok 5 — usunięcie ikon u góry — **ZROBIONE (2026-10-21)**
 
-- `task_draw()` — rysuje trójkąt listy okien; **usunąć rysowanie** (zostawić
-  funkcję/maszynerię dropdownu, bo jest używana przy hit-teście).
-- `desk_draw()` — glyph dwóch monitorów; **usunąć rysowanie**; przełączanie
-  desków zostaje na `Shift+Alt+F10` i w menu sesji (prawy przycisk).
+- `task_draw()` **nie rysuje już** trójkąta listy okien ani podkreślenia
+  (minimalizacja/lista nadal działa przez ukryty hit-test).
+- `desk_draw()` i `desk_glyph()` **usunięte**; numer desku nie jest rysowany.
+  Przełączanie desków zostaje na `Shift+Alt+F10` i w menu sesji (prawy
+  przycisk). `desk_icon_rect`/`desk_click` zostają jako ukryty hotspot.
+- `task_minimized_count()` usunięte (służyło tylko do podkreślenia ikony).
+- Złoty zrzut: **`15424d43…`** (dwie próby identyczne).
 
 ---
 
@@ -254,7 +270,8 @@ syscalli:
 7. **Po zapisach do FAT czyścić cache** (`kblock_cache_clear()`), inaczej
    kolejny odczyt widzi nieaktualne dane (to zepsuło listę ikon pulpitu).
 8. **Złoty zrzut** (`test-wall-custom.py golden`) — aktualny REF:
-   **`5c1e5546…`** (jasnoszary pasek). Każda zmiana UI = świadoma aktualizacja REF.
+   **`15424d43…`** (jasnoszary pasek, górna belka bez task/desk). Każda zmiana
+   UI = świadoma aktualizacja REF.
 9. **Zmiana stanu paska nie przerysowuje się sama.** `kernel_wm_frame_tick()`
    wychodzi przy `!wm.damage_count`; po `dock_release()` trzeba dodać damage
    (stary + nowy prostokąt) i `wm_force_compose=1`. Hover wymaga tego samego —
@@ -296,6 +313,11 @@ syscalli:
     wierzchnie okno (test nie trafia w 15×13 gadżet), `kdbg_test_spawn=1`
     uruchamia PLASMA bez skrótu (test prawej strony). W produkcji nikt ich nie
     ustawia. Analogicznie `kdbg_test_mouse`.
+20. **Górna belka bez ikon, ale z ukrytymi hotspotami.** `task_draw()` nie
+    rysuje trójkąta ani glyphu, lecz `task_click()`/`desk_click()` nadal
+    otwierają listy w pustym prawym górnym rogu. Jeśli mają zniknąć całkiem,
+    usunąć też te funkcje (maszyneria listy może zostać). Nie malować tła pod
+    ikonami — belkę rysuje pulpit; `task_draw` ma tylko dokładać dropdowny.
 
 ---
 
@@ -303,7 +325,7 @@ syscalli:
 
 ```bash
 cd display-demo
-python3 test-wall-custom.py golden          # zrzut startowy == 5c1e5546…
+python3 test-wall-custom.py golden          # zrzut startowy == 15424d43…
 python3 test-icons-size.py boot48           # ikony 48 px, pomiar
 python3 test-dock-step3.py                  # krok 3: DOCK.CFG/LAUNCH.CFG, ikony, hover, start
 python3 test-dock-menu.py                   # PPM: DODAJ PRE2, USUN COMMANDER, DOCK.CFG
@@ -372,7 +394,7 @@ po każdej zmianie sprawdzić oba joby.
       zminimalizowanej), klik przywraca okno; aplikacje bez skrótu mają `[>]`
       po prawej; lewy skrót nigdy nie tworzy drugiej kopii
       (`test-dock-running.py` zielony),
-- [ ] ikony u góry (task/desk) usunięte (krok 5),
+- [x] ikony u góry (task/desk) usunięte; dropdowny zostają jako ukryty hit-test (krok 5),
 - [x] złoty zrzut stabilny w dwóch kolejnych bootach: **`5c1e5546…`** BAJT W BAJT
       (jasnoszary pasek; zmiana koloru była świadoma),
 - [ ] CI zielone (TOS=1 i TOS=0) — lokalnie oba profile budują się i testy
