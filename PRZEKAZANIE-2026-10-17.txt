@@ -1563,3 +1563,28 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    gc-sections je usunie, dopoki pasek go nie uzyje; to normalne.
    NASTEPNY KROK: dolny pasek rysowany przez WM (overlay, zwijany do ikony po
    lewej, rozwijany w prawo), wysokosc 16-24 px, sloty wypelniane z pulpitu.
+
+10ay. DOCK - KROK 2: DOLNY PASEK RYSOWANY PRZEZ WM (20.10, ZROBIONY SZKIELET):
+   ZGODNIE Z WYMAGANIAMI: pasek nie jest staly - zwiniety to mala ikona przy
+   LEWEJ krawedzi dolnej, klik rozwija go W PRAWO (i z powrotem).
+   GDZIE: system/kernel_wm.c, obok task_draw/desk_draw (WM rysuje pasek NAD
+   oknami, tak jak gorna belke; pulpit NIE moze, bo lezy pod oknami).
+   CO JEST:
+     - dock_geometry(): wysokosc DOCK_H=24 px, y = screen_h-26, x=8;
+       zwiniety w = 24 px, rozwiniety w = screen_w-16,
+     - dock_draw(): tlo (NC_BLUE w 8bpp, WM_PAPER w mono), "hamburger" po lewej,
+       oraz ZASLEPKI slotow: 4 po lewej (skroty) i 3 po prawej (uruchomione),
+     - dock_click(): przelacza stan, wołane przy PUSZCZENIU przycisku,
+     - rysowanie co klatke na koncu kompozycji (pulpit przemalowuje tlo i
+       zmazywal pasek; przy zwinietym to 24x24 px, wiec tanio),
+     - liczniki diagnostyczne: kdbg_dock_click / kdbg_dock_open / kdbg_dock_draws.
+   ZMIERZONE: klik 1->2->3, open 1->0->1, rysunkow ~22 na sekunde; zrzuty
+   dd1/dd2 (rozwiniety) i w-golden-boot.png (zwiniety).
+   ZLOTY ZRZUT - SWIADOMA ZMIANA: pasek jest widoczny przy starcie (zwiniety),
+   wiec wzorzec zmienil sie z 0e821ede na 65e67b09 (test-wall-custom.py REF).
+   Przy okazji: przelaczanie na RELEASE, bo sam "wiszący" press przy starcie
+   potrafil przelaczyc pasek i zrzut byl niestabilny (3319e208 vs 65e67b09).
+   NASTEPNE KROKI: (3) sloty z pulpitu - skroty z LAUNCH.CFG + ikony 16 px
+   (kgfx_icon_small_draw juz jest), (4) prawa strona: uruchomione aplikacje
+   (gui_call 20/68) + zebatka + klik = foreground_user_process,
+   (5) usuniecie ikon u gory (task_draw/desk_draw), gdy pasek przejmie ich role.

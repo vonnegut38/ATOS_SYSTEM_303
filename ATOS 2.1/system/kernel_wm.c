@@ -1019,6 +1019,60 @@ static int desk_click(int16_t mx,int16_t my)
     }
     return 0;
 }
+/* --- DOLNY PASEK (dock) -------------------------------------------------
+   Nie jest stala czescia pulpitu: zwiniety to mala ikona przy LEWEJ krawedzi
+   dolnej, a klik rozwija go W PRAWO.  Rysuje go WM (a nie pulpit), bo pasek
+   musi byc NAD oknami - tak samo jak gorna belka.  Sloty (skroty i uruchomione
+   aplikacje) wypelni pulpit; tu jest geometria, tlo i przelaczanie. */
+#define DOCK_H 24
+static uint8_t dock_open;
+static uint8_t dock_dirty;
+static wm_rect_t dock_last;
+uint32_t kdbg_dock_click,kdbg_dock_open,kdbg_dock_draws;
+
+static int dock_height(void){return DOCK_H;}
+static void dock_geometry(wm_rect_t *r)
+{
+    int h=dock_height();
+    int w=dock_open?(wm.screen_w-16):h;
+    r->x=8;r->y=(int16_t)(wm.screen_h-h-2);r->w=(uint16_t)w;r->h=(uint16_t)h;
+}
+static void dock_draw(void)
+{
+    wm_fb_t d;wm_rect_t r,c;unsigned i;int k;
+    if(!wm_framebuffer)return;
+    dock_geometry(&r);dock_last=r;dock_dirty=0u;++kdbg_dock_draws;
+    d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
+    d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
+    wm_fill_rect(&d,&r,(wm_bpp==8u)?NC_BLUE:WM_PAPER);
+    for(k=0;k<3;++k){
+        c=(wm_rect_t){(int16_t)(r.x+5),(int16_t)(r.y+6+k*5),12,2};
+        wm_fill_rect(&d,&c,WM_PAPER);
+    }
+    if(dock_open){
+        for(i=0;i<4u;++i){
+            c=(wm_rect_t){(int16_t)(r.x+24+(int)i*26),(int16_t)(r.y+3),20,(uint16_t)(r.h-6)};
+            wm_fill_rect(&d,&c,(wm_bpp==8u)?NC_BRIGHT:WM_INK);
+        }
+        for(i=0;i<3u;++i){
+            c=(wm_rect_t){(int16_t)(r.x+r.w-24-(int)i*26),(int16_t)(r.y+3),20,(uint16_t)(r.h-6)};
+            wm_fill_rect(&d,&c,(wm_bpp==8u)?NC_BRIGHT:WM_INK);
+        }
+    }
+    kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
+}
+static int dock_click(int16_t x,int16_t y)
+{
+    wm_rect_t r,c,pt;
+    dock_geometry(&r);
+    pt=(wm_rect_t){x,y,1,1};
+    if(!wm_rect_intersect(&r,&pt,&c))return 0;
+    dock_open=(uint8_t)!dock_open;
+    dock_dirty=1u;
+    ++kdbg_dock_click;kdbg_dock_open=dock_open;
+    return 1;
+}
+
 static void task_draw(void)
 {
     wm_fb_t d;wm_rect_t r,t;unsigned i,k;int16_t y;
@@ -1738,6 +1792,7 @@ void kernel_wm_frame_tick(uint32_t now)
          }
          /* A short click may arrive entirely between frames. Process its
             recorded press above, then its release in THIS same frame. */
+         if(dock_click((int16_t)mx,(int16_t)my)){/* pasek: pelny klik = przelaczenie */}
          if(!(buttons&0x1u)){
              sb_drag_win=-1;
              if(gpress_part){
@@ -1898,6 +1953,14 @@ void kernel_wm_frame_tick(uint32_t now)
        when covered, or while closing a popup whose save-under needs repair.
        topstrip_damaged also accounts for open task/desktop dropdowns. */
     if(topstrip_hit||task_strip_repaint){task_draw();applet_draw(now);}
+    /* Dolny pasek: rysuj PO oknach (ma byc NAD nimi).  Przerysuj, gdy zmienil
+       sie stan albo gdy jakies okno wchodzi na jego obszar. */
+    {int need=dock_dirty;wm_rect_t dr,c2;dock_geometry(&dr);
+     if(!need){unsigned di;for(di=0;di<wm.count;++di)
+         if((wm.win[di].flags&1u)&&wm_rect_intersect(&wm.win[di].frame,&dr,&c2)){need=1;break;}}
+     (void)need;
+     dock_draw();   /* co klatke: pulpit przemalowuje tlo i zmazuje pasek */
+     }
     task_strip_repaint=0u;
     /* Window decorations: border + title bar. Cheap (a few spans) and drawn
        every frame so they survive the desktop application's own painting. */

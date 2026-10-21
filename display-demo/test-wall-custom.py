@@ -21,7 +21,11 @@ BASE_IMG = DEMO + "/demo-guard.img"   # kanoniczny obraz testowy (boot do pulpit
 IMG = DEMO + "/demo-wall-custom.img"
 HAT = DEMO + "/hatari-scalony-20261017"
 FIFO = "/tmp/wall.fifo"
-REF = "0e821ede61e5946463cb75f424e592200da37803b5a2dc3ec7747cf249ef064a"
+# Wzorzec zaktualizowany 20.10: zrzut startowy zawiera teraz DOLNY PASEK
+# (dock) rysowany przez WM (stan zwiniety) - swiadoma zmiana UI, nie regresja.
+# Pasek przelacza sie na RELEASE (pelny klik), zeby przypadkowy "wiszący" press
+# przy starcie nie zmienial stanu i nie rozjezdzal zrzutu.
+REF = "65e67b09f0058fb4157b45431dd4be2de3f41ebe9cdcd155ef2eccb83b03c807"
 
 BUILD = {
     r"\SYSTEM\KERNEL.SYS": REAL + "/build/system/KERNEL.SYS",
