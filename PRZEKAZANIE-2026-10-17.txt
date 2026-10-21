@@ -1682,3 +1682,44 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    NASTEPNY KROK: (4) prawa strona - uruchomione aplikacje (wm.win[] +
    window_owner_pid), zebatka, klik = window_restore/wm_raise; potem (5) ikony
    task/desk u gory.
+
+10bb. DOCK - KROK 4: URUCHOMIONE APLIKACJE NA PRAWEJ (21.10, ZROBIONE):
+   Na prosbe uzytkownika: po zminimalizowaniu programu (np. MODPLAY) jego ikona
+   ma byc na pasku z malym znaczkiem "dziala", a klik ma PRZYWROCIC okno, a nie
+   uruchomic druga kopie.
+   GDZIE: system/kernel_wm.c (dock_run_build, dock_run_add, dock_run_rect,
+   dock_badge_draw, dock_hover_target, dock_launch/dock_press/dock_release)
+   + system/kernel_exception.c (publiczne kernel_user_pid_name,
+   kernel_user_find_running_app).
+   JAK DZIALA:
+     - lista: okna z wm.win[] biezacej sesji; najpierw zminimalizowane
+       (flags&8), potem widoczne (flags&1), od wierzchu Z; pomija tlo pulpitu
+       (flags&4), konsole (pid 0) i pid pulpitu; max 5 pozycji,
+     - ikona/etykieta: kernel_user_pid_name(pid) -> nazwa 8.3 ->
+       dock_catalog_icon_name()/dock_catalog_label_name(); TOS async
+       (TOS_ASYNC_PID) -> ICON_TOS_PRG + tytul okna; nieznane -> ICON_SYSTEM,
+     - znaczek: dock_badge_draw() = 7x7 czarna plakietka z biala zebatka 5x5
+       w prawym gornym rogu ikony; na ZWINIETYM pasku ta sama zebatka na
+       hamburgerze, ale tylko gdy jakas aplikacja jest zminimalizowana,
+     - klik w prawa ikone: kernel_wm_activate_pid(pid) - restore/raise + fokus;
+       ZERO drugiego spawnu,
+     - klik w LEWY skrot dzialajacej aplikacji: dock_launch() najpierw
+       kernel_user_find_running_app(path,&session); jesli program chodzi,
+       przelacza sesje (gdy inna) i kernel_wm_activate_pid(pid).  Dla .PRG:
+       kernel_tos_async_owns(TOS_ASYNC_PID) + kernel_wm_activate_pid.
+   LICZNIKI: kdbg_dock_running (ile ikon), kdbg_dock_restore (przywrocenia).
+   TEST-ONLY: kdbg_test_minimize=1 minimalizuje wierzchnie okno (test nie musi
+   trafiac w gadzet 15x13); w produkcji nikt tego nie ustawia.
+   ZMIERZONE (test-dock-running.py, PASS): PLASMA start lewym skrotem ->
+   kdbg_dock_launch=1, rc=0; minimalizacja -> kdbg_dock_running=1; klik w
+   prawa ikone -> kdbg_dock_restore=1; minimalizacja + klik w LEWY skrot ->
+   launch nadal 1, restore=2 (brak drugiej kopii); po zwinięciu paska
+   open=0, running=1, zebatka na hamburgerze.  Zrzuty:
+   display-demo/dockrun-min.png, dockrun-restored.png,
+   dockrun-restored-by-shortcut.png, dockrun-closed.png.
+   TESTY: test-dock-running.py PASS; test-dock-step3.py PASS;
+   test-dock-menu.py PASS; golden 5c1e5546... BAJT W BAJT (bez zmian).
+   KERNEL.SYS: 232510 B (TOS=1); TOS=1/TOS=0 buduja sie, check-graphics i
+   check-video zielone.
+   NASTEPNY KROK: (5) usuniecie ikon task/desk u gory (task_draw/desk_draw),
+   gdy pasek przejmie ich role.

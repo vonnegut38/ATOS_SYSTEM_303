@@ -12,9 +12,13 @@ static uint8_t  console_geom_valid,console_geom_tried;
 #include "kernel_graphics.h"
 #include "kernel_theme.h"
 #include "icons_ids.h"
+#include "tos_async.h"
 extern unsigned kernel_user_pid_terminal(uint32_t pid);
 extern int32_t kernel_spawn_user_async(const char *,const char *,const char *,uint32_t *);
 extern void kblock_cache_clear(void);
+extern uint32_t kernel_desktop_active_pid(void);
+extern int kernel_user_pid_name(uint32_t pid,char name[13]);
+extern uint32_t kernel_user_find_running_app(const char *path,unsigned *session);
 #include "font.h"
 #include "gui_draw.h"
 #include "kernel_console.h"
@@ -1028,14 +1032,17 @@ static int desk_click(int16_t mx,int16_t my)
    musi byc NAD oknami - tak samo jak gorna belka.
    LEWA strona: skroty z \SYSTEM\LAUNCH.CFG - ikona 16 px z drugiego cache'u,
    klik uruchamia program, najechanie pokazuje etykiete nad paskiem.
-   PRAWA strona: na razie zaslepki; uruchomione aplikacje przyjda w kroku 4. */
+   PRAWA strona: ikony URUCHOMIONYCH aplikacji (widoczne lub zminimalizowane),
+   z mala zebatka; klik przywraca okno, a nie uruchamia drugiej kopii. */
 #define DOCK_H 24
 #define DOCK_ICON 16
 #define DOCK_SLOT 24
 #define DOCK_HAMBURGER 22
 #define DOCK_MAX_SHORT 8u
+#define DOCK_MAX_RUN 5u
 #define DOCK_LABEL_MAX 12u
 #define DOCK_PART_NONE 0xFFu
+#define DOCK_PART_RUN 0x40u
 /* Jasnoszare tlo paska (indeks 15 palety systemowej = 0xAAA).  W mono tlo
    zostaje biale, a kreski czarne - ten sam kontrast w obu trybach. */
 #define DOCK_BG 15u
@@ -1057,9 +1064,14 @@ static uint8_t dock_short_state;    /* 0 = jeszcze nie czytane, 1 = wczytane */
 static uint8_t dock_cfg[768];       /* LAUNCH.CFG jest maly; czytamy leniwie */
 static uint8_t dock_open;
 static uint8_t dock_press_active,dock_press_part;
+static uint32_t dock_press_pid;
 static uint8_t dock_tip_shown,dock_tip_slot;
 static wm_rect_t dock_tip_last;
 static int dock_hover_drawn=-1;     /* slot narysowany w ostatniej kompozycji */
+typedef struct {uint32_t pid;uint8_t win,icon;char label[13];} dock_run_t;
+static dock_run_t dock_run[DOCK_MAX_RUN];
+static unsigned dock_run_count;
+static unsigned dock_run_hidden;   /* ile z nich jest zminimalizowanych */
 static uint8_t dock_menu_open,dock_menu_mode,dock_menu_page;
 static uint8_t dock_menu_slot,dock_menu_rows;
 static int dock_menu_hover=-1;
@@ -1071,6 +1083,8 @@ uint32_t kdbg_dock_click,kdbg_dock_open,kdbg_dock_draws;
 uint32_t kdbg_dock_slots,kdbg_dock_launch,kdbg_dock_rc;
 uint32_t kdbg_dock_menu,kdbg_dock_add,kdbg_dock_remove;
 uint32_t kdbg_dock_save_rc,kdbg_dock_menu_draws;
+uint32_t kdbg_dock_restore,kdbg_dock_running;
+uint32_t kdbg_test_minimize;        /* hook testowy: 1 = zminimalizuj wierzchnie okno */
 
 static int dock_height(void){return DOCK_H;}
 static void dock_geometry(wm_rect_t *r)
@@ -1153,6 +1167,40 @@ static int dock_catalog_icon(const char *path)
     for(i=0;i<DOCK_CATALOG_COUNT;++i)
         if(dock_path_equal(path,dock_catalog[i].path))return (int)dock_catalog[i].icon;
     return -1;
+}
+/* To samo, ale po nazwie procesu (8.3 base, np. "MODPLAY.APP"): pasek musi
+   rozpoznac aplikacje uruchomiona z pulpitu/shellu, nie tylko z wlasnego menu. */
+static int dock_catalog_icon_name(const char *name)
+{
+    unsigned i;
+    if(!name||!name[0])return -1;
+    for(i=0;i<DOCK_CATALOG_COUNT;++i){
+        const char *base=dock_catalog[i].path;unsigned j=0;
+        while(base[j])++j;
+        while(j&&base[j-1]!='\\'&&base[j-1]!='/')--j;
+        if(dock_path_equal(base+j,name))return (int)dock_catalog[i].icon;
+    }
+    return -1;
+}
+static const char *dock_catalog_label_name(const char *name)
+{
+    unsigned i;
+    if(!name||!name[0])return 0;
+    for(i=0;i<DOCK_CATALOG_COUNT;++i){
+        const char *base=dock_catalog[i].path;unsigned j=0;
+        while(base[j])++j;
+        while(j&&base[j-1]!='\\'&&base[j-1]!='/')--j;
+        if(dock_path_equal(base+j,name))return dock_catalog[i].label;
+    }
+    return 0;
+}
+/* "MODPLAY.APP" -> "MODPLAY" (etykieta tooltipa dla nieznanych aplikacji). */
+static void dock_label_from_name(char *out,unsigned cap,const char *name)
+{
+    unsigned i=0;
+    if(!name){out[0]=0;return;}
+    while(name[i]&&name[i]!='.'&&i+1u<cap){out[i]=name[i];++i;}
+    out[i]=0;
 }
 /* Ikona wg programu (katalog), a dla nieznanych - wg rodzaju pliku. */
 static uint8_t dock_icon_for(const char *path)
@@ -1291,18 +1339,37 @@ static int dock_path_is_tos(const char *path)
 static void dock_launch(unsigned index)
 {
     uint32_t pid=0u;
+    unsigned session=0;
     int32_t result=-1;
     if(index>=dock_short_count)return;
     if(dock_path_is_tos(dock_short[index].path)){
 #if CONFIG_TOS
+        /* TOS async: jeden gosc na system.  Gdy juz chodzi, klik tylko
+           przywraca jego okno - nie startujemy drugiej kopii. */
+        if(kernel_tos_async_owns(TOS_ASYNC_PID)){
+            session=kernel_tos_async_session();
+            if(session!=(unsigned)ksessions_current())(void)ksessions_control(session+1u,0);
+            if(kernel_wm_activate_pid(TOS_ASYNC_PID))++kdbg_dock_restore;
+            ++kdbg_dock_click;
+            return;
+        }
         /* .PRG/.TOS nie maja naglowka ASYSBOOT, wiec ida przez persone TOS -
            w wariancie async, zeby nie zablokowac petli jadra (i paska). */
-        extern int32_t kernel_tos_start_async(const char *path);
-        result=kernel_tos_start_async(dock_short[index].path);
+        {extern int32_t kernel_tos_start_async(const char *path);
+         result=kernel_tos_start_async(dock_short[index].path);}
 #else
         result=-0x2ff;   /* profil bez persony TOS: .PRG nie ma czym uruchomic */
 #endif
     }else{
+        /* "Jedna zywa kopia": jesli program juz gdzies chodzi, klik skrotu ma
+           PRZYWROCIC jego okno, a nie uruchomic drugi proces. */
+        pid=kernel_user_find_running_app(dock_short[index].path,&session);
+        if(pid){
+            if(session!=(unsigned)ksessions_current())(void)ksessions_control(session+1u,0);
+            if(kernel_wm_activate_pid(pid))++kdbg_dock_restore;
+            ++kdbg_dock_click;
+            return;
+        }
         result=kernel_spawn_user_async(dock_short[index].path,"","\\",&pid);
     }
     ++kdbg_dock_click;++kdbg_dock_launch;kdbg_dock_rc=(uint32_t)result;
@@ -1313,6 +1380,64 @@ static void dock_slot_rect(unsigned index,wm_rect_t *r)
     dock_geometry(&d);
     r->x=(int16_t)(d.x+DOCK_HAMBURGER+2+(int)index*DOCK_SLOT);
     r->y=d.y;r->w=(uint16_t)DOCK_SLOT;r->h=d.h;
+}
+static void dock_run_rect(unsigned index,wm_rect_t *r)
+{
+    wm_rect_t d;
+    dock_geometry(&d);
+    r->x=(int16_t)(d.x+d.w-4-(int)(index+1u)*DOCK_SLOT);
+    r->y=d.y;r->w=(uint16_t)DOCK_SLOT;r->h=d.h;
+}
+static void dock_run_add(unsigned win)
+{
+    dock_run_t *e;
+    uint32_t pid;char name[13];const char *label;int icon;
+    if(dock_run_count>=DOCK_MAX_RUN)return;
+    pid=window_owner_pid(win);
+    if(!pid||pid==kernel_desktop_active_pid())return;
+    if(wm.win[win].session!=(uint8_t)ksessions_current())return;
+    e=&dock_run[dock_run_count];
+    icon=-1;name[0]=0;
+    if(pid==(uint32_t)TOS_ASYNC_PID){
+        icon=(int)ICON_TOS_PRG;
+        dock_copy(e->label,sizeof(e->label),wm.win[win].title[0]?wm.win[win].title:"TOS");
+    }else{
+        (void)kernel_user_pid_name(pid,name);
+        icon=dock_catalog_icon_name(name);
+        label=dock_catalog_label_name(name);
+        if(label)dock_copy(e->label,sizeof(e->label),label);
+        else if(name[0])dock_label_from_name(e->label,sizeof(e->label),name);
+        else dock_copy(e->label,sizeof(e->label),wm.win[win].title[0]?wm.win[win].title:"APP");
+    }
+    if(icon<0)icon=(int)ICON_SYSTEM;
+    e->pid=pid;e->win=(uint8_t)win;e->icon=(uint8_t)icon;
+    if(wm.win[win].flags&8u)++dock_run_hidden;
+    ++dock_run_count;
+}
+/* Lista prawej strony: najpierw zminimalizowane (ukryte), potem widoczne,
+   zawsze od wierzchu Z.  Jedna pozycja na okno; max 5. */
+static void dock_run_build(void)
+{
+    unsigned i;
+    dock_run_count=0u;dock_run_hidden=0u;
+    for(i=wm.count;i--;)
+        if((wm.win[i].flags&8u)&&!(wm.win[i].flags&4u))dock_run_add(i);
+    for(i=wm.count;i--;)
+        if((wm.win[i].flags&1u)&&!(wm.win[i].flags&8u)&&!(wm.win[i].flags&4u))dock_run_add(i);
+    kdbg_dock_running=(uint32_t)dock_run_count;
+}
+/* Mala zebatka w prawym gornym rogu ikony - "program dziala". */
+static void dock_badge_draw(wm_fb_t *d,int16_t x,int16_t y)
+{
+    static const uint8_t gear[5]={0x15,0x1F,0x0E,0x1F,0x15};
+    wm_rect_t r;unsigned row,col;
+    r=(wm_rect_t){(int16_t)(x+DOCK_ICON-7),y,7,7};
+    wm_fill_rect(d,&r,WM_INK);
+    for(row=0;row<5u;++row)for(col=0;col<5u;++col)
+        if(gear[row]&(uint8_t)(0x10u>>col)){
+            r=(wm_rect_t){(int16_t)(x+DOCK_ICON-6+(int16_t)col),(int16_t)(y+1+(int16_t)row),1,1};
+            wm_fill_rect(d,&r,WM_PAPER);
+        }
 }
 /* 0 = przelacznik (hamburger / cale zwinniete pudelko), 1.. = skrot,
    DOCK_PART_NONE = puste miejsce w pasku. */
@@ -1335,6 +1460,12 @@ static uint8_t dock_part_at(int16_t x,int16_t y)
         dock_slot_rect(i,&s);
         if(x>=s.x&&y>=s.y&&x<(int16_t)(s.x+s.w)&&y<(int16_t)(s.y+s.h))return (uint8_t)(1u+i);
     }
+    dock_run_build();
+    for(i=0;i<dock_run_count;++i){
+        dock_run_rect(i,&s);
+        if(x>=s.x&&y>=s.y&&x<(int16_t)(s.x+s.w)&&y<(int16_t)(s.y+s.h))
+            return (uint8_t)(DOCK_PART_RUN+i);
+    }
     return DOCK_PART_NONE;
 }
 static void dock_tip_hide(void)
@@ -1346,20 +1477,17 @@ static void dock_tip_hide(void)
 }
 /* Etykieta nad paskiem: rysowana tylko przy zmianie slotu (bez migania),
    a stary prostokat oddawany jako damage, zeby tlo wrocilo po zjechaniu. */
-static void dock_tip_show(unsigned index)
+static void dock_tip_show(int key,int16_t anchor_x,const char *label)
 {
     wm_fb_t d;wm_rect_t box,r,t;
-    const char *label;
     unsigned length=0;
-    if(!wm_framebuffer||index>=dock_short_count)return;
-    if(index!=dock_tip_slot)dock_tip_hide();
-    label=dock_short[index].label;
+    if(!wm_framebuffer||!label)return;
+    if(key!=dock_tip_slot)dock_tip_hide();
     while(label[length]&&length<DOCK_LABEL_MAX)++length;
     if(!length)return;
     dock_geometry(&r);
     t.w=(uint16_t)(length*8u+8u);t.h=16u;
-    t.x=(int16_t)(r.x+DOCK_HAMBURGER+2+(int)index*DOCK_SLOT);
-    t.x=(int16_t)(t.x+((DOCK_SLOT-(int)t.w)/2));
+    t.x=(int16_t)(anchor_x+((DOCK_SLOT-(int)t.w)/2));
     if(t.x<1)t.x=1;
     if((int)t.x+(int)t.w>(int)wm.screen_w-1)t.x=(int16_t)((int)wm.screen_w-1-(int)t.w);
     t.y=(int16_t)(r.y-20);
@@ -1372,14 +1500,16 @@ static void dock_tip_show(unsigned index)
     wm_fill_rect(&d,&t,WM_PAPER);
     kgfx_text((int32_t)(t.x+4),(int32_t)t.y,label,WM_INK,WM_PAPER,0);
     kvideo_damage(box.x,box.y,(int32_t)box.w,(int32_t)box.h);
-    dock_tip_last=box;dock_tip_shown=1u;dock_tip_slot=(uint8_t)index;
+    dock_tip_last=box;dock_tip_shown=1u;dock_tip_slot=(uint8_t)key;
 }
-static int dock_hover_slot(void)
+static int dock_hover_target(void)
 {
     uint8_t part;
     if(!dock_open||!wm_mouse_valid)return -1;
     part=dock_part_at((int16_t)wm_mouse_x,(int16_t)wm_mouse_y);
     if(part>=1u&&part<=DOCK_MAX_SHORT)return (int)(part-1u);
+    if(part>=DOCK_PART_RUN&&part<DOCK_PART_RUN+DOCK_MAX_RUN)
+        return 100+(int)(part-DOCK_PART_RUN);
     return -1;
 }
 /* Zmiana slotu pod wskaznikiem musi WYMUSIC kompozycje: bez damage'u petla
@@ -1389,7 +1519,7 @@ static void dock_hover_poll(void)
 {
     int hover;
     if(!dock_open)return;
-    hover=dock_hover_slot();
+    hover=dock_hover_target();
     if(hover==dock_hover_drawn)return;
     {wm_rect_t r;dock_geometry(&r);wm_damage_add(&wm,r);}
     wm_force_compose=1;
@@ -1634,6 +1764,7 @@ static void dock_draw(void)
     wm_fb_t d;wm_rect_t r,c;unsigned i;int k,hover;
     if(!wm_framebuffer)return;
     if(dock_open&&!dock_short_state)dock_shortcuts_load();
+    dock_run_build();
     dock_geometry(&r);++kdbg_dock_draws;
     d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
     d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
@@ -1642,7 +1773,7 @@ static void dock_draw(void)
         c=(wm_rect_t){(int16_t)(r.x+5),(int16_t)(r.y+6+k*5),12,2};
         wm_fill_rect(&d,&c,WM_INK);   /* czarne kreski na jasnym tle (i w mono) */
     }
-    hover=dock_hover_slot();
+    hover=dock_hover_target();
     dock_hover_drawn=hover;
     if(dock_open){
         for(i=0;i<dock_short_count;++i){
@@ -1650,22 +1781,44 @@ static void dock_draw(void)
             if((int)i==hover&&wm_bpp==8u)wm_fill_rect(&d,&s,NC_BRIGHT);
             dock_icon_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4),dock_short[i].icon);
         }
-        for(i=0;i<3u;++i){
-            c=(wm_rect_t){(int16_t)(r.x+r.w-24-(int)i*26),(int16_t)(r.y+3),20,(uint16_t)(r.h-6)};
-            wm_fill_rect(&d,&c,(wm_bpp==8u)?NC_BRIGHT:WM_INK);
+        /* Prawa strona: uruchomione aplikacje.  Ikona + mala zebatka =
+           "program dziala" (takze gdy okno jest zminimalizowane). */
+        for(i=0;i<dock_run_count;++i){
+            wm_rect_t s;dock_run_rect(i,&s);
+            if(hover==100+(int)i&&wm_bpp==8u)wm_fill_rect(&d,&s,NC_BRIGHT);
+            dock_icon_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4),dock_run[i].icon);
+            dock_badge_draw(&d,(int16_t)(s.x+4),(int16_t)(s.y+4));
         }
+    }else if(dock_run_hidden){
+        /* Zwiniety pasek: mala zebatka na hamburgerze, gdy jakas aplikacja jest
+           UKRYTA (zminimalizowana) - np. MODPLAY zwiniety do paska. */
+        dock_badge_draw(&d,(int16_t)(r.x+8),(int16_t)r.y);
     }
     kvideo_damage(r.x,r.y,(int32_t)r.w,(int32_t)r.h);
-    if(hover>=0)dock_tip_show((unsigned)hover);
-    else dock_tip_hide();
+    if(hover>=100){
+        unsigned idx=(unsigned)(hover-100);
+        if(idx<dock_run_count){
+            wm_rect_t s;dock_run_rect(idx,&s);
+            dock_tip_show(hover,s.x,dock_run[idx].label);
+        }else dock_tip_hide();
+    }else if(hover>=0&&hover<(int)dock_short_count){
+        wm_rect_t s;dock_slot_rect((unsigned)hover,&s);
+        dock_tip_show(hover,s.x,dock_short[hover].label);
+    }else dock_tip_hide();
 }
 /* Klik dziala na PUSZCZENIU (MagiC/Win98): press tylko zapamietuje slot, a
    akcja jest, gdy release wypadnie w tym samym slocie.  Dzieki temu "wiszący"
    press przy starcie niczego nie przelacza (pulapka 1). */
 static int dock_press(int16_t x,int16_t y)
 {
+    uint8_t part;
     if(!dock_inside(x,y))return 0;
-    dock_press_active=1u;dock_press_part=dock_part_at(x,y);   /* NONE = puste pole */
+    part=dock_part_at(x,y);
+    dock_press_active=1u;dock_press_part=part;dock_press_pid=0u;
+    if(part>=DOCK_PART_RUN&&part<DOCK_PART_RUN+DOCK_MAX_RUN){
+        unsigned i=(unsigned)(part-DOCK_PART_RUN);
+        if(i<dock_run_count)dock_press_pid=dock_run[i].pid;
+    }
     return 1;
 }
 static void dock_release(int16_t x,int16_t y)
@@ -1689,6 +1842,12 @@ static void dock_release(int16_t x,int16_t y)
         if(!dock_open){dock_tip_hide();dock_hover_drawn=-1;}
     }else if(part<=DOCK_MAX_SHORT){
         dock_launch((unsigned)(part-1u));
+    }else if(part>=DOCK_PART_RUN&&part<DOCK_PART_RUN+DOCK_MAX_RUN){
+        /* Klik w ikone uruchomionej aplikacji: PRZYWRACAMY okno (zdjecie
+           minimalizacji / podniesienie), nie startujemy drugiej kopii. */
+        if(dock_press_pid&&kernel_wm_activate_pid(dock_press_pid)){
+            ++kdbg_dock_restore;wm_force_compose=1;
+        }
     }
 }
 
@@ -2156,6 +2315,15 @@ void kernel_wm_frame_tick(uint32_t now)
        a WM-enabled kernel would paint the applet bar/decorations over the text
        console every main-loop iteration. */
     if(!wm_compose_forced&&!kgfx_desktop_active()&&!kernel_wm_desktop_session())return;
+    /* Hook testowy (jak kdbg_test_mouse): 1 = zminimalizuj wierzchnie okno
+       aplikacji.  Pozwala testowac pasek bez trafiania w maly gadzet okna. */
+    if(kdbg_test_minimize){
+        unsigned mi;
+        for(mi=wm.count;mi--;){
+            if((wm.win[mi].flags&1u)&&!(wm.win[mi].flags&4u)){window_minimize(mi);break;}
+        }
+        kdbg_test_minimize=0u;
+    }
     /* TOS/desktop mode: no text console at all. The desktop is graphics only
        (background + application windows); the shell lives in the console
        session, reachable from the top switcher. */

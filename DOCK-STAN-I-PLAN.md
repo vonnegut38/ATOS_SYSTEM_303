@@ -103,20 +103,39 @@ USUN COMMANDER = 3 (`remove=1`, `save_rc=0`); `DOCK.CFG` po zakończeniu:
 (`LAUNCH.CFG`). To świadome rozdzielenie — pulpit ma własne builtiny
 `*TERMINAL`/`*TRASH`, których nie chcemy nadpisywać.
 
+### 2.5 Uruchomione aplikacje na prawej stronie (krok 4, 2026-10-21)
+
+| element | szczegóły |
+|---|---|
+| lista | `dock_run_build()`: okna z `wm.win[]` **bieżącej sesji**; najpierw zminimalizowane (`flags&8`), potem widoczne (`flags&1`), od wierzchu Z; pomija tło pulpitu (`flags&4`), konsolę (pid 0) i pid pulpitu; maks. 5 pozycji |
+| ikona/etykieta | `kernel_user_pid_name(pid)` → nazwa 8.3 → `dock_catalog_icon_name()`/`dock_catalog_label_name()`; TOS async (`TOS_ASYNC_PID`) → `ICON_TOS_PRG` + tytuł okna; nieznane → `ICON_SYSTEM` |
+| znaczek | `dock_badge_draw()`: 7×7 czarna plakietka z białą zębatką 5×5 w prawym górnym rogu ikony. Przy **zwiniętym** pasku ta sama zębatka na hamburgerze — tylko gdy jest **zminimalizowana** aplikacja (`dock_run_hidden`) |
+| klik w ikonę | `kernel_wm_activate_pid(pid)` — zdejmuje minimalizację / podnosi okno i daje fokus; **nie spawnuje** drugiej kopii |
+| lewy skrót | `dock_launch()` najpierw `kernel_user_find_running_app(path,&session)`; gdy program już działa: przełącza sesję (jeśli inna) i `kernel_wm_activate_pid(pid)`. TOS: `kernel_tos_async_owns(TOS_ASYNC_PID)` + `kernel_wm_activate_pid(TOS_ASYNC_PID)` |
+| liczniki | `kdbg_dock_running` (ile pozycji na prawej), `kdbg_dock_restore` (ile przywróceń) |
+| test | `display-demo/test-dock-running.py` |
+
+**Zmierzone (PLASMA):** start lewym skrótem → `launch=1`, `rc=0`; minimalizacja
+(hook `kdbg_test_minimize`) → `kdbg_dock_running=1`; klik w prawą ikonę →
+`kdbg_dock_restore=1`; ponowna minimalizacja + klik w **lewy** skrót →
+`launch` nadal 1, `restore=2` (żadnej drugiej kopii); zwinięty pasek →
+`open=0`, `running=1` i zębatka na hamburgerze. Zrzuty:
+`display-demo/dockrun-min.png`, `dockrun-restored.png`,
+`dockrun-restored-by-shortcut.png`, `dockrun-closed.png`.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
 
-**Zrobione w kroku 3 + menu** (było na tej liście): skróty z `LAUNCH.CFG`,
-unikalne ikony 16 px dla programów/gier, klik uruchamiający, podpowiedź z nazwą,
-menu PPM z dodawaniem/usuwaniem pozycji (`DOCK.CFG`).
+**Zrobione** (było na tej liście): skróty z `LAUNCH.CFG`/`DOCK.CFG`, unikalne
+ikony 16 px, klik uruchamiający, podpowiedź z nazwą, menu PPM z dodawaniem/
+usuwaniem pozycji, **prawa strona z uruchomionymi aplikacjami i przywracaniem**.
 
-1. **Prawa strona** — brak listy uruchomionych aplikacji, zębatki i
-   przywracania na wierzch (krok 4).
-2. **Usunięcie ikon u góry** — `task_draw()` (trójkąt listy okien) i
+1. **Usunięcie ikon u góry** — `task_draw()` (trójkąt listy okien) i
    `desk_draw()` (glyph dwóch monitorów) nadal się rysują (krok 5).
-3. **Kosmetyka** — brak podziału wizualnego lewa/prawa; prawe sloty to nadal
-   zaślepki, a podpowiedź działa tylko dla lewych skrótów.
+2. **Kosmetyka** — brak wyraźnego podziału lewa/prawa; prawa ikona jest bardzo
+   blisko krawędzi; można dodać separator i menu aplikacji (close/minimize) pod
+   PPM na prawej ikonie.
 
 ---
 
@@ -178,19 +197,28 @@ zostawała zwinięta ikonka, a `dock_short` w ogóle się nie wczytywał.
   tytuł, czarne napisy, ikony 16 px przy pozycjach, podświetlenie wiersza pod
   myszą. Test: `display-demo/test-dock-menu.py`.
 
-### Krok 4 — uruchomione aplikacje (prawa strona)
+### Krok 4 — uruchomione aplikacje (prawa strona) — **ZROBIONE (2026-10-21)**
 
-Wszystko dostępne **w jądrze**, bez syscalli:
+Tak jak zakładał plan, całość w jądrze, bez nowych syscalli:
 
-- lista procesów: `process_table[]` (jądro) albo syscall 20 +
-  `gui_call(68,...)` — w WM prościej bezpośrednio z tablicy procesów
-  (`kernel_user_process_info/name` w `kernel_module.c`).
-- **przywrócenie na wierzch**: znaleźć okno, którego właścicielem jest pid
-  (`window_owner_pid(i) == pid`) i wywołać `wm_raise(&wm, i)` + damage.
-  (`foreground_user_process(pid)` istnieje w API modułu, ale **nie ma numeru
-  syscalla** — w WM nie jest potrzebne.)
-- **zębatka**: kilka pikseli w prawym górnym rogu ikony slotu (`wm_fill_rect`).
-- kolejność: uruchomione od prawej do lewej, maks. 5 slotów.
+- lista z `wm.win[]` (a nie z `process_table[]`): okno ma już pid właściciela
+  (`window_owner_pid`), flagi widoczności/minimalizacji i tytuł; proces daje
+  nazwę 8.3 (`kernel_user_pid_name`, nowy publiczny wrapper w
+  `kernel_exception.c`), a nazwa — ikonę z `dock_catalog[]`.
+- **przywrócenie**: `kernel_wm_activate_pid(pid)` — zdejmuje minimalizację
+  (`window_restore`) albo podnosi okno (`wm_raise`) i ustawia fokus.
+  **Nie ma drugiego spawnu.**
+- **zębatka**: `dock_badge_draw()` — 7×7 czarna plakietka + biała zębatka 5×5
+  w prawym górnym rogu ikony; przy zwiniętym pasku ta sama zębatka na
+  hamburgerze, gdy coś jest zminimalizowane.
+- kolejność: zminimalizowane od wierzchu Z, potem widoczne; maks. 5 slotów,
+  od prawej krawędzi w lewo.
+- **lewy skrót też nie tworzy kopii**: `dock_launch()` pyta
+  `kernel_user_find_running_app(path,&session)` (publiczny wrapper istniejącego
+  `user_find_running_app`), przełącza sesję gdy trzeba i przywraca okno. Dla
+  `.PRG` sprawdzany jest `kernel_tos_async_owns(TOS_ASYNC_PID)`.
+- hook testowy `kdbg_test_minimize=1` minimalizuje wierzchnie okno — tylko po
+  to, by test nie musiał trafiać w mały gadżet okna.
 
 ### Krok 5 — usunięcie ikon u góry
 
@@ -245,6 +273,16 @@ Wszystko dostępne **w jądrze**, bez syscalli:
 15. **Jedna mapa ikon.** `dock_catalog[]` (ścieżka→ikona) zasila i sloty, i
     listę „DODAJ”; bez tego każdy `.APP` dostawał ten sam `ICON_SYSTEM`
     i pasek wyglądał jak rząd identycznych zębów.
+16. **Jedna żywa kopia programu.** Przed spawnem `dock_launch()` musi zapytać
+    `kernel_user_find_running_app()` (a dla TOS `kernel_tos_async_owns()`);
+    inaczej klik w lewy skrót uruchamia drugi proces, a nie przywraca okna.
+    `kernel_wm_activate_pid()` robi restore/raise + fokus.
+17. **Prawa lista: filtruj sesję i pid pulpitu.** Bez filtra
+    `wm.win[].session` i `kernel_desktop_active_pid()` na pasku pojawiałoby się
+    okno plików pulpitu i okna z innych desktopów.
+18. **Hook `kdbg_test_minimize`** (test-only): minimalizuje wierzchnie okno,
+    żeby test nie musiał trafiać w 15×13 gadżet minimalizacji. W produkcji
+    nikt go nie ustawia. Analogicznie `kdbg_test_mouse`.
 
 ---
 
@@ -256,11 +294,13 @@ python3 test-wall-custom.py golden          # zrzut startowy == 5c1e5546…
 python3 test-icons-size.py boot48           # ikony 48 px, pomiar
 python3 test-dock-step3.py                  # krok 3: DOCK.CFG/LAUNCH.CFG, ikony, hover, start
 python3 test-dock-menu.py                   # PPM: DODAJ PRE2, USUN COMMANDER, DOCK.CFG
+python3 test-dock-running.py                # krok 4: minimalizacja, zębatka, restore (nie spawn)
 # pasek: klik w (20, 580) zwija/rozwija; PPM otwiera menu konfiguracji.
 # Stan czytać z liczników jądra:
 #   kdbg_dock_click, kdbg_dock_open, kdbg_dock_draws,
 #   kdbg_dock_slots, kdbg_dock_launch, kdbg_dock_rc,
-#   kdbg_dock_menu, kdbg_dock_add, kdbg_dock_remove, kdbg_dock_save_rc
+#   kdbg_dock_menu, kdbg_dock_add, kdbg_dock_remove, kdbg_dock_save_rc,
+#   kdbg_dock_running, kdbg_dock_restore
 ```
 
 `test-dock-step3.py` sprawdza też **pamięć jądra**: `dock_short` (etykiety,
@@ -271,6 +311,12 @@ Zrzuty: `dock3-closed/open/tip/launch.png`.
 `test-dock-menu.py` otwiera PPM na slocie, dodaje PRE2 z katalogu, usuwa
 COMMANDER i po zamknięciu Hatari czyta `\SYSTEM\DOCK.CFG` z obrazu. Zrzuty:
 `dockmenu-main/add/added/removed/empty.png`.
+
+`test-dock-running.py` uruchamia PLASMA, minimalizuje ją hookiem
+`kdbg_test_minimize`, sprawdza ikonę z zębatką (`kdbg_dock_running=1`), klik w
+nią (`kdbg_dock_restore=1`), potem lewy skrót przy zminimalizowanej aplikacji
+(`launch` nadal 1, `restore=2`) i zębatkę na zwiniętym hamburgerze. Zrzuty:
+`dockrun-min/restored/restored-by-shortcut/closed.png`.
 
 Szybkie wstrzykiwanie myszy (7× szybsze niż stare): `Session.inject(x,y,btn)`
 — jeden zapis do `kdbg_test_mouse` (patrz `10am`); `click_fast/dbl_fast` na
@@ -289,13 +335,14 @@ po każdej zmianie sprawdzić oba joby.
 | `system/kernel_wm.c` | kompozytor, górna belka (`task_draw`, `desk_draw`), **dolny pasek** (`dock_*`), **menu PPM** (`dock_menu_*`), okna |
 | `system/kernel_graphics.c` | ikony: główny cache + **mały cache 16 px**, `kgfx_icon_small_draw` |
 | `system/kernel_sessions.c` | mysz/klawiatura, mailbox testowy (`kdbg_test_mouse`), pump |
-| `system/kernel_exception.c` | router myszy: `dock_wm_capture` — PPM/klik w pasek nie trafia do aplikacji |
+| `system/kernel_exception.c` | router myszy: `dock_wm_capture`; publiczne `kernel_user_pid_name()` i `kernel_user_find_running_app()` dla paska |
 | `system/desktop_wm.c` | pulpit: ikony, okno plików (z kolumną boczną „My Atari"), `LAUNCH.CFG` |
 | `system/kernel_main.c` | start jądra, ładowanie ICONS.DAT + przygotowanie cache 16 px |
 | `display-demo/stress_atos.py` | harness: `Session`, `inject`, `click_fast`, `rd32`, `screen_text` |
 | `display-demo/test-dock-step3.py` | test kroku 3: otwarcie, `dock_short`, ikony, hover, start z paska |
 | `display-demo/test-dock-menu.py` | test PPM: dodaj/usuń, katalog, zapis `DOCK.CFG` |
-| `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10ba |
+| `display-demo/test-dock-running.py` | test kroku 4: minimalizacja, zębatka, restore z prawej i z lewego skrótu |
+| `PRZEKAZANIE-2026-10-17.txt` | pełna historia sesji, punkty 10aw–10bb |
 
 ---
 
@@ -306,8 +353,9 @@ po każdej zmianie sprawdzić oba joby.
       klik uruchamia, najechanie pokazuje nazwę (`test-dock-step3.py` zielony),
 - [x] **PPM na pasku: menu „ADD ITEM...”/„REMOVE: ...”/„CLOSE”**,
       zapis do `DOCK.CFG` i natychmiastowe odświeżenie (`test-dock-menu.py` zielony),
-- [ ] prawa strona: ikony uruchomionych aplikacji + mała zębatka, najechanie
-      pokazuje nazwę, klik przywraca okno na pierwszy plan (krok 4),
+- [x] **prawa strona: ikony uruchomionych aplikacji + mała zębatka**, najechanie
+      pokazuje nazwę, klik przywraca okno (a nie uruchamia kopii); lewy skrót
+      też przywraca, gdy program już działa (`test-dock-running.py` zielony),
 - [ ] ikony u góry (task/desk) usunięte (krok 5),
 - [x] złoty zrzut stabilny w dwóch kolejnych bootach: **`5c1e5546…`** BAJT W BAJT
       (jasnoszary pasek; zmiana koloru była świadoma),

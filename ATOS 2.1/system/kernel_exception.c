@@ -796,6 +796,19 @@ int kernel_user_process_name(uint32_t slot,char name[13])
     name[i]='\0';return 1;
 }
 
+/* 8.3 program name of a running pid (dla paska: ikona/etykieta aplikacji). */
+int kernel_user_pid_name(uint32_t pid,char name[13])
+{
+    uint8_t i;
+    if(!pid||!name)return 0;
+    for(i=0;i<USER_PROCESS_SLOTS;++i){
+        uint32_t info[4];
+        if(!kernel_user_process_info(i,info)||info[0]!=pid)continue;
+        return kernel_user_process_name(i,name);
+    }
+    return 0;
+}
+
 int kernel_user_kill(uint32_t pid)
 {
     uint8_t i,j;user_process_t *process=0;
@@ -1215,6 +1228,13 @@ static uint32_t user_find_running_app(const char *path,unsigned *session)
         return info[0];
     }
     return 0;
+}
+
+/* Publiczne wejscie dla WM (pasek): "czy ta aplikacja juz gdzies chodzi?".
+   Dzieki temu klik w skrot nie tworzy drugiej kopii, tylko przywraca okno. */
+uint32_t kernel_user_find_running_app(const char *path,unsigned *session)
+{
+    return user_find_running_app(path,session);
 }
 
 static void user_set_program_name(user_process_t *process,const char *path)
