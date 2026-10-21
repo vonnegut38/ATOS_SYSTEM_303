@@ -45,6 +45,17 @@ static uint16_t icon_color_count;
 static uint16_t icon_px=ICON_SIZE,icon_mask_bytes=ICON_MASK_BYTES,icon_pixel_bytes=ICON_PIXEL_BYTES;
 static uint16_t icon_want_px=ICON_SIZE;
 static void *icon_alloc_table,*icon_alloc_data;   /* do zwolnienia przy zmianie rozmiaru */
+/* --- Drugi cache: ikony 16 px dla paska na dole (dock) --------------------
+   Pulpit rysuje ikony w rozmiarze wybranym w SETTINGS (32/48/64), a pasek
+   potrzebuje 16 px JEDNOCZESNIE.  Dekodujemy wiec sekcje 16 px raz, na starcie,
+   i trzymamy ja w osobnych buforach; rysowanie uzywa kgfx_icon_small_draw().
+   Wskazniki tabeli 16 px wskazuja do wlasnego bufora danych, wiec zmiana
+   glownego rozmiaru ich nie rusza. */
+#define ICON_SMALL_PX 16u
+static icon_color_t icon_small_table[ICON_COLOR_COUNT];
+static uint16_t icon_small_count;
+uint32_t kdbg_icon_small;   /* ile ikon w cache 16 px (diagnostyka) */
+static void *icon_small_alloc_table,*icon_small_alloc_data;
 static term_cell_t (*session_cells)[TERM_CELLS];
 static uint8_t (*dyn_mask)[ICON_MAX_MASK_BYTES];
 static uint8_t (*dyn_pixels)[ICON_MAX_PIXEL_BYTES];
@@ -1437,6 +1448,56 @@ static uint8_t icon_grid=0u;   /* 0 COMPACT = dotychczasowy uklad (zrzut startow
 void kgfx_icon_grid_set(uint8_t mode){icon_grid=mode>2u?2u:mode;}
 uint8_t kgfx_icon_grid(void){return icon_grid;}
 int kgfx_icons_loaded(void){return icon_color_count!=0;}
+
+/* Dekoduje sekcje 16 px z tego samego bloba, zapamietuje ja w malych buforach
+   i przywraca glowny rozmiar.  Wywolac RAZ, po kgfx_icons_load(). */
+int kgfx_icons_small_prepare(const void *blob,uint32_t size)
+{
+    uint16_t main_px=icon_px;
+    unsigned i;
+    if(icon_small_count)return 1;                 /* juz przygotowane */
+    if(!blob||!size)return 0;
+    kgfx_icons_unload();
+    kgfx_icons_request(ICON_SMALL_PX);
+    if(!kgfx_icons_load(blob,size)){             /* brak sekcji 16 px */
+        kgfx_icons_request(main_px);
+        (void)kgfx_icons_load(blob,size);
+        return 0;
+    }
+    /* Przejmij bufory 16 px: loader nie moze ich zwolnic przy powrocie. */
+    icon_small_count=icon_color_count;
+    for(i=0;i<icon_small_count&&i<ICON_COLOR_COUNT;++i)icon_small_table[i]=icon_color_table[i];
+    icon_small_alloc_table=icon_alloc_table;icon_small_alloc_data=icon_alloc_data;
+    icon_alloc_table=0;icon_alloc_data=0;
+    kgfx_icons_unload();
+    kgfx_icons_request(main_px);
+    (void)kgfx_icons_load(blob,size);
+    kdbg_icon_small=icon_small_count;
+    return icon_small_count?1:0;
+}
+int kgfx_icons_small_ready(void){return icon_small_count!=0;}
+/* Rysuje ikone 16 px (pasek na dole).  x,y to lewy gorny rog. */
+void kgfx_icon_small_draw(int32_t x,int32_t y,uint8_t id)
+{
+    const icon_color_t *ic;surface_t s;cursor_guard_t guard;
+    int32_t cx=x,cy=y,cw=(int32_t)ICON_SMALL_PX,ch=(int32_t)ICON_SMALL_PX;
+    uint16_t px,py;
+    if(id>=icon_small_count)return;
+    ic=&icon_small_table[id];
+    if(!ic->mask||!ic->pixels)return;
+    s=active_surface();
+    if(!s.chunky)return;
+    if(!clip_rect(&cx,&cy,&cw,&ch))return;
+    guard=cursor_guard_begin(cx,cy,cw,ch);
+    for(py=0;py<ICON_SMALL_PX;py++)for(px=0;px<ICON_SMALL_PX;px++){
+        if(x+(int32_t)px<cx||y+(int32_t)py<cy||x+(int32_t)px>=cx+cw||y+(int32_t)py>=cy+ch)continue;
+        if(ic->mask[((uint32_t)py*ICON_SMALL_PX+px)>>3]&(uint8_t)(0x80u>>(px&7u)))
+            surface_pixel_set(&s,(uint16_t)(x+px),(uint16_t)(y+py),
+                (uint8_t)(ICON_PAL_BASE+ic->pixels[(uint32_t)py*ICON_SMALL_PX+px]));
+    }
+    cursor_guard_end(guard);
+    mark_dirty(cx,cy,cw,ch);
+}
 
 /* Zainstaluj uklad v1 lezacy pod `base` (naglowek + wpisy + paleta + dane). */
 static int icons_install(const uint8_t *base,uint32_t size,uint16_t px)

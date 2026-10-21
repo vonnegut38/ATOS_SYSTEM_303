@@ -1543,3 +1543,23 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    NASTEPNY KROK: WM-owy dolny pasek (overlay, zwijany do ikony po lewej)
    + drugi cache ikon 16 px; potem sloty z pulpitu (skroty), potem uruchomione
    aplikacje z klikiem na foreground_user_process.
+
+10ax. DOCK - KROK 1: DRUGI CACHE IKON 16 px (20.10, ZROBIONE):
+   Problem: jadro trzyma ikony w JEDNYM rozmiarze (icon_px z SETTINGS), a pasek
+   na dole potrzebuje 16 px jednoczesnie z pulitem (48 px).
+   ROZWIAZANIE (kernel_graphics.c):
+     - kgfx_icons_small_prepare(blob,size): dekoduje sekcje 16 px TYM SAMYM
+       loaderem (kgfx_icons_request(16) + kgfx_icons_load), kopiuje tabele do
+       icon_small_table[], PRZEJMUJE bufory (icon_small_alloc_*), po czym
+       przywraca glowny rozmiar.  Wolane RAZ, w gali sukcesu ladowania ikon
+       w kernel_main.
+     - kgfx_icon_small_draw(x,y,id): rysuje ikone 16 px z malego cache
+       (mask+piksele, paleta ICON_PAL_BASE); uzywac z paska na dole.
+     - kdbg_icon_small: ile ikon trafilo do cache (diagnostyka).
+   ZMIERZONE: kdbg_icon_small = 98 (wszystkie ikony), glowny rozmiar pulpitu
+   bez zmian, zloty zrzut startowy 0e821ede... BAJT W BAJT.
+   KERNEL.SYS: ffd37d6e... (222 KB).
+   UWAGA: kgfx_icon_small_draw nie jest jeszcze linkowane (nic go nie wola) -
+   gc-sections je usunie, dopoki pasek go nie uzyje; to normalne.
+   NASTEPNY KROK: dolny pasek rysowany przez WM (overlay, zwijany do ikony po
+   lewej, rozwijany w prawo), wysokosc 16-24 px, sloty wypelniane z pulpitu.

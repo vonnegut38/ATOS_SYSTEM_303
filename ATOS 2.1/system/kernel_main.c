@@ -540,9 +540,14 @@ void kernel_main(const boot_handoff_t *h)
             uint8_t *icons_blob=(uint8_t *)kmem_alloc(icons_size,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
             if(!icons_blob)icons_state=3;                    /* brak pamieci */
             else if(kfat_load_path(icons_path,icons_blob,icons_size,&icons_got)!=FAT_FILE_FOUND||icons_got!=icons_size)icons_state=4;
-            else if(!kgfx_icons_load(icons_blob,icons_size))icons_state=5;   /* zly format */
+            else if(!kgfx_icons_load(icons_blob,icons_size)){icons_state=5;}   /* zly format */
             else {
                 icons_state=6;boot_loaded("ICONS.DAT");
+                /* Drugi cache: 16 px dla paska na dole (ten sam blob, osobne
+                   bufory).  Brak sekcji 16 px w starszym formacie nie jest
+                   bledem - pasek po prostu nie bedzie mial malych ikon. */
+                {extern int kgfx_icons_small_prepare(const void *,uint32_t);
+                 (void)kgfx_icons_small_prepare(icons_blob,icons_size);}
                 /* Wersje 2/3 sa spakowane: loader rozwinal dane do WLASNEGO
                    bufora (staly rozmiar ~255 KB), wiec bufor PLIKU jest juz
                    niepotrzebny.  Wersja 1 rysuje WPROST z tego bufora, wiec
