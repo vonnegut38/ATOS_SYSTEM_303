@@ -959,6 +959,10 @@ int kernel_user_gui_keyboard_wake(void)
     static uint32_t mouse_capture_pid;
     static uint8_t mouse_wm_capture;
     static unsigned mouse_wm_session;
+    /* Pasek dolny (WM) i jego menu kontekstowe: gest myszy w tym obszarze
+       nalezy do WM, nie do aplikacji pod spodem. */
+    static uint8_t dock_wm_capture;
+    static unsigned dock_wm_session;
     ++kdbg_wake_calls;
     user_process_t *target=0;user_message_t *message;
     uint32_t pid=gui_keyboard_pid;
@@ -1017,8 +1021,19 @@ int kernel_user_gui_keyboard_wake(void)
                the WM. Its independent recorded press remains untouched. */
             if(mouse_wm_capture&&mouse_wm_session!=ksessions_current())
                 mouse_wm_capture=0;
-            if(kgame_owns_screen())mouse_wm_capture=0;
+            if(kgame_owns_screen()){mouse_wm_capture=0;dock_wm_capture=0;}
             else {
+                if(dock_wm_capture&&dock_wm_session!=ksessions_current())
+                    dock_wm_capture=0;
+                if(!mouse_capture_pid&&!dock_wm_capture&&kernel_wm_dock_at(ev_x,ev_y)){
+                    dock_wm_capture=1;
+                    dock_wm_session=ksessions_current();
+                }
+                if(dock_wm_capture){
+                    if(!(ev_buttons&3u))dock_wm_capture=0;
+                    ksessions_mouse_consume();
+                    return 1;
+                }
                 if(!mouse_capture_pid&&!mouse_wm_capture&&(ev_buttons&1u)&&
                    kernel_wm_chrome_at(ev_x,ev_y)){
                     mouse_wm_capture=1;

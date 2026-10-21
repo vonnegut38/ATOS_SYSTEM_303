@@ -14,6 +14,7 @@ static uint8_t  console_geom_valid,console_geom_tried;
 #include "icons_ids.h"
 extern unsigned kernel_user_pid_terminal(uint32_t pid);
 extern int32_t kernel_spawn_user_async(const char *,const char *,const char *,uint32_t *);
+extern void kblock_cache_clear(void);
 #include "font.h"
 #include "gui_draw.h"
 #include "kernel_console.h"
@@ -1035,6 +1036,17 @@ static int desk_click(int16_t mx,int16_t my)
 #define DOCK_MAX_SHORT 8u
 #define DOCK_LABEL_MAX 12u
 #define DOCK_PART_NONE 0xFFu
+/* Jasnoszare tlo paska (indeks 15 palety systemowej = 0xAAA).  W mono tlo
+   zostaje biale, a kreski czarne - ten sam kontrast w obu trybach. */
+#define DOCK_BG 15u
+/* Menu kontekstowe paska (PPM) - klasyczny popup nad paskiem. */
+#define DOCK_MENU_MAX 10u
+#define DOCK_MENU_TITLE 16
+#define DOCK_MENU_ROW 16
+#define DOCK_MENU_W 232
+#define DOCK_MENU_PAGE 7u
+enum {DOCK_MENU_NONE,DOCK_MENU_REMOVE,DOCK_MENU_ADD,DOCK_MENU_CLOSE,
+      DOCK_MENU_PICK,DOCK_MENU_NEXT,DOCK_MENU_PREV};
 
 typedef struct {char label[13];char path[64];uint8_t icon;} dock_short_t;
 /* Statyczna tablica w linii (nie wskaznik): jadro ma statyczny BSS, a GUI
@@ -1048,8 +1060,17 @@ static uint8_t dock_press_active,dock_press_part;
 static uint8_t dock_tip_shown,dock_tip_slot;
 static wm_rect_t dock_tip_last;
 static int dock_hover_drawn=-1;     /* slot narysowany w ostatniej kompozycji */
+static uint8_t dock_menu_open,dock_menu_mode,dock_menu_page;
+static uint8_t dock_menu_slot,dock_menu_rows;
+static int dock_menu_hover=-1;
+static uint8_t dock_menu_action[DOCK_MENU_MAX],dock_menu_arg[DOCK_MENU_MAX];
+static uint8_t dock_menu_icon[DOCK_MENU_MAX];
+static char dock_menu_text[DOCK_MENU_MAX][24];
+static wm_rect_t dock_menu_rect;
 uint32_t kdbg_dock_click,kdbg_dock_open,kdbg_dock_draws;
 uint32_t kdbg_dock_slots,kdbg_dock_launch,kdbg_dock_rc;
+uint32_t kdbg_dock_menu,kdbg_dock_add,kdbg_dock_remove;
+uint32_t kdbg_dock_save_rc,kdbg_dock_menu_draws;
 
 static int dock_height(void){return DOCK_H;}
 static void dock_geometry(wm_rect_t *r)
@@ -1090,10 +1111,54 @@ static int dock_ext_is(const char *path,const char *extension)
     }
     return 1;
 }
-/* Ikona wg rodzaju pliku - ten sam podzial co w pulpicie (desktop_wm.c:
-   ic_id_for), o tyle, ile potrzebuje pasek. */
+static int dock_path_equal(const char *a,const char *b)
+{
+    unsigned i=0;
+    for(;;){
+        char ca=a[i],cb=b[i];
+        if(ca>='a'&&ca<='z')ca=(char)(ca-32);
+        if(cb>='a'&&cb<='z')cb=(char)(cb-32);
+        if(ca!=cb)return 0;
+        if(!ca)return 1;
+        ++i;
+    }
+}
+/* Katalog programow i gier: JEDNO miejsce, ktore daje kazdemu programowi
+   wlasna, sensowna ikone (wczesniej kazdy .APP dostawal ten sam ICON_SYSTEM
+   i pasek wygladal jak rząd jednakowych zebow).  Ten sam katalog jest zrodlem
+   listy "DODAJ POZYCJE..." w menu kontekstowym paska. */
+typedef struct {const char *label;const char *path;uint8_t icon;} dock_catalog_t;
+static const dock_catalog_t dock_catalog[]={
+    {"COMMANDER","\\SYSTEM\\APP\\AC.APP",(uint8_t)ICON_NC},
+    {"SYSINFO","\\SYSTEM\\APP\\SYSINFO.APP",(uint8_t)ICON_INFORMACJE},
+    {"TASKMGR","\\SYSTEM\\APP\\TASKMGR.APP",(uint8_t)ICON_KONFIGURACJA},
+    {"PLASMA","\\SYSTEM\\APP\\PLASMA.APP",(uint8_t)ICON_OBRAZ},
+    {"ARKANOID","\\SYSTEM\\APP\\ARKANOID.APP",(uint8_t)ICON_ARKANOID},
+    {"FLASHBACK","\\SYSTEM\\APP\\FLASHBK.APP",(uint8_t)ICON_PLATFORMOWE},
+    {"SYSTOS","\\SYSTEM\\TEST\\SYSINFO.PRG",(uint8_t)ICON_TOS_PRG},
+    {"MODPLAY","\\SYSTEM\\APP\\MODPLAY.APP",(uint8_t)ICON_MUZYKA},
+    {"PRE2","\\SYSTEM\\APP\\PRE2.APP",(uint8_t)ICON_GRY},
+    {"SETTINGS","\\SYSTEM\\APP\\SETTINGS.APP",(uint8_t)ICON_USTAWIENIA},
+    {"GFXBENCH","\\SYSTEM\\APP\\GFXBENCH.APP",(uint8_t)ICON_GRAFIKA},
+    {"COMMAND","\\SYSTEM\\APP\\COMMAND.APP",(uint8_t)ICON_TERMINAL},
+    {"NOTE","\\SYSTEM\\APP\\NOTE.APP",(uint8_t)ICON_EDYTOR},
+    {"MEMTEST","\\SYSTEM\\APP\\MEMTEST.APP",(uint8_t)ICON_SYSTEM},
+    {"DIRTEST","\\SYSTEM\\APP\\DIRTEST.APP",(uint8_t)ICON_FOLDER},
+    {"FILETEST","\\SYSTEM\\APP\\FILETEST.APP",(uint8_t)ICON_DOKUMENT}
+};
+#define DOCK_CATALOG_COUNT ((unsigned)(sizeof(dock_catalog)/sizeof(dock_catalog[0])))
+static int dock_catalog_icon(const char *path)
+{
+    unsigned i;
+    for(i=0;i<DOCK_CATALOG_COUNT;++i)
+        if(dock_path_equal(path,dock_catalog[i].path))return (int)dock_catalog[i].icon;
+    return -1;
+}
+/* Ikona wg programu (katalog), a dla nieznanych - wg rodzaju pliku. */
 static uint8_t dock_icon_for(const char *path)
 {
+    int known=dock_catalog_icon(path);
+    if(known>=0)return (uint8_t)known;
     if(dock_ext_is(path,".PRG")||dock_ext_is(path,".TOS")||
        dock_ext_is(path,".TTP")||dock_ext_is(path,".GTP"))return (uint8_t)ICON_TOS_PRG;
     if(dock_ext_is(path,".TXT")||dock_ext_is(path,".DOC"))return (uint8_t)ICON_PLIK_TEKSTOWY;
@@ -1138,37 +1203,85 @@ static void dock_short_defaults(void)
     dock_short_add("TASKMGR","\\SYSTEM\\APP\\TASKMGR.APP");
 }
 /* Leniwie, przy pierwszym otwarciu paska: FAT jest juz gotowy, a boot nie
-   placi za czytanie pliku, ktorego zwiniety pasek nie potrzebuje. */
+   placi za czytanie pliku, ktorego zwiniety pasek nie potrzebuje.
+   Kolejnosc: \SYSTEM\DOCK.CFG (wlasna lista paska, tworzona przez menu
+   kontekstowe), potem \SYSTEM\LAUNCH.CFG (zgodnosc z krokiem 3 i pulpitem).
+   DOCK.CFG z samym naglowkiem = swiadomie PUSTY pasek (nie wskrzeszamy
+   domyslnych wpisow). */
 static void dock_shortcuts_load(void)
 {
     uint32_t got=0;
     unsigned i=0;
+    int from_dock=0;
     char *buffer=(char *)dock_cfg;
     if(dock_short_state)return;
     dock_short_state=1u;
     dock_short_count=0u;
-    if(kfat_load_path("\\SYSTEM\\LAUNCH.CFG",dock_cfg,sizeof(dock_cfg)-1u,&got)!=FAT_FILE_FOUND||got<2u){
-        dock_short_defaults();
+    if(kfat_load_path("\\SYSTEM\\DOCK.CFG",dock_cfg,sizeof(dock_cfg)-1u,&got)==FAT_FILE_FOUND&&got>=2u){
+        from_dock=1;
     }else{
-        if(got>sizeof(dock_cfg)-1u)got=sizeof(dock_cfg)-1u;
-        buffer[got]=0;
-        while(i<got){
-            char *line=buffer+i,*equals,*label,*value;
-            while(i<got&&buffer[i]!='\n')++i;
-            if(i<got)buffer[i++]='\0';
-            dock_trim_right(line);
-            label=dock_trim_left(line);
-            if(!*label||*label==';'||*label=='#')continue;
-            equals=label;while(*equals&&*equals!='=')++equals;
-            if(*equals!='=')continue;
-            *equals=0;dock_trim_right(label);
-            value=dock_trim_left(equals+1);
-            if(!*label||!*value)continue;
-            dock_short_add(label,value);
+        got=0;
+        if(kfat_load_path("\\SYSTEM\\LAUNCH.CFG",dock_cfg,sizeof(dock_cfg)-1u,&got)!=FAT_FILE_FOUND||got<2u){
+            dock_short_defaults();
+            kdbg_dock_slots=(uint32_t)dock_short_count;
+            return;
         }
-        if(!dock_short_count)dock_short_defaults();
     }
+    if(got>sizeof(dock_cfg)-1u)got=sizeof(dock_cfg)-1u;
+    buffer[got]=0;
+    while(i<got){
+        char *line=buffer+i,*equals,*label,*value;
+        while(i<got&&buffer[i]!='\n')++i;
+        if(i<got)buffer[i++]='\0';
+        dock_trim_right(line);
+        label=dock_trim_left(line);
+        if(!*label||*label==';'||*label=='#')continue;
+        equals=label;while(*equals&&*equals!='=')++equals;
+        if(*equals!='=')continue;
+        *equals=0;dock_trim_right(label);
+        value=dock_trim_left(equals+1);
+        if(!*label||!*value)continue;
+        dock_short_add(label,value);
+    }
+    if(!dock_short_count&&!from_dock)dock_short_defaults();
     kdbg_dock_slots=(uint32_t)dock_short_count;
+}
+static unsigned dock_put_uint(char *out,unsigned value)
+{
+    char digits[4];unsigned n=0,i;
+    if(!value){out[0]='0';return 1u;}
+    while(value){digits[n++]=(char)('0'+value%10u);value/=10u;}
+    for(i=0;i<n;++i)out[i]=digits[n-1u-i];
+    return n;
+}
+/* Zapis wlasnej listy paska do \SYSTEM\DOCK.CFG.  LAUNCH.CFG zostaje nietkniety
+   (pulpit ma swoje wpisy i builtiny *TERMINAL, *TRASH).  Po zapisie czyscimy
+   cache blokow, inaczej natychmiastowy odczyt widzi stara zawartosc. */
+static int dock_shortcuts_save(void)
+{
+    char buffer[800];
+    unsigned len=0,i;
+    const char *header="; ATOS dock - pozycje paska (zapis z menu kontekstowego)\n";
+    int result;
+    for(i=0;header[i]&&len<sizeof(buffer)-1u;++i)buffer[len++]=header[i];
+    for(i=0;i<dock_short_count;++i){
+        unsigned j;
+        for(j=0;dock_short[i].label[j]&&len<sizeof(buffer)-1u;++j)buffer[len++]=dock_short[i].label[j];
+        if(len<sizeof(buffer)-1u)buffer[len++]='=';
+        for(j=0;dock_short[i].path[j]&&len<sizeof(buffer)-1u;++j)buffer[len++]=dock_short[i].path[j];
+        if(len<sizeof(buffer)-3u){buffer[len++]='|';len+=dock_put_uint(buffer+len,dock_short[i].icon);}
+        if(len<sizeof(buffer)-1u)buffer[len++]='\n';
+    }
+    result=kfat_save_path("\\SYSTEM\\DOCK.CFG",buffer,len);
+    kblock_cache_clear();
+    kdbg_dock_save_rc=(uint32_t)result;
+    return result;
+}
+static void dock_shortcuts_reload(void)
+{
+    dock_short_state=0u;
+    dock_short_count=0u;
+    dock_shortcuts_load();
 }
 static int dock_path_is_tos(const char *path)
 {
@@ -1293,6 +1406,229 @@ static void dock_icon_draw(wm_fb_t *d,int16_t x,int16_t y,uint8_t icon)
      r=(wm_rect_t){(int16_t)(x+1),(int16_t)(y+1),DOCK_ICON-2,DOCK_ICON-2};wm_fill_rect(d,&r,WM_PAPER);
      r=(wm_rect_t){(int16_t)(x+2),(int16_t)(y+2),DOCK_ICON-4,3};wm_fill_rect(d,&r,WM_INK);}
 }
+/* --- Menu kontekstowe paska (PPM) ----------------------------------------
+   PPM na pasku otwiera popup: dla slotu "USUN: <nazwa>", zawsze "DODAJ
+   POZYCJE..." (katalog programow/gier) i "ZAMKNIJ".  Pozycje dodane/usuniete
+   laduja w \SYSTEM\DOCK.CFG, wiec LAUNCH.CFG pulpitu zostaje nietkniety. */
+static int dock_short_has_path(const char *path)
+{
+    unsigned i;
+    for(i=0;i<dock_short_count;++i)
+        if(dock_path_equal(dock_short[i].path,path))return 1;
+    return 0;
+}
+static void dock_menu_row(unsigned row,uint8_t action,uint8_t arg,uint8_t icon,const char *text)
+{
+    if(row>=DOCK_MENU_MAX)return;
+    dock_menu_action[row]=action;dock_menu_arg[row]=arg;dock_menu_icon[row]=icon;
+    dock_copy(dock_menu_text[row],sizeof(dock_menu_text[row]),text);
+}
+static void dock_menu_geometry(void)
+{
+    wm_rect_t d;unsigned h;
+    dock_geometry(&d);
+    h=DOCK_MENU_TITLE+dock_menu_rows*DOCK_MENU_ROW+2u;
+    dock_menu_rect.x=d.x;
+    dock_menu_rect.w=(uint16_t)DOCK_MENU_W;
+    dock_menu_rect.h=(uint16_t)h;
+    dock_menu_rect.y=(int16_t)((int)d.y-(int)h-2);
+    if(dock_menu_rect.y<16)dock_menu_rect.y=16;
+}
+static void dock_menu_build_main(void)
+{
+    dock_menu_rows=0u;
+    if(dock_menu_slot<dock_short_count){
+        char text[24];unsigned i=0;
+        const char *prefix="USUN: ";
+        while(prefix[i]&&i+1u<sizeof(text)){text[i]=prefix[i];++i;}
+        dock_copy(text+i,sizeof(text)-i,dock_short[dock_menu_slot].label);
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_REMOVE,dock_menu_slot,
+                      dock_short[dock_menu_slot].icon,text);
+    }
+    if(dock_short_count<DOCK_MAX_SHORT)
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_ADD,0u,0xFFu,"DODAJ POZYCJE...");
+    else
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"PASEK PELNY (8 POZ.)");
+    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"ZAMKNIJ");
+}
+static void dock_menu_build_add(void)
+{
+    unsigned available[DOCK_CATALOG_COUNT],n=0u,i,page,pages,start;
+    for(i=0;i<DOCK_CATALOG_COUNT;++i)
+        if(!dock_short_has_path(dock_catalog[i].path))available[n++]=i;
+    pages=(n+DOCK_MENU_PAGE-1u)/DOCK_MENU_PAGE;
+    if(!pages)pages=1u;
+    if((unsigned)dock_menu_page>=pages)dock_menu_page=(uint8_t)(pages-1u);
+    page=dock_menu_page;
+    dock_menu_rows=0u;
+    if(!n){
+        dock_menu_row(dock_menu_rows++,DOCK_MENU_NONE,0u,0xFFu,"BRAK NOWYCH POZYCJI");
+    }else{
+        start=page*DOCK_MENU_PAGE;
+        for(i=start;i<n&&i<start+DOCK_MENU_PAGE;++i){
+            unsigned ci=available[i];
+            dock_menu_row(dock_menu_rows++,DOCK_MENU_PICK,(uint8_t)ci,
+                          dock_catalog[ci].icon,dock_catalog[ci].label);
+        }
+    }
+    if(pages>1u){
+        if(page+1u<pages)dock_menu_row(dock_menu_rows++,DOCK_MENU_NEXT,0u,0xFFu,"DALEJ >");
+        if(page>0u)dock_menu_row(dock_menu_rows++,DOCK_MENU_PREV,0u,0xFFu,"< WSTECZ");
+    }
+    dock_menu_row(dock_menu_rows++,DOCK_MENU_CLOSE,0u,0xFFu,"ANULUJ");
+}
+static void dock_menu_build(void)
+{
+    if(dock_menu_mode)dock_menu_build_add();
+    else dock_menu_build_main();
+    dock_menu_geometry();
+}
+static void dock_menu_close(void)
+{
+    if(!dock_menu_open)return;
+    wm_damage_add(&wm,dock_menu_rect);
+    wm_force_compose=1;
+    dock_menu_open=0u;dock_menu_hover=-1;dock_menu_rows=0u;
+}
+static void dock_menu_open_at(int16_t x,int16_t y)
+{
+    uint8_t part;
+    if(dock_menu_open)dock_menu_close();
+    dock_menu_mode=0u;dock_menu_page=0u;dock_menu_slot=0xFFu;dock_menu_hover=-1;
+    part=dock_part_at(x,y);
+    if(part>=1u&&part<=DOCK_MAX_SHORT)dock_menu_slot=(uint8_t)(part-1u);
+    dock_menu_build();
+    dock_menu_open=1u;
+    ++kdbg_dock_menu;
+    wm_damage_add(&wm,dock_menu_rect);
+    wm_force_compose=1;
+}
+static void dock_menu_changed(void)
+{
+    wm_rect_t old=dock_menu_rect;
+    dock_menu_build();
+    wm_damage_add(&wm,old);
+    wm_damage_add(&wm,dock_menu_rect);
+    dock_menu_hover=-1;
+    wm_force_compose=1;
+}
+static int dock_menu_row_at(int32_t x,int32_t y)
+{
+    wm_rect_t r=dock_menu_rect;
+    int32_t top;int row;
+    if(!dock_menu_open)return -1;
+    if(x<r.x+1||x>=(int32_t)(r.x+r.w-1))return -1;
+    top=(int32_t)r.y+1+DOCK_MENU_TITLE;
+    if(y<top||y>=(int32_t)(r.y+r.h-1))return -1;
+    row=(int)((y-top)/DOCK_MENU_ROW);
+    return (row>=0&&(unsigned)row<dock_menu_rows)?row:-1;
+}
+static void dock_menu_add(unsigned catalog)
+{
+    if(catalog>=DOCK_CATALOG_COUNT||dock_short_count>=DOCK_MAX_SHORT)return;
+    if(dock_short_has_path(dock_catalog[catalog].path))return;
+    dock_copy(dock_short[dock_short_count].label,sizeof(dock_short[dock_short_count].label),
+              dock_catalog[catalog].label);
+    dock_copy(dock_short[dock_short_count].path,sizeof(dock_short[dock_short_count].path),
+              dock_catalog[catalog].path);
+    dock_short[dock_short_count].icon=dock_catalog[catalog].icon;
+    ++dock_short_count;
+    ++kdbg_dock_add;
+    (void)dock_shortcuts_save();
+    dock_shortcuts_reload();
+    dock_menu_close();
+}
+static void dock_menu_remove(unsigned index)
+{
+    unsigned i;
+    if(index>=dock_short_count)return;
+    for(i=index;i+1u<dock_short_count;++i)dock_short[i]=dock_short[i+1u];
+    --dock_short_count;
+    ++kdbg_dock_remove;
+    (void)dock_shortcuts_save();
+    dock_shortcuts_reload();
+    dock_menu_close();
+}
+static void dock_menu_activate(unsigned row)
+{
+    uint8_t action,arg;
+    if(row>=dock_menu_rows)return;
+    action=dock_menu_action[row];arg=dock_menu_arg[row];
+    if(action==DOCK_MENU_CLOSE){dock_menu_close();return;}
+    if(action==DOCK_MENU_ADD){dock_menu_mode=1u;dock_menu_page=0u;dock_menu_changed();return;}
+    if(action==DOCK_MENU_NEXT){++dock_menu_page;dock_menu_changed();return;}
+    if(action==DOCK_MENU_PREV){if(dock_menu_page)--dock_menu_page;dock_menu_changed();return;}
+    if(action==DOCK_MENU_REMOVE){dock_menu_remove(arg);return;}
+    if(action==DOCK_MENU_PICK){dock_menu_add(arg);return;}
+}
+static int dock_menu_press(int16_t x,int16_t y)
+{
+    int row;
+    if(!dock_menu_open)return 0;
+    row=dock_menu_row_at(x,y);
+    if(row>=0)dock_menu_activate((unsigned)row);
+    else dock_menu_close();
+    return 1;
+}
+static void dock_right_click(int16_t x,int16_t y)
+{
+    if(dock_menu_open){dock_menu_close();return;}
+    if(!dock_inside(x,y))return;
+    dock_menu_open_at(x,y);
+}
+static void dock_menu_hover_poll(void)
+{
+    int row;
+    if(!dock_menu_open)return;
+    row=dock_menu_row_at(wm_mouse_x,wm_mouse_y);
+    if(row==dock_menu_hover)return;
+    dock_menu_hover=row;
+    wm_damage_add(&wm,dock_menu_rect);
+    wm_force_compose=1;
+}
+static void dock_menu_paint(void)
+{
+    wm_fb_t d;wm_rect_t box,title,row;unsigned i;int32_t top;
+    if(!dock_menu_open||!wm_framebuffer)return;
+    ++kdbg_dock_menu_draws;
+    d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
+    d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
+    wm_fill_rect(&d,&dock_menu_rect,WM_INK);
+    box=dock_menu_rect;
+    box.x=(int16_t)(box.x+1);box.y=(int16_t)(box.y+1);
+    box.w=(uint16_t)(box.w-2u);box.h=(uint16_t)(box.h-2u);
+    wm_fill_rect(&d,&box,WM_PAPER);
+    title=box;title.h=DOCK_MENU_TITLE;
+    wm_fill_rect(&d,&title,(wm_bpp==8u)?NC_BLUE:WM_INK);
+    kgfx_text((int32_t)title.x+4,(int32_t)title.y,
+              dock_menu_mode?"DODAJ POZYCJE":"PASEK - KONFIGURACJA",
+              WM_PAPER,(wm_bpp==8u)?NC_BLUE:WM_INK,0);
+    top=(int32_t)title.y+DOCK_MENU_TITLE;
+    for(i=0;i<dock_menu_rows;++i){
+        int16_t ry=(int16_t)(top+(int32_t)i*DOCK_MENU_ROW);
+        uint8_t ink=WM_INK,paper=WM_PAPER;
+        row=(wm_rect_t){box.x,ry,box.w,DOCK_MENU_ROW};
+        if((int)i==dock_menu_hover){
+            wm_fill_rect(&d,&row,(wm_bpp==8u)?NC_BRIGHT:WM_INK);
+            ink=WM_PAPER;paper=(wm_bpp==8u)?NC_BRIGHT:WM_INK;
+        }
+        if(dock_menu_icon[i]!=0xFFu)
+            dock_icon_draw(&d,(int16_t)(row.x+3),ry,dock_menu_icon[i]);
+        kgfx_text((int32_t)(row.x+(dock_menu_icon[i]!=0xFFu?22:4)),(int32_t)ry,
+                  dock_menu_text[i],ink,paper,0);
+    }
+    kvideo_damage(dock_menu_rect.x,dock_menu_rect.y,
+                  (int32_t)dock_menu_rect.w,(int32_t)dock_menu_rect.h);
+}
+/* Router myszy (kernel_exception.c) pyta o ten obszar PRZED oddaniem zdarzenia
+   aplikacji.  Przy otwartym menu zwracamy 1 wszedzie: menu jest modalne i
+   klik poza nim tylko je zamyka, nie klikajac okna pod spodem. */
+int kernel_wm_dock_at(int32_t x,int32_t y)
+{
+    if(!wm_ready||!kgfx_desktop_active())return 0;
+    if(dock_menu_open)return 1;
+    return dock_inside((int16_t)x,(int16_t)y);
+}
 static void dock_draw(void)
 {
     wm_fb_t d;wm_rect_t r,c;unsigned i;int k,hover;
@@ -1301,10 +1637,10 @@ static void dock_draw(void)
     dock_geometry(&r);++kdbg_dock_draws;
     d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;
     d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
-    wm_fill_rect(&d,&r,(wm_bpp==8u)?NC_BLUE:WM_PAPER);
+    wm_fill_rect(&d,&r,(wm_bpp==8u)?DOCK_BG:WM_PAPER);
     for(k=0;k<3;++k){
         c=(wm_rect_t){(int16_t)(r.x+5),(int16_t)(r.y+6+k*5),12,2};
-        wm_fill_rect(&d,&c,WM_PAPER);
+        wm_fill_rect(&d,&c,WM_INK);   /* czarne kreski na jasnym tle (i w mono) */
     }
     hover=dock_hover_slot();
     dock_hover_drawn=hover;
@@ -1883,18 +2219,21 @@ void kernel_wm_frame_tick(uint32_t now)
         fall between two frames and never be seen - and the stale pending flag
         then leaked forever.  ksessions_mouse_press_consume() below clears it. */
      int pressed=press_pos||((buttons&1u)&&!(prev_buttons&1u));
+     int right_pressed=((buttons&2u)&&!(prev_buttons&2u));
      if(pressed&&press_pos)ksessions_mouse_press_consume();
      prev_buttons=buttons;
      ++kdbg_frames;wm_dbg_mx=(uint32_t)mx;wm_dbg_my=(uint32_t)my;wm_mouse_x=mx;wm_mouse_y=my;wm_mouse_valid=1;
      cursor_sync();
      dock_hover_poll();   /* otwarty pasek: zmiana slotu = wymus kompozycje */
+     dock_menu_hover_poll();
+     if(right_pressed)dock_right_click((int16_t)mx,(int16_t)my);
      if(1){
          if((buttons&0x1u)||pressed){
              if(pressed&&!drag_active&&!rsz_active){
                  /* px,py is the recorded button-down position (see above). */
                  /* The top-bar icon / open task list consume the click first. */
                  ++wm_dbg_press;wm_dbg_pmx=(uint32_t)px;wm_dbg_pmy=(uint32_t)py;wm_dbg_press_frame=kdbg_frames;
-                 if(dock_press((int16_t)px,(int16_t)py)==0&&desk_click((int16_t)px,(int16_t)py)==0&&
+                 if(dock_menu_press((int16_t)px,(int16_t)py)==0&&dock_press((int16_t)px,(int16_t)py)==0&&desk_click((int16_t)px,(int16_t)py)==0&&
                    task_click((int16_t)px,(int16_t)py)==0){
                      unsigned hit=wm_hit(&wm,(int16_t)px,(int16_t)py);wm_dbg_phit=hit;
                      /* Click-to-focus: the pressed window's client takes the
@@ -2380,6 +2719,7 @@ void kernel_wm_frame_tick(uint32_t now)
        stal przed petla dekoracji, wiec dolna ramka/uchwyt okna zaslanialy pasek
        i klik w slot bywal niewidoczny. */
     dock_draw();
+    dock_menu_paint();   /* PPM-menu paska: nad paskiem, pod kursorem */
     /* Redraw the dashed outline on top of the freshly composed pixels. */
     {wm_fb_t d;d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
      outline_xor_active(&d);}

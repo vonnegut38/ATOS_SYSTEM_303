@@ -66,6 +66,10 @@ void kernel_wm_app_dirty(uint8_t *surface,int32_t l,int32_t t,int32_t r,int32_t 
 uint32_t kernel_wm_pid_at(int32_t x,int32_t y);
 /* Non-client controls own their mouse gesture; never click through to an app. */
 int kernel_wm_chrome_at(int32_t x,int32_t y);
+/* Dolny pasek (i jego otwarte menu kontekstowe) jest overlayem WM: gest
+   myszy w tym obszarze nalezy do WM i nie moze trafic do aplikacji pod spodem.
+   Przy otwartym menu zwraca 1 dla KAZDEGO punktu (menu jest modalne). */
+int kernel_wm_dock_at(int32_t x,int32_t y);
 /* Release every compositor window owned by a process that is exiting. */
 void kernel_wm_close_pid(uint32_t pid);
 /* Close just one window of a client.  A TOS program registers its window under

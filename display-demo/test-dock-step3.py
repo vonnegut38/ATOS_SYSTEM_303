@@ -148,9 +148,9 @@ def main():
             entries = read_shortcuts(session, 3)
             print("dock_short: %r" % (entries,), flush=True)
             expected = [
-                ("COMMANDER", "\\SYSTEM\\APP\\AC.APP", 76),
+                ("COMMANDER", "\\SYSTEM\\APP\\AC.APP", 50),
                 ("SYSINFO", "\\SYSTEM\\APP\\SYSINFO.APP", 24),
-                ("TASKMGR", "\\SYSTEM\\APP\\TASKMGR.APP", 76),
+                ("TASKMGR", "\\SYSTEM\\APP\\TASKMGR.APP", 40),
             ]
             for got, want in zip(entries, expected):
                 if got != want:

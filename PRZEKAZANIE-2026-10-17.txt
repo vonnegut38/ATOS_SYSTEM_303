@@ -1632,3 +1632,50 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    CI: lokalnie TOS=1 i TOS=0 buduja sie, check-graphics i check-video zielone.
    NASTEPNY KROK: (4) prawa strona - uruchomione aplikacje (wm.win[] +
    window_owner_pid), zebatka, klik = window_restore/wm_raise.
+
+10ba. DOCK - JASNOSZARY PASEK, UNIKALNE IKONY, MENU PPM (21.10, ZROBIONE):
+   Na prosbe uzytkownika: (a) pasek ma jasnoszare tlo zamiast niebieskiego,
+   (b) kazdy program/gra ma WLASNA ikone (wczesniej kazdy .APP dostawal ten sam
+   ICON_SYSTEM i pasek wygladal jak rzad identycznych zebow), (c) PPM na pasku
+   otwiera menu konfiguracji z dodawaniem/usuwaniem pozycji.
+   KOLOR: DOCK_BG=15 (paleta systemowa, #AAAAAA); hamburger czarny (WM_INK),
+   bo biale kreski na jasnym tle byly niewidoczne.  Mono bez zmian (biale tlo,
+   czarne kreski).  ZLOTY REF: 5c1e5546f36edd91147a84a4c943193f2ef294f669705c3d64a0e4d0443a3e08
+   (dwa booty identyczne); poprzedni 65e67b09 (niebieski pasek).
+   IKONY: dock_catalog[] w kernel_wm.c - 16 pozycji (sciezka -> ikona):
+     COMMANDER=ICON_NC, SYSINFO=ICON_INFORMACJE, TASKMGR=ICON_KONFIGURACJA,
+     PLASMA=ICON_OBRAZ, ARKANOID=ICON_ARKANOID, FLASHBACK=ICON_PLATFORMOWE,
+     SYSTOS=ICON_TOS_PRG, MODPLAY=ICON_MUZYKA, PRE2=ICON_GRY,
+     SETTINGS, GFXBENCH, COMMAND, NOTE, MEMTEST, DIRTEST, FILETEST...
+   Ten sam katalog jest zrodlem listy "DODAJ POZYCJE...".  Nieznane sciezki:
+   fallback wg rozszerzenia; opcjonalne |NN nadal nadpisuje ikone.
+   MENU PPM:
+     - PPM na slocie: "USUN: <nazwa>", "DODAJ POZYCJE...", "ZAMKNIJ";
+       PPM na pustym pasku: "DODAJ POZYCJE...", "ZAMKNIJ" (bez USUN),
+     - lista dodawania: katalog bez pozycji juz obecnych, 7 na strone,
+       "DALEJ >" / "< WSTECZ" / "ANULUJ", ikony 16 px przy pozycjach,
+     - zapis do \SYSTEM\DOCK.CFG (WLASNY plik paska; LAUNCH.CFG pulpitu
+       zostaje nietkniety, wiec builtiny *TERMINAL/*TRASH sa bezpieczne),
+       po zapisie kblock_cache_clear() + natychmiastowy reload paska,
+     - DOCK.CFG z samym naglowkiem = swiadomie pusty pasek (nie wskrzesza
+       domyslnych wpisow); brak DOCK.CFG = czytaj LAUNCH.CFG (zgodnosc z 10az).
+   PRZECHWYTYWANIE PPM: kernel_wm_dock_at() + dock_wm_capture w
+   system/kernel_exception.c.  Bez tego zdarzenie lecialo tez do pulpitu i pod
+   menu paska otwieralo sie menu kontekstowe pulpitu.  Przy otwartym menu
+   kernel_wm_dock_at() zwraca 1 dla KAZDEGO punktu (modalne), a klik poza menu
+   tylko je zamyka - nie klika okna pod spodem.
+   LICZNIKI: kdbg_dock_menu, kdbg_dock_add, kdbg_dock_remove,
+   kdbg_dock_save_rc, kdbg_dock_menu_draws.
+   ZMIERZONE (test-dock-menu.py, PASS): start 3 pozycje (ikony 50/24/40) ->
+   PPM -> DODAJ -> PRE2: slots=4, kdbg_dock_add=1, save_rc=0, PRE2 ikona 22;
+   PPM -> USUN COMMANDER: slots=3, remove=1, save_rc=0; DOCK.CFG po zamknieciu
+   emulatora: SYSINFO|24, TASKMGR|40, PRE2|22 (bez COMMANDER).  test-dock-step3.py
+   nadal PASS (ikony 50/24/40).  Zrzuty: dockmenu-main/add/added/removed.png.
+   KERNEL.SYS: 230622 B (TOS=1), ~176 KB (TOS=0); TOS=1/TOS=0 buduja sie,
+   check-graphics i check-video zielone.
+   PLIKI: system/kernel_wm.c (dock_catalog, dock_menu_*, dock_shortcuts_save/
+   reload), system/kernel_exception.c (dock_wm_capture), include/kernel_wm.h
+   (kernel_wm_dock_at), display-demo/test-dock-menu.py.
+   NASTEPNY KROK: (4) prawa strona - uruchomione aplikacje (wm.win[] +
+   window_owner_pid), zebatka, klik = window_restore/wm_raise; potem (5) ikony
+   task/desk u gory.

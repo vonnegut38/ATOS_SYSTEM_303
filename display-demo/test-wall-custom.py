@@ -25,7 +25,9 @@ FIFO = "/tmp/wall.fifo"
 # (dock) rysowany przez WM (stan zwiniety) - swiadoma zmiana UI, nie regresja.
 # Pasek przelacza sie na RELEASE (pelny klik), zeby przypadkowy "wiszący" press
 # przy starcie nie zmienial stanu i nie rozjezdzal zrzutu.
-REF = "65e67b09f0058fb4157b45431dd4be2de3f41ebe9cdcd155ef2eccb83b03c807"
+# 21.10: tlo paska zmienione na jasnoszare (indeks 15 palety) na prosbe
+# uzytkownika - swiadoma zmiana UI, nowy wzorzec 5c1e5546...
+REF = "5c1e5546f36edd91147a84a4c943193f2ef294f669705c3d64a0e4d0443a3e08"
 
 BUILD = {
     r"\SYSTEM\KERNEL.SYS": REAL + "/build/system/KERNEL.SYS",
