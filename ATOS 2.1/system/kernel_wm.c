@@ -1055,6 +1055,7 @@ uint32_t kdbg_dock_save_rc,kdbg_dock_menu_draws;
 uint32_t kdbg_dock_restore,kdbg_dock_running,kdbg_dock_left_running;
 uint32_t kdbg_test_spawn;           /* hook testowy: 1 = uruchom PLASMA poza skrotami */
 uint32_t kdbg_test_minimize;        /* hook testowy: 1 = zminimalizuj wierzchnie okno */
+uint32_t kdbg_test_close;           /* hook testowy: 1 = zamknij wierzchnie okno (WCLS) */
 
 static int dock_height(void){return DOCK_H;}
 static void dock_geometry(wm_rect_t *r)
@@ -2317,6 +2318,14 @@ void kernel_wm_frame_tick(uint32_t now)
             if((wm.win[mi].flags&1u)&&!(wm.win[mi].flags&4u)){window_minimize(mi);break;}
         }
         kdbg_test_minimize=0u;
+    }
+    /* Hook testowy: zamknij wierzchnie okno przez te sama sciezke co X
+       (window_close -> WCLS), zeby sprawdzic, czy aplikacja konczy proces. */
+    if(kdbg_test_close){
+        unsigned ci;
+        for(ci=wm.count;ci--;)
+            if((wm.win[ci].flags&1u)&&!(wm.win[ci].flags&4u)){window_close(ci);break;}
+        kdbg_test_close=0u;
     }
     /* Hook testowy: uruchom PLASMA poza skrotami paska (test prawej strony). */
     if(kdbg_test_spawn){

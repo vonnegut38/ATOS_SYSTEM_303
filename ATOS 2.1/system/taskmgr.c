@@ -277,8 +277,11 @@ int app_main(void)
            komunikat (bez timeoutu), wiec lista procesow nie odswiezala sie
            sama, gdy uzytkownik nic nie klikal.  Teraz co tick sprawdzamy
            zegar i robimy snapshot ~2 Hz. */
-        if(!got){got=receive(&m,0);if(!got)pause_tick();}
-        if(got&&m.sender){
+        /* receive(): 0 = success, negative = no message.  The old code
+           treated success as "no message" and dropped kernel events because
+           their sender is 0 - hence X never quit the process. */
+        if(!got){if(receive(&m,0)==0)got=1;else pause_tick();}
+        if(got){
             if(m.v[0]==KKEY){if(((m.v[1]>>24)&0xffu)==1u)key_event(m.v[1]&0x7fu);}
             else if(m.v[0]==KMOU){int mx=(int)(uint16_t)(m.v[1]>>16),my=(int)(uint16_t)(m.v[1]&0xffffu);
                 unsigned buttons=(m.v[2]>>24)&7u;

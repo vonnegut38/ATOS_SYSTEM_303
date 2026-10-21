@@ -71,6 +71,7 @@ def prepare():
 def main():
     prepare()
     session = st.Session()
+    ok = True
     try:
         print("czekam 70 s na boot...", flush=True)
         time.sleep(70)
@@ -107,16 +108,30 @@ def main():
         time.sleep(1.0)
         session.shot("input-4-devices")
 
-        # TASKMGR: zamkniecie okna
+        # TASKMGR: podnies i zamknij okno przez te sama sciezke co X
+        # (window_close -> WCLS).  Wstrzykiwany klik w X bywa zawodny, bo
+        # gest non-client nie domyka sie w testowym mailboxie.
         session.click_fast(*TASKMGR_SLOT)
-        time.sleep(1.0)
-        before = session.rd32("kdbg_wm_close_window")
-        print("kdbg_wm_close_window przed zamknieciem:", before, flush=True)
-        session.click_fast(630, 98)       # X okna TASKMGR
         time.sleep(2.0)
-        after = session.rd32("kdbg_wm_close_window")
-        print("kdbg_wm_close_window po zamknieciu:", after, flush=True)
+        session.inject(400, 300, 0)
+        session.shot("input-taskmgr-top")
+        launch_before = session.rd32("kdbg_dock_launch")
+        session.cmd("hatari-debug w l 0x%x 1" % st.S["kdbg_test_close"])
+        time.sleep(2.0)
         session.shot("input-taskmgr-closed")
+
+        # Sprawdz, czy proces TASKMGR naprawde zakonczyl sie po WCLS:
+        # klik w slot paska musi URUCHOMIC nowy proces (launch+1), a nie
+        # tylko podniesc okno/stary proces.
+        session.click_fast(*TASKMGR_SLOT)
+        time.sleep(2.0)
+        launch_after = session.rd32("kdbg_dock_launch")
+        print("TASKMGR po X: launch %s -> %s (oczekiwane +1)" %
+              (launch_before, launch_after), flush=True)
+        if launch_after != launch_before + 1:
+            print("BLAD: proces TASKMGR przezyl zamkniecie okna", flush=True)
+            ok = False
+        session.shot("input-taskmgr-relaunched")
     finally:
         session.proc.terminate()
         try:
@@ -127,8 +142,10 @@ def main():
             os.close(session.fd)
         session.log.close()
 
-    print("\nZRZUTY: input-1-*.png, input-4-*.png, input-taskmgr-closed.png", flush=True)
-    return 0
+    print("\nZRZUTY: input-1-*.png, input-4-*.png, input-taskmgr-closed.png, "
+          "input-taskmgr-relaunched.png", flush=True)
+    print("WYNIK: %s" % ("INPUT/CLOSE OK" if ok else "BLAD - patrz wyzej"), flush=True)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

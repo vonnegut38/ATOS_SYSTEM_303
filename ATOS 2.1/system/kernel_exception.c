@@ -377,37 +377,27 @@ static int32_t user_message_send(uint32_t pid,const uint32_t value[4])
         target->wait_message_pointer=0;target->saved_registers[0]=0;
         target->state=USER_PROCESS_READY;return 0;
     }
-    /* Keep half of the queue reserved for non-forgeable kernel lifecycle
-       events. A client flood must not hide process death from SYSTEM.GUI. */
-    if(target->mailbox_count>=USER_MAILBOX_CLIENT_DEPTH){
-        /* A synchronous service response must not be lost behind disposable
-           pointer motion. Replace the newest KMOU entry in-place, preserving
-           keyboard and non-forgeable lifecycle events. This also prevents a
-           GUI client from waiting forever after an input burst. */
+    /* Leave ONE slot for kernel lifecycle events (KEXI).  Input routing caps
+       at USER_MAILBOX_INPUT_DEPTH (6), so a service reply can normally queue
+       at 6 without touching anything.  Only at 7 do we evict disposable
+       motion/geometry - never clicks, keys, WCLS, replies or KEXI. */
+    if(target->mailbox_count>=USER_MAILBOX_DEPTH-1u){
         index=target->mailbox_tail;
         for(i=0;i<target->mailbox_count;++i){
             index=(uint8_t)((index+USER_MAILBOX_DEPTH-1u)%USER_MAILBOX_DEPTH);
             message=&target->mailbox[index];
-            if(message->sender==0u&&message->value[0]==0x4b4d4f55u){
+            if(message->sender!=0u)continue;
+            if(message->value[0]==0x574d4f56u){          /* WMOV - geometry */
                 message->sender=current_process->pid;
                 for(j=0;j<4u;++j)message->value[j]=value[j];
                 return 0;
             }
-        }
-        /* Brak KMOU: pelna skrzynka moze byc zapchana WMOV/KKEY.  Odpowiedz
-           uslugi (GFX/GUI) jest krytyczna - klient czeka na nia i nie odbierze
-           niczego, dopoki jej nie dostanie.  Zastap NAJSTARSZY komunikat,
-           ktory nie jest jadrowym KEXI (lifecycle).  Bez tego GFX.APP
-           zapetlal sie na -0x3c2 i zamrazal rysowanie wszystkich okien. */
-        index=target->mailbox_head;
-        for(i=0;i<target->mailbox_count;++i){
-            message=&target->mailbox[index];
-            if(!(message->sender==0u&&message->value[0]==0x4b455849u)){
+            if(message->value[0]==0x4b4d4f55u &&         /* KMOU - only motion */
+               ((message->value[2]>>24)&7u)==0u){
                 message->sender=current_process->pid;
                 for(j=0;j<4u;++j)message->value[j]=value[j];
                 return 0;
             }
-            index=(uint8_t)((index+1u)%USER_MAILBOX_DEPTH);
         }
         return -0x3c2;
     }

@@ -1836,3 +1836,25 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    UWAGA: KILL/SUSPEND i zamykanie X trzeba potwierdzic realna mysza -
    wstrzykiwane klikniecia w X (non-client) nie domykaja gestu, a przycisk
    KILL/SUSPEND moze trafic w zly wiersz przy stalej geometrii okna.
+
+10bh. AUDYT 21.10: RECEIVE/TASKMGR + PRIORYTETY IPC (NAPRAWIONE):
+   1) TASKMGR gubil zdarzenia jadra: receive() zwraca 0=sukces, <0=brak;
+      kod traktowal 0 jako brak i filtrowal "if(got&&m.sender)", a WCLS/
+      KMOU/KKEY maja sender==0.  X nie konczyl procesu, okno wracalo.
+      Teraz: if(receive(&m,0)==0)got=1; else pause_tick(); if(got){...}.
+   2) IPC nadpisywal wazne komunikaty (nasza ewikcja "najstarszy nie-KEXI").
+      Nowa polityka: odpowiedz queue przy <=6 (input cap 6), ostatni slot
+      dla KEXI; przy 7 evict tylko WMOV albo KMOU buttons==0 (ruch), nigdy
+      klik/klawisz/WCLS/odpowiedz.
+   3) GUI.APP: usuniety "drop na -0x3c2" (gubil odpowiedz) - znow retry.
+      GFX.APP bez zmian (401 B).
+   TEST: test-dock-input.py sprawdza teraz ZAKONCZENIE PROCESU po WCLS:
+   kdbg_test_close=1 (window_close -> WCLS), potem klik w slot paska musi
+   dac kdbg_dock_launch+1.  WYNIK: launch 4 -> 5 PASS; input-4 taby PASS.
+   PELNY SUITE: step3/menu/running/multi/golden PASS (golden 15424d43).
+   KERNEL.SYS: 232166 B (TOS=1), 178608 B (TOS=0); TASKMGR.APP 4346 B;
+   GUI.APP 629 B; GFX.APP 401 B.
+   PLIKI outputs/AUDYT... i outputs/taskmgr... nie byly obecne w workspace -
+   analiza na podstawie zrodel; jesli maja byc recenzowane, doslac.
+   DO ZROBIENIA: usunac aktywne odpytywanie TASKMGR, odmalowywac tylko
+   zmienione wiersze, ograniczyc odswiezanie zminimalizowanych okien.

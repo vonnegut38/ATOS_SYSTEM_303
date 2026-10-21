@@ -197,13 +197,14 @@ reply_send:
     trap #0
     tst.l %d0
     beq service_loop
-    cmpi.l #-0x3c2,%d0          /* input burst filled receiver mailbox */
+    cmpi.l #-0x3c2,%d0          /* receiver mailbox temporarily full */
     bne service_failed
-    /* Klient nie odbiera (np. zminimalizowany/zajety): NIE blokuj uslugi
-       i pozostalych aplikacji. Odrzucamy odpowiedz, klient dostanie ja
-       przy nastepnym wywolaniu. Wczesniejsza petla "bra reply_send"
-       zamrazala caly GUI przy pelnej skrzynce jednego klienta. */
-    bra service_loop
+    /* Nie gub odpowiedzi: klient czeka na nia synchronicznie.  Jadro
+       rezerwuje jeden slot i evictuje tylko motion/WMOV, wiec -0x3c2
+       praktycznie nie wystepuje; w razie potrzeby krotko yield i ponow. */
+    moveq #10,%d0
+    trap #0
+    bra reply_send
 
 service_stop:
     moveq #0,%d1

@@ -206,6 +206,34 @@ sama się odświeża (polling), wybór wiersza trzyma się po PID
 `receive(...,1)` — lista odświeża się ~2 Hz bez klikania; `sel_pid` zamiast
 samego indeksu, więc snapshot nie gubi zaznaczenia.
 
+### 2.10 Audyt 21.10: receive/TASKMGR i priorytety IPC
+
+**Potwierdzone i naprawione:**
+
+1. **TASKMGR gubił zdarzenia jądra.** `receive()` zwraca **0 = sukces**,
+   `<0 = brak wiadomości`; kod traktował 0 jako brak i dodatkowo filtrował
+   `if(got&&m.sender)`, a zdarzenia jądra (WCLS/KMOU/KKEY) mają `sender==0`.
+   Efekt: X nie kończył procesu, okno mogło wracać. Teraz:
+   `if(receive(&m,0)==0)got=1; else pause_tick();` i `if(got){...}` bez
+   filtra sender. Test `test-dock-input.py` sprawdza **zakończenie procesu**:
+   po WCLS klik w slot paska musi dać `kdbg_dock_launch + 1` (PASS, 4→5).
+2. **IPC nadpisywał ważne komunikaty.** Nasza ewikcja „najstarszy nie-KEXI”
+   mogła zjeść WCLS/KKEY/klik/odpowiedź usługi. Nowa polityka: odpowiedź
+   usługi mieści się już przy 6 komunikatach (input ma cap 6); ostatni slot
+   (7) jest zarezerwowany na KEXI. Dopiero przy 7 evictowany jest **wyłącznie**
+   WMOV albo KMOU z `buttons==0` (sam ruch); nigdy klik/klawisz/WCLS/odpowiedź.
+3. **GUI nie gubi już odpowiedzi.** Usunięty „drop na -0x3c2”; usługa czeka
+   (yield) na zwolnienie miejsca, a jądro gwarantuje slot. GFX.APP bez zmian
+   (401 B); wspólna polityka IPC usuwa najczęstszą przyczynę `-0x3c2`.
+
+**Testy:** `test-dock-input.py` (4 aplikacje, taby SYSINFO, WCLS + zakończenie
+procesu) PASS; step3/menu/running/multi/golden PASS.
+
+**Do zrobienia później (wydajność):** usunąć aktywne odpytywanie TASKMGR,
+odmalowywać tylko zmienione wiersze, ograniczyć odświeżanie zminimalizowanych
+okien. Pliki `outputs/...` z audytu nie były obecne w workspace — analiza
+na podstawie źródeł.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)
@@ -397,11 +425,19 @@ syscalli:
     aplikacje martwe. Teraz 8 klientów i odrzucenie odpowiedzi zamiast pętli;
     test `test-dock-input.py`.
 23. **Pełna skrzynka klienta = martwe okna.** Klient czekający na odpowiedź
-    GFX/GUI nie odbiera WMOV/KMOU; gdy skrzynka się zapełni, `-0x3c2` i
-    `GFX.APP`/`GUI.APP` blokują usługę. Jądro evictuje KMOU, a gdy ich brak —
-    najstarszy **nie-KEXI** komunikat. Próba „dropu” po stronie GFX.APP psuła
-    boot (krytyczna odpowiedź); nie wracać do tego. Test: `test-dock-input.py`
-    + zrzuty `live10-*`.
+    GFX/GUI nie odbiera WMOV/KMOU; przy `-0x3c2` GFX/GUI blokują usługę.
+    **Nie evictować** WCLS/KKEY/klików/odpowiedzi/KEXI. Jądro rezerwuje jeden
+    slot (KEXI); odpowiedź mieści się przy 6, a przy 7 wolno evictować tylko
+    WMOV albo KMOU z `buttons==0`. Próba „dropu” w GFX.APP psuła boot.
+24. **`receive()`: 0 = sukces, <0 = brak wiadomości.** Nie pisać
+    `if(!got){got=receive(...)}` — to odwraca wynik. Zdarzenia jądra
+    (WCLS/KMOU/KKEY) mają `sender==0`; **nie filtrować** `if(m.sender)`.
+    Inaczej X nie kończy procesu, a okno wraca. Test:
+    `test-dock-input.py` sprawdza `kdbg_dock_launch + 1` po WCLS.
+25. **Test zamykania musi sprawdzać proces, nie zrzut.** Sam brak okna nie
+    dowodzi zakończenia; po WCLS klik w slot paska ma utworzyć nowy proces
+    (launch+1). Hook `kdbg_test_close=1` zamyka wierzchnie okno tą samą
+    ścieżką co X (window_close → WCLS).
 
 ---
 
