@@ -1022,5 +1022,26 @@ zalogować `intin[0]`/`intin[1]` (start, depth) dla `case 42`.
   (shell blokuje się na `kernel_user_terminal_getchar`). Do sprawdzenia:
   czy `kernel_user_terminal_getchar`/shell pump czyta zdarzenia niezależnie
   od tego, która sesja jest aktywna.
+- Wdrożona bramka sesji w `kernel_user_terminal_wake()`
+  (`kernel_exception.c`): `if(process->terminal!=ksessions_current())return 0;`
+  — nieaktywna sesja nie może już zjadać klawiszy. To poprawka słuszna sama w
+  sobie (routing wejścia), ale **test nadal pokazuje `tos_rawlog_n==0`** po
+  `hatari-event keypress 30` przy działającym SysInfo. Czyli klawisze nie
+  dochodzą jeszcze wcześniej: albo IKBD/ACIA nie dostarcza pod jądrem, albo
+  coś innego konsumuje zdarzenia przed ścieżką TOS.
+- Stan na koniec 15. rundy: blokada wejścia klawiatury pod jądrem utrzymuje się
+  (rundy 13/14/15), ale cel ma równoległą, niezależną ścieżkę pracy (tekst pól
+  TEDINFO/G_FTEXT, `wind_get` WF_*, `form_do`/menu), więc cel zostaje aktywny.
 - Uwaga proceduralna: `hatari-event keydown shift`/`alternate` **nie
   działają** (to nie scancode); używać liczb: Shift=42, Alt=56, F10=68.
+
+### 23o — korekta: baza TPA to 0x01000000 (nie 0x04000000)
+- Log Hatari: Bus Error reading at address $dffffe, PC=$1019b8c — czyli program
+  TOS działa pod 0x01000000, a nie 0x04000000, jak zakładał handoff. To
+  wyjaśnia wcześniejsze "podejrzane" aes_dbg_tree = 0x0101a066: to poprawny
+  wskaźnik do drzewa w TPA. Analiza drzewa (42x G_STRING + korzeń panelu
+  436x296) była więc w pełni aktualna.
+- Emulator w tym środowisku kończy się sam niedługo po hatari-debug screenshot
+  (exit 0; w logu zrzut OK, potem "Storing NVRAM ... failed"). Build jest już
+  zainstalowany w work/work.img; wystarczy ponownie uruchomić udokumentowaną
+  komendę Hatari.

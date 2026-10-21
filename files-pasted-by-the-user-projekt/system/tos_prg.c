@@ -41,7 +41,8 @@ static void (*tos_puts)(const char *);
 static uint8_t tos_cpu_type;
 static int32_t tos_exit_code;
 static uint32_t tos_saved_vec[13];
-static uint8_t *tos_screen;          /* 32 KB TOS screen for the program */
+static uint8_t *tos_screen;          /* TOS screen: private buffer or the real one */
+static uint8_t tos_screen_owned;     /* 1 = tos_screen was kmem_alloc'd */
 static uint16_t tos_date=0x5d2bu,tos_time=0x6000u;   /* software GEMDOS clock */
 static uint8_t tos_window_enabled;      /* T2 window is opt-in (XBIOS 0xFE cmd 7) */
 static uint8_t tos_desktop_active;      /* the graphics desktop is on screen */
@@ -569,14 +570,17 @@ static int tos_pat_match(const char *pat,const char *name)
 static int tos_dir_collect(const char *name,uint32_t size,uint32_t attributes,void *ctx)
 {
     (void)ctx;
+    /* The listing callback continues while it returns non-zero; 0 stops the
+       scan.  This used to return 0 for every entry, so Fsfirst reported a
+       single file per directory. */
     if(tos_dir_count>=TOS_DIR_MAX)return 0;
-    if(!tos_pat_match((const char *)ctx,name))return 0;
+    if(!tos_pat_match((const char *)ctx,name))return 1;
     {int i;for(i=0;i<12&&name[i];i++)tos_dir[tos_dir_count].name[i]=name[i];
      tos_dir[tos_dir_count].name[i]=0;}
     tos_dir[tos_dir_count].size=size;
     tos_dir[tos_dir_count].attr=(uint8_t)attributes;
     tos_dir_count++;
-    return 0;
+    return 1;
 }
 
 static void tos_dta_write(const tos_dirent_t *e)
@@ -650,6 +654,8 @@ static int tos_fsfirst(const char *pattern)
         dir[kk]=0;}
     else{dir[0]='.';dir[1]=0;}
     {const char *q=slash?slash+1:pattern;k=0;while(*q&&k<15)pat[k++]=*q++;pat[k]=0;}
+    /* DOS/NC semantics: *.* matches names without an extension too. */
+    if(pat[0]=='*'&&pat[1]=='.'&&pat[2]=='*'&&pat[3]==0)pat[1]=0;
     tos_dir_count=0;tos_dir_index=0;
     {char *ctx=pat;(void)ctx;}
     kfat_list_path(dir,(kfat_list_callback_t)tos_dir_collect,pat);
@@ -1176,10 +1182,18 @@ int32_t kernel_tos_run_program(const char *path)
         {uint32_t j=0u;while(args[j]&&k3<126u){mem[0x81u+k3]=(uint8_t)args[j];++k3;++j;}}}
      mem[0x80]=(uint8_t)k3;mem[0x81u+k3]=0u;}
 
-    tos_screen=(uint8_t *)(uintptr_t)(mem+total+16u);
-    /* The program screen lives after the program image (32 KB). */
-    tos_screen=(uint8_t *)kmem_alloc(32768u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
-    if(tos_screen){for(i=0u;i<32768u;++i)tos_screen[i]=0u;}
+    if(tos_window_enabled){
+        /* T2 window/fullscreen: give the program its own 32 KB screen. */
+        tos_screen=(uint8_t *)kmem_alloc(32768u,16u,KMEM_OWNER_KERNEL,KMEM_READ|KMEM_WRITE,1);
+        if(tos_screen){for(i=0u;i<32768u;++i)tos_screen[i]=0u;}
+        tos_screen_owned=1u;
+    }else{
+        /* Text mode: the program owns the real console screen, exactly like a
+         * classic ST TOS program (Physbase returns the live framebuffer). */
+        tos_screen=(uint8_t *)(uintptr_t)0x00c00000UL;   /* console on the ET4000 */
+        for(i=0u;i<32000u;++i)tos_screen[i]=0u;
+        tos_screen_owned=0u;
+    }
     tos_mode=2u;
     {int k2;for(k2=0;k2<TOS_MAX_HANDLES;k2++)tos_files[k2].used=0u;}
     tos_dta=0;tos_dir_count=0;tos_dir_index=0;tos_key_pending=-2;
@@ -1236,7 +1250,7 @@ int32_t kernel_tos_run_program(const char *path)
         for(k=0u;k<13u;++k)vec[vidx[k]]=tos_saved_vec[k];
     }
     kmem_free(file,KMEM_OWNER_KERNEL);
-    if(tos_screen)kmem_free(tos_screen,KMEM_OWNER_KERNEL);
+    if(tos_screen&&tos_screen_owned)kmem_free(tos_screen,KMEM_OWNER_KERNEL);
     if(tos_heap)kmem_free(tos_heap,KMEM_OWNER_KERNEL);
     tos_screen=0;tos_heap=0;
     kmem_free(mem,KMEM_OWNER_KERNEL);

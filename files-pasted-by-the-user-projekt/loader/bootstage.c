@@ -122,13 +122,13 @@ static int validate_chain(const boot_file_t *f)
 static int load_image(const boot_file_t *f,const char magic[8],uint16_t header_version,uint32_t load,uint32_t header_load,uint32_t *entry)
 {
     uint32_t rounded=(f->size+511u)&~511UL,remaining=f->size,sector=0,sum=0,i,memory_size,cluster=f->cluster;uint8_t *dst=(uint8_t *)(uintptr_t)load,*src=(uint8_t *)io_words;uint32_t cluster_sectors=(uint32_t)f->spc*f->scale;
-    if(f->size<BOOT_IMAGE_HEADER_SIZE||f->size>1024UL*1024UL||rounded<f->size||load+rounded>g_system.ram_bytes-8192u)return 0;
+    if(f->size<BOOT_IMAGE_HEADER_SIZE||f->size>1024UL*1024UL||rounded<f->size||load+rounded>g_system.ram_bytes+g_system.tt_ram_bytes-8192u)return 0;
     if(!validate_chain(f))return 0;
     while(remaining){uint32_t lba=f->data_start+((uint32_t)cluster-2u)*cluster_sectors+sector;uint16_t amount=remaining<512u?(uint16_t)remaining:512u,copy;if(!acsi_read_sector(f->id,lba,io_words))return 0;for(copy=0;copy<amount;++copy)*dst++=src[copy];remaining-=amount;if(++sector>=cluster_sectors){sector=0;if(remaining){cluster=fat_next(f->id,f->fat_start,cluster);if(cluster<2u||cluster==FAT_BAD||cluster_end(cluster))return 0;}}}
     system_image_cache_sync(g_system.cpu_type);
     dst=(uint8_t *)(uintptr_t)load;for(i=0;i<8u;++i)if(dst[i]!=(uint8_t)magic[i])return 0;
     if(be16(dst+8)!=header_version||be16(dst+10)!=BOOT_IMAGE_HEADER_SIZE||be32(dst+12)!=f->size||be32(dst+16)!=header_load)return 0;
-    memory_size=be32(dst+24);if(memory_size<f->size||load+memory_size<load||load+memory_size>g_system.ram_bytes-8192u)return 0;
+    memory_size=be32(dst+24);if(memory_size<f->size||load+memory_size<load||load+memory_size>g_system.ram_bytes+g_system.tt_ram_bytes-8192u)return 0;
     *entry=load+be32(dst+20);if(*entry<load+BOOT_IMAGE_HEADER_SIZE||*entry>=load+f->size)return 0;
     for(i=0;i<f->size;++i)if(i<28u||i>=32u)sum+=dst[i];
     return sum==be32(dst+28);
@@ -146,7 +146,7 @@ static void start_kernel(void)
     r=path_lookup(dirs,2u,kernel_name,&file);
     if(r!=1){console_puts("\nLOOKUP FAIL ");console_put_u32((uint32_t)(r<0?(-r):r));return;}
     console_puts(" FOUND ");console_put_u32(file.size);console_puts(" B");
-    if(!load_image(&file,kernel_magic,BOOT_IMAGE_VERSION,0x00040000UL,0x00040000UL,&entry)){console_puts("\nIMAGE FAIL");return;}
+    if(!load_image(&file,kernel_magic,BOOT_IMAGE_VERSION,0x00080000UL,0x00080000UL,&entry)){console_puts("\nIMAGE FAIL");return;}
     console_puts("\nSTARTING KERNEL.SYS...");
     ((void (*)(const boot_handoff_t *))(uintptr_t)entry)(&handoff);
 }
@@ -199,5 +199,5 @@ void boot_stage2_run(void)
 handoff.video_enter=video8_enter;handoff.video_leave=nova_enter_text_vga;
 handoff.video_clear=video8_clear;handoff.video_fill=video8_fill;handoff.video_text=video8_text;
 handoff.video_blit_mono=video8_blit_mono;((void (*)(const boot_handoff_t *))(uintptr_t)entry)(&handoff);console_clear();console_puts("ATARI SYSTEM BOOT\n\nBOOT.SYS RETURNED UNEXPECTEDLY");wait_return();return;}
-    console_clear();console_puts("ATARI SYSTEM BOOT\n\nBOOT DEVICE ");console_puts(g_system.boot_ide?"IDE UNIT ":"ACSI ID ");console_put_u32(g_system.boot_ide?(uint32_t)(id&0x7fu):(uint32_t)id);console_puts("  PARTITION ");console_put_u32((uint32_t)part);console_puts("\n\n");if(result==-2)console_puts("BOOT FILESYSTEM ERROR");else if(result<=0)console_puts("\\SYSTEM\\BOOT\\BOOT.SYS NOT FOUND");else console_puts("BOOT.SYS INVALID OR LOAD FAILED");wait_return();
+    console_clear();console_puts("ATARI SYSTEM BOOT\n\nBOOT DEVICE ");console_puts(g_system.boot_ide?"IDE UNIT ":"ACSI ID ");console_put_u32(g_system.boot_ide?(uint32_t)(id&0x7fu):(uint32_t)id);console_puts("  PARTITION ");console_put_u32((uint32_t)part);console_puts("\n\n");console_puts("RESULT=");console_put_u32((uint32_t)result);console_puts(" START=");console_put_u32(g_system.acsi_part_start[part]);console_puts(" ID=");console_puts(g_system.acsi_part_id[part]);console_puts("\n");if(result==-2)console_puts("BOOT FILESYSTEM ERROR");else if(result<=0)console_puts("\\SYSTEM\\BOOT\\BOOT.SYS NOT FOUND");else console_puts("BOOT.SYS INVALID OR LOAD FAILED");wait_return();
 }

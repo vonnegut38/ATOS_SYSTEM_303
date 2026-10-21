@@ -2,6 +2,11 @@
 #
 # ASF BIOS + TF536 (68030 / 64 MB ALT-RAM / IDE) + VOFA ET4000 na Mega ST.
 #
+# BIOS i obraz pochodza z biezacego drzewa ../ATOS 2.0 (spojny adres ladowania
+# jadra 0x00020000). Wczesniejsza wersja brala BIOS z files-pasted-by-the-user-
+# projekt (oczekiwal 0x00080000) i obraz ../disk/work.img (jadro 0x00040000),
+# przez co BIOS konczyl na "IMAGE FAIL / KERNEL LOAD FAILED" i ekran byl czarny.
+#
 # Domyslnie BIOS startuje z dysku IDE podlaczonego do karty TF536 (bez TOS
 # plyty i bez ACSI). Zeby uruchomic z ACSI zamiast IDE:
 #     BOOT=acsi ./run-bios-vga.sh
@@ -11,9 +16,9 @@
 set -e
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-PROJECT=$(cd "$HERE/../files-pasted-by-the-user-projekt" && pwd)
+PROJECT=$(cd "$HERE/../ATOS 2.0" && pwd)
 BIOS="$PROJECT/build/bios_mste.bin"
-IMAGE="$HERE/disk/work.img"
+IMAGE="$PROJECT/work/atos-v2.img"
 HATARI="$HERE/hatari-tf536"
 
 if [ ! -x "$HATARI" ]; then
@@ -44,6 +49,7 @@ if [ "${BOOT:-ide}" = "acsi" ]; then
 	exec "$HATARI" \
 		--machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 \
 		--tf536 on --graphics-card vofa --gfx-chip et4000 --mono --zoom 2 \
+		--grab --mousewarp true \
 		--acsi 0="$IMAGE" \
 		--tos "$BIOS" \
 		"$@"
@@ -53,6 +59,7 @@ fi
 exec "$HATARI" \
 	--machine megast --cpulevel 3 --cpuclock 32 --memsize 4 --ttram 64 \
 	--tf536 on --graphics-card vofa --gfx-chip et4000 --mono --zoom 2 \
+	--grab --mousewarp true \
 	$NOACSI --ide-master "$IMAGE" \
 	--tos "$BIOS" \
 	"$@"

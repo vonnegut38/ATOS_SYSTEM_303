@@ -2049,3 +2049,81 @@ PLIKI: ATOS 2.1/system/modplay.c (kopia .przed-claude-modplay),
   demo-final-claude.img (kopia demo-final.img + nowy MODPLAY),
   URUCHOM_DEMO_FINAL_CLAUDE.command (binarka z trackerem + pelne flagi).
 ================================================================================
+
+
+--------------------------------------------------------------------------------
+54. ZGLOSZENIE UI: BRAK "BURGERA" (☰), ZMINIMALIZOWANE APLIKACJE NA GORZE (16.10)
+--------------------------------------------------------------------------------
+OBSERWACJA UZYTKOWNIKA (potwierdzona zrzutem belka-teraz.png): na gorze jest
+"FILE | SETTINGS" i po prawej mala ikona (prostokat z trojkatem) - to "task
+icon"; dol ekranu jest PUSTY.  Brak przycisku menu (tzw. burgera, ☰).
+GDZIE TO JEST W KODZIE (system/kernel_wm.c):
+  * "The compositor-owned top-bar strip: session badge + task icon + applet"
+    (komentarz przy linii 1200) - caly pasek rysowany jest w GORNEJ czesci,
+  * task_draw() - ikona zadan (zminimalizowane aplikacje),
+  * applet_draw() - aplet zegara, obecnie WYLACZONY: #define WM_CLOCK_APPLET 0
+    (komentarz: "disabled for now (requested)"),
+  * kernel_wm_applet_bar() (linia 2134) odswieza pasek raz na minute,
+  * w petli glownej: kernel_wm_applet_bar(timer_service->ticks()).
+PROPOZYCJA (zgodnie z konwencja GEM/EmuTOS, do akceptacji):
+  1) GORNA BELKA: przycisk ☰ (burger) po lewej + tytuly menu (FILE/SETTINGS)
+     - burger otwiera to samo menu co FILE (jedno spojne wejscie),
+  2) DOLNY PASEK ZADAN: zminimalizowane aplikacje jako ikony z podpisami
+     (klik = przywroc), zamiast zbiorczej ikony w prawym gornym rogu,
+  3) sesyjna plakietka zostaje na gorze; zegar w gornej belce - do decyzji
+     (obecnie wylaczony na zyczenie).
+ZAKRES: zmiana wylacznie w rysowaniu paskow WM (kernel_wm.c) + obsluga klikniec
+w dolny pasek.  Bez zmian w aplikacjach.  Wymaga: build + make TOS=1 check +
+zrzuty przed/po + sprawdzenie, ze minimalizacja/przywracanie dziala.
+STATUS: czeka na akceptacje uzytkownika (dwie decyzje: burger = to samo menu co
+FILE? zegar wlaczyc?).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+55. SPECYFIKACJA UI: BURGER NA DOLE + PASEK ZADAN, GORNE MENU BEZ IKONY (16.10)
+--------------------------------------------------------------------------------
+WYMAGANIA UZYTKOWNIKA (zapis doslowny, do implementacji):
+ 1) BURGER (☰) ma byc NA DOLE, jako ikonka,
+ 2) rozwijany W LEWO,
+ 3) zawiera ZWINIETE APLIKACJE w formie ikonek (tak, jak ustalilismy),
+ 4) GORNE MENU: bez zegara (na razie) i BEZ ikonki od programow
+    (czyli usuwa sie "task icon" z prawego gornego rogu),
+ 5) DOMYSLNIE burger ma byc OTWARTY,
+ 6) ale po zapisaniu ustawien pulpitu ma PRZYJMOWAC STAN Z ZAPISU.
+WNIOSKI WYKONAWCZE:
+ * burger siedzi w PRAWYM DOLNYM rogu (skoro rozwija sie w lewo),
+ * ikony zminimalizowanych aplikacji pojawiaja sie na lewo od burgera,
+ * stan (otwarty/zamkniety) jest czescia konfiguracji pulpitu i jest zapisywany
+   razem z nia (menu FILE -> SAVE DESKTOP oraz APPLY w SETTINGS),
+ * przy braku wpisu w konfiguracji obowiazuje DOMYSLNIE otwarty.
+GDZIE TO WEJDZIE (system/kernel_wm.c - pasek jest wlasnoscia kompozytora):
+ * rysowanie gornej belki: komentarz "top-bar strip: session badge + task icon +
+   applet" (linia ~1200) -> usunac "task icon" z prawej gory, zegar zostaje
+   wylaczony (WM_CLOCK_APPLET 0),
+ * task_draw() -> zamiast zbiorczej ikony w gornym pasku rysuje ikonki
+   zminimalizowanych okien w dolnym pasku, na lewo od burgera,
+ * nowa funkcja rysujaca sam burger w prawym dolnym rogu (stan otwarty/zamkniety),
+ * hit-test klikniecia: burger przelacza stan; ikonka przywraca swoje okno,
+ * petla glowna wola odswiezanie paska (kernel_wm_applet_bar juz istnieje).
+PERSYSTENCJA STANU (DESKTOP.CFG - plik nalezacy do aplikacji pulpitu):
+ * nowy klucz, propozycja: BURGER=OPEN|CLOSED (lub 1|0),
+ * desktop_wm.c: przy starcie czyta klucz i przekazuje stan do WM (nowy opcode),
+   przy "SAVE DESKTOP"/APPLY zapisuje aktualny stan,
+ * brak klucza => OPEN (zgodnie z wymaganiem 5).
+ZAKRES ZMIAN: system/kernel_wm.c (rysowanie + hit-test + nowy opcode),
+system/desktop_wm.c (odczyt/zapis klucza), ewentualnie include/kernel_wm.h.
+Weryfikacja: build + make TOS=1 check + zrzuty przed/po + test: minimalizacja
+okna -> ikonka na dole, klik = przywrocenie; przelaczenie burgera; SAVE DESKTOP;
+restart -> stan z zapisu; przy braku wpisu -> otwarty.
+STATUS: specyfikacja przyjeta, implementacja do wykonania w swiezej sesji.
+Powod: to zmiana rysowania paskow WM + nowy opcode + persystencja, czyli kilka
+plikow i pelny cykl testow - dokladnie to, czego nie robi sie na koncu dlugiej
+sesji (dzisiejsze dwie regresje: Ctrl+Alt+Del w kernel_exception.c i probe
+RUN-owego repaintu - obie kosztowaly czas).
+================================================================================
+
+[SEKCJA 55 - WYCOFANA 16.10] Uzytkownik sprecyzowal, ze "burger" nie dotyczy
+okna pulpitu opisanego w sekcji 55 ("olej. nie to okno :)").  Specyfikacja
+burgera+paska zadan na dole zostaje WSTRZYMANA do czasu wskazania wlasciwego
+okna.  Nic z tego nie zostalo wdrazane.

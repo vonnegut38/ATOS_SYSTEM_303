@@ -186,10 +186,110 @@ shell_start:
     move.l 160(%a0),%a0
     jsr (%a0)
     addq.l #8,%sp
+    bsr shell_autoexec
     pea shell_newline(%pc)
     bsr shell_puts
     addq.l #4,%sp
     bsr shell_print_prompt
+    rts
+
+/* Run startup commands from C:\AUTOEXEC.BAT in bounded 512-byte windows.
+   Each CR/LF-terminated line is placed in shell_buffer and dispatched by
+   shell_execute, so startup stays on disk instead of in the kernel. */
+shell_autoexec:
+    movem.l %d0-%d7/%a0-%a6,-(%sp)
+    lea shell_autoexec_name(%pc),%a0
+    bsr shell_make_path
+    tst.l %d0
+    beq shell_autoexec_ret
+    pea shell_attributes(%pc)
+    pea shell_file_size(%pc)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 16(%a0),%a0
+    jsr (%a0)
+    lea 12(%sp),%sp
+    tst.l %d0
+    beq shell_autoexec_ret
+    lea shell_attributes(%pc),%a0
+    btst #4,(%a0)
+    bne shell_autoexec_ret
+    lea shell_autoexec_offset(%pc),%a0
+    clr.l (%a0)
+    lea shell_autoexec_n(%pc),%a0
+    clr.l (%a0)
+shell_autoexec_block:
+    pea shell_loaded_size(%pc)
+    move.l #512,-(%sp)
+    pea shell_file_buffer(%pc)
+    lea shell_autoexec_offset(%pc),%a0
+    move.l (%a0),-(%sp)
+    pea shell_work_path(%pc)
+    lea shell_vfs(%pc),%a0
+    move.l (%a0),%a0
+    move.l 28(%a0),%a0
+    jsr (%a0)
+    lea 20(%sp),%sp
+    tst.l %d0
+    beq shell_autoexec_ret
+    lea shell_loaded_size(%pc),%a0
+    move.l (%a0),%d1
+    beq shell_autoexec_ret
+    lea shell_file_buffer(%pc),%a0
+shell_autoexec_chars:
+    tst.l %d1
+    beq shell_autoexec_block_done
+    move.b (%a0)+,%d0
+    cmpi.b #10,%d0
+    beq.s shell_autoexec_endl
+    cmpi.b #13,%d0
+    beq.s shell_autoexec_endl
+    lea shell_autoexec_n(%pc),%a1
+    move.l (%a1),%d2
+    cmpi.l #62,%d2
+    bhi.s shell_autoexec_skip
+    lea shell_buffer(%pc),%a2
+    lea (%a2,%d2.l),%a3
+    move.b %d0,(%a3)
+    addq.l #1,%d2
+    move.l %d2,(%a1)
+shell_autoexec_skip:
+    subq.l #1,%d1
+    bra.s shell_autoexec_chars
+shell_autoexec_endl:
+    lea shell_autoexec_n(%pc),%a1
+    move.l (%a1),%d2
+    lea shell_buffer(%pc),%a2
+    lea (%a2,%d2.l),%a3
+    clr.b (%a3)
+    tst.l %d2
+    beq.s shell_autoexec_endl_done
+    lea shell_foreground_attached(%pc),%a1
+    clr.b (%a1)
+    movem.l %a0/%d1,-(%sp)
+    bsr shell_execute
+    movem.l (%sp)+,%a0/%d1
+    lea shell_length(%pc),%a1
+    clr.b (%a1)
+    lea shell_buffer(%pc),%a1
+    clr.b (%a1)
+shell_autoexec_endl_done:
+    lea shell_autoexec_n(%pc),%a1
+    clr.l (%a1)
+    subq.l #1,%d1
+    bra.s shell_autoexec_chars
+shell_autoexec_block_done:
+    lea shell_autoexec_offset(%pc),%a0
+    lea shell_loaded_size(%pc),%a1
+    move.l (%a1),%d0
+    add.l %d0,(%a0)
+    lea shell_file_size(%pc),%a1
+    move.l (%a0),%d0
+    cmp.l (%a1),%d0
+    blo shell_autoexec_block
+shell_autoexec_ret:
+    movem.l (%sp)+,%d0-%d7/%a0-%a6
     rts
 
 shell_redraw_prompt:
@@ -2366,6 +2466,7 @@ shell_cursor_text: .asciz "_"
 shell_slash_text: .asciz "\\"
 shell_newline: .asciz "\n"
 shell_empty_text: .asciz ""
+shell_autoexec_name: .asciz "AUTOEXEC.BAT"
 shell_cmd_help: .asciz "help"
 shell_cmd_uptime: .asciz "uptime"
 shell_cmd_cpu: .asciz "cpu"
@@ -2562,6 +2663,8 @@ shell_file_size: .space 4
 shell_loaded_size: .space 4
 shell_stream_offset: .space 4
 shell_attributes: .space 4
+shell_autoexec_offset: .space 4
+shell_autoexec_n: .space 4
 shell_cd_argument: .space 4
 shell_app_image: .space 4
 shell_app_stack: .space 4

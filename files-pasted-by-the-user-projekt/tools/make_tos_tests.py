@@ -94,9 +94,57 @@ BODIES = {
     move.w #100,40(%a0)
     .word 0xa002
 """,
+ 6: LA + """    /* VDI: v_opnvwk then v_bar. contrl/intin/ptsin/intout/ptsout via D0..D4. */
+    lea lblock(%pc),%a0
+    move.w #0x73,0(%a0)
+    move.w #0,2(%a0)
+    move.w #11,4(%a0)
+    move.w #45,6(%a0)
+    move.w #6,8(%a0)
+    move.w #1,16(%a0)
+    move.w #2,18(%a0)
+    move.w #3,20(%a0)
+    move.w #4,22(%a0)
+    move.w #5,24(%a0)
+    move.w #6,26(%a0)
+    move.w #7,28(%a0)
+    move.w #8,30(%a0)
+    move.w #9,32(%a0)
+    move.w #10,34(%a0)
+    move.w #11,36(%a0)
+    move.l %a0,%d0
+    lea 16(%a0),%a1
+    move.l %a1,%d1
+    lea 40(%a0),%a1
+    move.l %a1,%d2
+    lea 48(%a0),%a1
+    move.l %a1,%d3
+    lea 56(%a0),%a1
+    move.l %a1,%d4
+    trap #2
+    move.w #6,0(%a0)
+    move.w #2,2(%a0)
+    move.w #0,4(%a0)
+    move.w #0,6(%a0)
+    move.w #0,8(%a0)
+    move.w #0,40(%a0)
+    move.w #0,42(%a0)
+    move.w #80,44(%a0)
+    move.w #60,46(%a0)
+    move.l %a0,%d0
+    lea 16(%a0),%a1
+    move.l %a1,%d1
+    lea 40(%a0),%a1
+    move.l %a1,%d2
+    lea 48(%a0),%a1
+    move.l %a1,%d3
+    lea 56(%a0),%a1
+    move.l %a1,%d4
+    trap #2
+""",
 }
 
-NAMES = {1: "CONSOLE", 2: "SCREEN", 3: "LINES", 4: "RECTS", 5: "MIXED"}
+NAMES = {1: "CONSOLE", 2: "SCREEN", 3: "LINES", 4: "RECTS", 5: "MIXED", 6: "VDI"}
 
 for n in sorted(BODIES):
     start = f"PROG{n} {NAMES[n]} START" + NL
