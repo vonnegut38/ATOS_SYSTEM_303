@@ -39,7 +39,7 @@ przez `kernel_wm_app_dirty()` (z clip/WVIS).
 - zrzut: `display-demo/dockrun-right-restored.png`.
 
 Build: `KERNEL.SYS` **234 328 B** (TOS=1) / 180 762 B (TOS=0),
-`PLASMA.APP` **2 116 B**.
+`PLASMA.APP` **2 130 B**.
 
 
 ## Optymalizacja 2026-10-22 (wydajność)
@@ -48,3 +48,11 @@ Wcześniej: pełny blit 320×200 + WM + flush na każdą klatkę → **8,4 fps**
 Teraz: wzór statyczny, animowana tylko paleta 16 wpisów → **40,3 fps**
 (`kdbg_palette_calls`, 5 s). Brak per-frame BLIT8/damage WM, więc okna pod
 PLASMA nie są co klatkę przemalowywane.
+
+
+## Przesuw (2026-10-22)
+
+Dodana składowa liniowa `x + 2*y` do wzoru: przy animacji palety kolory
+wędrują po skosie, co daje efekt przewijania jak w demach — nadal tylko
+16 zapisów DAC na klatkę, **40 fps**. To nie jest fizyczne przesuwanie
+kształtu (to wymagałoby pełnego blitu 320×200 i spadku do ~8 fps).

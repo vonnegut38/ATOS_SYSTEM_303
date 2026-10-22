@@ -106,8 +106,10 @@ static int draw_pattern(void)
         int b=sin_tab[((int)x*3-(int)y*2+64)&255];
         int c=sin_tab[(((int)x+(int)y)*2)&255];
         int d=sin_tab[((dx*dx+dy*dy)>>7)&255];
-        int v=a+b+c+d;                    /* -508..508 */
-        v=(v+508)*16/1016;                /* 0..15 */
+        /* Skladowa liniowa (x+2y) daje kierunkowy "przesuw" kolorow przy
+           obrocie palety; fale dokladaja kontury. */
+        int v=a+b+c+d+(int)x*2+(int)y*3;  /* -508..1743 */
+        v=(v+508)*16/2256;                /* 0..15 */
         buf[y*W+x]=(uint8_t)(236+v);      /* prywatne 236..251 */
     }
     (void)gui_call(ATOS_CALL_BLIT8,W,H,buf,0u);
