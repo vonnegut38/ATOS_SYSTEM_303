@@ -370,6 +370,18 @@ void kernel_user_notify_focus(uint32_t pid)
     (void)user_message_post_from(0u,pid,value);
 }
 
+/* Widocznosc okna dla animacji (WM -> app).  visible=0 gdy okno jest
+   zminimalizowane lub calkowicie zasloniete (clip_count==0); 1 gdy widoczne.
+   Zwraca 0 po zakolejkowaniu, <0 gdy skrzynka pelna - WM ponowi. */
+int kernel_user_notify_visibility(uint32_t pid,uint32_t visible)
+{
+    uint32_t value[4];
+    if(!pid)return -1;
+    value[0]=0x57564953u;   /* "WVIS" */
+    value[1]=visible?1u:0u;value[2]=0u;value[3]=0u;
+    return user_message_post_from(0u,pid,value);
+}
+
 static int32_t user_message_send(uint32_t pid,const uint32_t value[4])
 {
     /* Bridge: a client addressing the kernel's GFX service with the message

@@ -30,6 +30,15 @@ TOS (`tos_prg.c`) korzysta z tej samej funkcji, więc obejmuje go bez zmian.
 `frame()` wywoływane tylko, gdy faza naprawdę się zmieniła; przy 50 Hz
 identyczny obraz nie wysyła partii 46 800 px.
 
+### Krok 4 — WVIS (kernel_wm.c, kernel_exception.c, plasma.c)
+WM śledzi `clip_count` okna (poza `wm.win[].flags`, bo część kodu porównuje
+flags dokładnie `==1/==7`). Gdy okno przechodzi między „całkowicie
+zasłonięte/zminimalizowane” a „widoczne”, wysyła `WVIS` (0/1) do właściciela;
+przy pełnej skrzynce ponawia maks. 8 razy, potem odpuszcza (bez zalewania WM).
+PLASMA na `WVIS 0` wstrzymuje zegar i nie rysuje; na `WVIS 1` ustawia
+`last=hires()`, zeruje `phase_acc` i rysuje od razu. Model: app GFX
+499→31 tys. px/s (−94%).
+
 ### Pomiar
 - `kdbg_flush_area` liczone w `kernel_video.c` (słowa przeglądane przez flush).
 
@@ -68,15 +77,17 @@ app GFX spada 873→499 tys. px/s; krok 4 (WVIS) ma zejść do ~31 tys.
 - `test-dock-multi.py` → PASS (5 aplikacji).
 - Zrzut `perf-4apps.png`: pasek widoczny, mimo `dock_draws=0` po ustabilizowaniu.
 
-Build: `KERNEL.SYS` 232 884 B (TOS=1), 179 298 B (TOS=0), `PLASMA.APP` 1 760 B.
+Krok 4: golden, step3, menu, running, input, multi — PASS; running po WVIS
+(minimalizacja/restore PLASMA) rysuje bieżącą klatkę po odsłonięciu.
+
+Build: `KERNEL.SYS` **233 348 B** (TOS=1), 179 762 B (TOS=0),
+`PLASMA.APP` **1 828 B**.
 
 ---
 
 ## 4. Co dalej (kroki 4–7)
 
-4. **WVIS** — WM powiadamia aplikację o `clip_count 0↔>0`; animacje
-   (PLASMA) wstrzymują zegar, po odsłonięciu rysują od razu. Model: app GFX
-   499→31 tys. px/s. Ryzyko średnie (nowy komunikat ABI).
+4. ~~**WVIS**~~ — **wdrożone** (patrz wyżej).
 5. **Damage na komendę/grupę** — mniejsze prostokąty dla MODPLAY/SYSINFO/
    TASKMGR; w modelu WM 0,53→0,40 MB/s.
 6. **GUI_FRAME** — damage + `wm_force_compose` zamiast pełnego ticku przy

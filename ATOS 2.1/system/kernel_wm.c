@@ -1483,6 +1483,46 @@ static unsigned dock_state_sig(void)
     }
     return s;
 }
+
+/* WVIS: aplikacja dostaje 0/1, gdy okno przechodzi miedzy "calkowicie
+   zasloniete/zminimalizowane" a "widoczne".  Animacje moga wstrzymac zegar
+   bez rysowania pikseli, ktorych nikt nie widzi.  Stan trzymamy poza
+   wm.win[].flags, bo niektore sciezki porownuja flags dokladnie (==1 / ==7). */
+#define WM_VIS_MAX 16
+static struct {uint32_t owner,surf;uint8_t known,visible,tries;} wm_vis[WM_VIS_MAX];
+static void wm_notify_visibility(void)
+{
+    unsigned i,j;uint8_t seen[WM_VIS_MAX];
+    extern int kernel_user_notify_visibility(uint32_t,uint32_t);
+    if(!wm_ready)return;
+    for(i=0;i<WM_VIS_MAX;++i)seen[i]=0u;
+    for(i=0;i<wm.count;++i){
+        uint32_t owner,surf;int vis;
+        if(wm.win[i].flags&4u)continue;
+        owner=window_owner_pid(i);surf=wm.win[i].pid;
+        if(!owner)continue;
+        vis=((wm.win[i].flags&1u)&&!(wm.win[i].flags&8u)&&wm.clip_count[i]>0u)?1:0;
+        for(j=0;j<WM_VIS_MAX;++j)if(wm_vis[j].owner==owner&&wm_vis[j].surf==surf)break;
+        if(j==WM_VIS_MAX)for(j=0;j<WM_VIS_MAX;++j)if(!wm_vis[j].owner)break;
+        if(j==WM_VIS_MAX)continue;
+        if(!wm_vis[j].owner){wm_vis[j].owner=owner;wm_vis[j].surf=surf;wm_vis[j].known=0u;wm_vis[j].visible=0u;wm_vis[j].tries=0u;}
+        seen[j]=1u;
+        if(!wm_vis[j].known||(int)wm_vis[j].visible!=vis){
+            if(kernel_user_notify_visibility(owner,vis?1u:0u)==0){
+                wm_vis[j].known=1u;wm_vis[j].visible=(uint8_t)vis;wm_vis[j].tries=0u;
+            }else if(++wm_vis[j].tries>=8u){
+                /* Skrzynka pelna/brak odbiorcy: nie zalewaj WM kolejnymi
+                   probami.  Animacja moze stracic jedna zmiane, ale nie
+                   zawiesi petli. */
+                wm_vis[j].known=1u;wm_vis[j].visible=(uint8_t)vis;wm_vis[j].tries=0u;
+            }
+        }
+    }
+    /* Usun wpisy okien, ktorych juz nie ma (zwalnia slot dla nowych). */
+    for(j=0;j<WM_VIS_MAX;++j)if(wm_vis[j].owner&&!seen[j]){
+        wm_vis[j].owner=0;wm_vis[j].surf=0;wm_vis[j].known=0;wm_vis[j].visible=0;wm_vis[j].tries=0;
+    }
+}
 static uint8_t dock_part_at(int16_t x,int16_t y)
 {
     wm_rect_t r,s;unsigned i;
@@ -2344,6 +2384,7 @@ void kernel_wm_frame_tick(uint32_t now)
     if(kgame_owns_screen())return;
     wm_sync_view();
     window_pending_zoom();
+    wm_notify_visibility();
     /* The compositor only owns the screen in desktop mode.  Without this gate
        a WM-enabled kernel would paint the applet bar/decorations over the text
        console every main-loop iteration. */

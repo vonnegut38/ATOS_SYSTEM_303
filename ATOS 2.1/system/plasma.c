@@ -13,6 +13,7 @@
 #define KMOU 0x4b4d4f55u
 #define WMOV 0x574d4f56u
 #define WCLS 0x57434c53u
+#define WVIS 0x57564953u
 #define GFX_RESTORE 6u
 #define GFX_DESKTOP 13u
 #define GFX_BATCH 18u
@@ -115,7 +116,7 @@ static void frame(uint32_t phase)
 
 int app_main(void)
 {
-    uint32_t phase=0,last,phase_acc=0;
+    uint32_t phase=0,last,phase_acc=0;uint8_t visible=1;
     gfx_pid=lookup("SYSTEM.GFX");if(gfx_pid<0)return 1;
     gui_pid=lookup("SYSTEM.GUI");if(gui_pid<0)return 1;
     {int32_t v=gfx(GFX_VIDEO_MODE,0,0,0);
@@ -145,10 +146,16 @@ int app_main(void)
                 uint32_t scan=m.v[1]&0x7fu;
                 if(scan==1u||scan==0x44u)quit=1;
             }else if(m.v[0]==WCLS)quit=1;
+            else if(m.v[0]==WVIS){
+                unsigned nv=m.v[1]&1u;
+                if(nv&&!visible){visible=1;last=hires();phase_acc=0;frame(phase);}
+                else if(!nv)visible=0;
+            }
             else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)m.v[1];}
             if(quit)break;
         }
         if(quit)break;
+        if(!visible){pause_tick();continue;}
         {uint32_t now=hires(),elapsed=now-last;
          if(elapsed>=FRAME_COUNTS){
              uint32_t steps=elapsed/FRAME_COUNTS;int redraw=0;
