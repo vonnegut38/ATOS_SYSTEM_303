@@ -1907,3 +1907,11 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    SYS_CPU zwraca percent; TASKMGR wyswietla bez wlasnej delty.
    Bezczynne aplikacje nadal 0% (poprawnie); aktywne - ostatnie okno 1 s.
    KERNEL.SYS 232454 B (TOS=1); TASKMGR.APP 4134 B.
+
+10bn. KILL NIE ZAMYKAL OKNA (22.10, NAPRAWIONE):
+   kernel_user_kill() zwalnial pamiec/powierzchnie, ale nie wolal
+   kernel_wm_close_pid(); po KILL PLASMA proces znikal, okno z zawartoscia
+   zostawalo.  Dodane przed ksurface_release_owner - KILL usuwa okno jak
+   normalne wyjscie.
+   CPU%: nadal per proces; bezczynny TASKMGR/SYSINFO 0% jest poprawne.
+   KERNEL.SYS 232462 B (TOS=1).

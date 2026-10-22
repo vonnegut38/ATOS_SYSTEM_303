@@ -273,6 +273,14 @@ tick timera** bieżącego procesu (`cpu_window`) i co 50 ticków (1 s) publikuje
 wyświetla go bez własnej delty. Bezczynne aplikacje nadal 0% (poprawnie);
 aktywne pokazują ostatnie okno 1 s.
 
+### 2.14 KILL zamyka okno (2026-10-22)
+
+`kernel_user_kill()` zwalniał pamięć i powierzchnie, ale **nie wołał
+`kernel_wm_close_pid()`** — po KILL PLASMA proces znikał, a okno z ostatnią
+zawartością zostawało. Dodane przed `ksurface_release_owner`; teraz KILL
+usuwa okno tak samo jak normalne wyjście. (Uwaga: CPU% to nadal **per
+proces**; bezczynny TASKMGR/SYSINFO = 0% jest poprawne.)
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)

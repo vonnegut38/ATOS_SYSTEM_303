@@ -849,6 +849,9 @@ int kernel_user_kill(uint32_t pid)
     if(kernel_user_service_pid("SYSTEM.GUI")==pid){
         for(i=0;i<SESSION_COUNT;i++)user_gui_release_session(i,0);
     }else{extern uint32_t kdbg_rel_kill; ++kdbg_rel_kill; user_gui_release_session(process->terminal,pid);}
+    /* KILL musi usunac okna tak samo jak normalne wyjscie; inaczej zostaje
+       martwe okno z ostatnia zawartoscia (np. PLASMA po KILL). */
+    kernel_wm_close_pid(pid);
     user_gui_notify_exit(pid,-3);user_service_remove_pid(pid);ksurface_release_owner(pid);
     /* A dying process must not leave a PSG channel sounding (normal exit, error
        or kill all arrive here).  Harmless when the pid was not the sound owner. */
