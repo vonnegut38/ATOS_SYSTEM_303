@@ -54,8 +54,6 @@ static uint32_t sel_pid;
 typedef struct {uint32_t pid;uint8_t state;char name[13];
                 uint32_t cpu,priv;} proc_row;   /* cpu = %, priv = total bytes */
 static proc_row rows[SLOTS];
-static uint32_t prev_cpu[SLOTS],prev_wall;
-static uint8_t first_snap=1;
 
 /* ---- service plumbing (same as SYSINFO) --------------------------------- */
 static gui_message_t pend[16];static unsigned pend_head,pend_tail;
@@ -119,25 +117,19 @@ static const char *state_name(uint8_t s)
 static void snapshot(void)
 {
     unsigned i;
-    uint32_t wall_now=(uint32_t)gui_call(58,0,0,0,0);   /* 50 Hz wall clock */
-    uint32_t elapsed=wall_now-prev_wall;
-    prev_wall=wall_now;
     for(i=0;i<SLOTS;++i){
         uint32_t info[4];
         info[0]=info[1]=info[2]=info[3]=0;
         rows[i].pid=0;rows[i].state=0;rows[i].name[0]=0;rows[i].cpu=0;rows[i].priv=0;
         if(gui_call(20,i,0,info,0))continue;
-        if(!info[0]){prev_cpu[i]=0;continue;}
+        if(!info[0])continue;
         rows[i].pid=info[0];rows[i].state=(uint8_t)info[1];
         (void)gui_call(SYS_NAME,i,0,rows[i].name,0);
         {uint32_t res[4];
          res[0]=res[1]=res[2]=res[3]=0;
          if(!gui_call(SYS_RES,i,0,res,0))rows[i].priv=res[0]+res[1]+res[2];} /* image+stack+heap */
-        {uint32_t c=(uint32_t)gui_call(SYS_CPU,i,0,0,0);
-         if(!first_snap&&elapsed&&c>=prev_cpu[i])rows[i].cpu=(c-prev_cpu[i])*100u/elapsed;
-         prev_cpu[i]=c;}
+        rows[i].cpu=(uint32_t)gui_call(SYS_CPU,i,0,0,0);   /* % z jadra (1 s) */
     }
-    first_snap=0;
     /* Wybor trzymamy po PID, nie po indeksie: nowy/zakonczony proces zmienia
        kolejnosc wierszy i indeks wskazywalby inny proces (albo wolny slot). */
     if(sel_pid){

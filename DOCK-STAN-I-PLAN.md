@@ -263,6 +263,16 @@ TASKMGR lista pokazuje wszystkie uruchomione aplikacje, a w tle nie ma
 żadnego odświeżania. Test: `input-taskmgr-top.png` — SYSINFO, TASKMGR,
 PLASMA, MODPLAY na liście po fokusie.
 
+### 2.13 CPU%: licznik per-tick w jądrze (2026-10-22)
+
+`SYS_CPU` (70) zwracał `cpu_ticks` (preempcje), a TASKMGR liczył procent
+między własnymi snapshotami — stąd 0% dla bezczynnych i przy rzadkich
+snapshotach. Teraz jądro w `kernel_user_preempt_context` zlicza **każdy
+tick timera** bieżącego procesu (`cpu_window`) i co 50 ticków (1 s) publikuje
+`cpu_percent = window*2` (0..100). `SYS_CPU` zwraca ten procent, TASKMGR
+wyświetla go bez własnej delty. Bezczynne aplikacje nadal 0% (poprawnie);
+aktywne pokazują ostatnie okno 1 s.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)

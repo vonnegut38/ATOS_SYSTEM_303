@@ -1898,3 +1898,12 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    pokazuje SYSINFO/TASKMGR/PLASMA/MODPLAY (input-taskmgr-top.png), a w tle
    nie ma zadnego odswiezania.
    KERNEL.SYS 232434 B (TOS=1); TASKMGR.APP 4310 B.
+
+10bm. CPU%: LICZNIK PER-TICK W JADRZE (22.10):
+   SYS_CPU (70) zwracal cpu_ticks (preempcje), TASKMGR liczyl % miedzy
+   snapshotami - 0% dla idle i przy rzadkich odswiezeniach.
+   Teraz kernel_user_preempt_context zlicza kazdy tick biezacego procesu
+   (cpu_window); co 50 tickow (1 s) publikuje cpu_percent=window*2 (0..100).
+   SYS_CPU zwraca percent; TASKMGR wyswietla bez wlasnej delty.
+   Bezczynne aplikacje nadal 0% (poprawnie); aktywne - ostatnie okno 1 s.
+   KERNEL.SYS 232454 B (TOS=1); TASKMGR.APP 4134 B.

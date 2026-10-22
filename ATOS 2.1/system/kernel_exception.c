@@ -113,6 +113,8 @@ typedef struct {
     uint16_t runtime_stack_owner,runtime_image_owner;
     uint32_t wake_tick;
     uint32_t cpu_ticks;
+    uint32_t cpu_window;              /* ticki w biezacym oknie 1 s */
+    uint32_t cpu_percent;             /* ostatnie okno, 0..100 */
     uint32_t watchdog_ticks;
     uint32_t wait_pid;
     int32_t *wait_status_pointer;
@@ -138,6 +140,7 @@ static user_process_t *suspended_parents[USER_PROCESS_SLOTS];
 static uint8_t suspended_depth;
 static char pending_arguments[64];
 static uint32_t next_user_pid=1u;
+static uint32_t cpu_sample_ticks;
 static uint8_t next_process_slot;
 static uint8_t user_console_flags[SESSION_COUNT];
 #define user_console_dirty user_console_flags[ksessions_current()]
@@ -876,6 +879,12 @@ uint32_t kernel_user_process_cpu_ticks(uint32_t slot)
     return process_table[slot].cpu_ticks;
 }
 
+uint32_t kernel_user_process_cpu_percent(uint32_t slot)
+{
+    if(slot>=USER_PROCESS_SLOTS||process_table[slot].state==USER_PROCESS_FREE)return 0;
+    return process_table[slot].cpu_percent;
+}
+
 uint32_t kernel_user_process_stack_used(uint32_t slot)
 {
     const user_process_t *process;const uint8_t *stack;uint32_t untouched=0;
@@ -1306,7 +1315,7 @@ int kernel_user_begin(const void *image,uint32_t size,const char *working_direct
  current_process->runtime_stack_owner=current_process->runtime_stack?0x0201u:0u;
  current_process->runtime_image_owner=image?0x0200u:0u;
  current_process->wake_tick=0;
- current_process->cpu_ticks=0;
+ current_process->cpu_ticks=0;current_process->cpu_window=0u;current_process->cpu_percent=0u;
  current_process->watchdog_ticks=0;
  current_process->wait_pid=0;current_process->wait_status_pointer=0;
  current_process->wait_message_pointer=0;
@@ -1462,7 +1471,7 @@ int32_t kernel_user_clone(uint32_t entry,uint32_t *child_pid)
     user_stack_init(child);
     (void)kmem_pin(image,child->memory_owner);(void)kmem_pin(stack,child->memory_owner);
     child->wake_tick=0;
-    child->cpu_ticks=0;
+    child->cpu_ticks=0;child->cpu_window=0u;child->cpu_percent=0u;
     child->watchdog_ticks=0;
     child->wait_pid=0;child->wait_status_pointer=0;
     child->wait_message_pointer=0;
@@ -1513,7 +1522,7 @@ int32_t kernel_user_create_loaded(void *image,uint32_t image_size,void *stack,
     child->saved_usp=(uint32_t)(uintptr_t)stack+USER_STACK_GUARD_BYTES+stack_size;
     user_stack_init(child);(void)kmem_pin(image,child->memory_owner);
     (void)kmem_pin(stack,child->memory_owner);child->saved_pc=entry;
-    child->saved_sr=0x0500u;child->wake_tick=0;child->cpu_ticks=0;child->watchdog_ticks=0;
+    child->saved_sr=0x0500u;child->wake_tick=0;child->cpu_ticks=0;child->cpu_window=0u;child->cpu_percent=0u;child->watchdog_ticks=0;
     child->wait_pid=0;child->wait_status_pointer=0;
     child->wait_message_pointer=0;
     user_mailbox_reset(child);
@@ -1610,6 +1619,16 @@ uint32_t kernel_user_preempt_context(uint32_t *registers,uint32_t usp,uint32_t *
     if(!user_active||!registers||!pc||!sr)return 0;
     if(user_active){
         ++current_process->cpu_ticks;
+        ++current_process->cpu_window;
+        if(++cpu_sample_ticks>=50u){
+            uint8_t cs;
+            cpu_sample_ticks=0u;
+            for(cs=0;cs<USER_PROCESS_SLOTS;++cs){
+                process_table[cs].cpu_percent=process_table[cs].cpu_window>=50u?100u:
+                    process_table[cs].cpu_window*2u;
+                process_table[cs].cpu_window=0u;
+            }
+        }
         if(current_process->watchdog_ticks&&!--current_process->watchdog_ticks){
             current_process->syscall_result=-4;
             kernel_user_end();
@@ -2177,7 +2196,7 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
         if(!kernel_user_process_resources(argument0,info)){user_syscall_result=-0x3d3;return 0;}
         for(k=0;k<4u;++k)((uint32_t *)pointer0)[k]=info[k];
         user_syscall_result=0;return 0;}
-    if(call==70u){user_syscall_result=(int32_t)kernel_user_process_cpu_ticks(argument0);return 0;}
+    if(call==70u){user_syscall_result=(int32_t)kernel_user_process_cpu_percent(argument0);return 0;}
     if(call==71u){user_syscall_result=kernel_user_kill(argument0);return 0;}
     if(call==72u){user_syscall_result=kernel_user_suspend(argument0);return 0;}
     if(call==73u){user_syscall_result=kernel_user_resume(argument0);return 0;}
