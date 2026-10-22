@@ -5,14 +5,12 @@
 #include "app_abi.h"
 #include "icons_ids.h"
 
+#define W 160u
+#define H 100u
 #if defined(FX_PLASMA) || defined(FX_TUNNEL)
-#define W 320u
-#define H 200u
 #define PAL_ANIM 1
 #define FRAME_COUNTS 246u
 #else
-#define W 160u
-#define H 100u
 #define PAL_ANIM 0
 #define FRAME_COUNTS 615u
 #endif
@@ -55,7 +53,10 @@ static const signed char sin_tab[256] __attribute__((unused))= {
     -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
     -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3,
 };
-static uint8_t *buf,*fire __attribute__((unused)),*tex __attribute__((unused));
+static uint8_t buf[W*H];
+#if defined(FX_ROTOZOOM)||defined(FX_SCALER)||defined(FX_WOBBLE)
+static uint8_t tex[64u*64u];
+#endif
 
 static void pend_push(const gui_message_t *s);
 static int pend_pop(gui_message_t *d);
@@ -124,24 +125,6 @@ static unsigned __attribute__((unused)) atan2_8(int y,int x)
 static uint32_t rng __attribute__((unused))=1234567u;
 static unsigned __attribute__((unused)) rnd(void){rng=rng*1103515245u+12345u;return (rng>>16)&0x7fffu;}
 
-static int alloc_buf(void)
-{
-    buf=(uint8_t *)(uintptr_t)gui_call(ATOS_CALL_ALLOC,(uint32_t)W*H,1u,0u,0u);
-    if(!buf)return -1;
-#if defined(FX_FLAMES)
-    fire=(uint8_t *)(uintptr_t)gui_call(ATOS_CALL_ALLOC,(uint32_t)W*H,1u,0u,0u);
-    if(!fire)return -1;
-#endif
-#if defined(FX_ROTOZOOM)||defined(FX_SCALER)||defined(FX_WOBBLE)
-    tex=(uint8_t *)(uintptr_t)gui_call(ATOS_CALL_ALLOC,64u*64u,1u,0u,0u);
-    if(!tex)return -1;
-    {unsigned x,y;for(y=0;y<64u;++y)for(x=0;x<64u;++x){
-        int v=sin_tab[(x*5+y*3)&255]+sin_tab[(x*2-y*7+32)&255];
-        tex[y*64u+x]=(uint8_t)((v+254)*16/508);
-    }}
-#endif
-    return 0;
-}
 static void blit_frame(void)
 {
     (void)gui_call(ATOS_CALL_BLIT8,W,H,buf,0u);
@@ -152,7 +135,7 @@ static void draw_static(void)
 {
     unsigned x,y;
     for(y=0;y<H;++y)for(x=0;x<W;++x){
-        int dx=(int)x-160,dy=(int)y-100;
+        int dx=(int)x-(int)(W/2),dy=(int)y-(int)(H/2);
         unsigned r=isqrt_u((unsigned)(dx*dx+dy*dy));
         unsigned ang=atan2_8(dy,dx);
 #if defined(FX_PLASMA)
@@ -174,28 +157,32 @@ static void apply_frame(unsigned phase)
 #else
 static void init_effect(void)
 {
+    unsigned x,y;
+#if defined(FX_ROTOZOOM)||defined(FX_SCALER)||defined(FX_WOBBLE)
+    for(y=0;y<64u;++y)for(x=0;x<64u;++x){
+        int v=sin_tab[(x*5+y*3)&255]+sin_tab[(x*2-y*7+32)&255];
+        tex[y*64u+x]=(uint8_t)((v+254)*16/508);
+    }
+#endif
 #if defined(FX_FLAMES)
-    unsigned x,y;for(y=0;y<H;++y)for(x=0;x<W;++x)fire[y*W+x]=0;
-    for(x=0;x<W;++x)fire[(H-1)*W+x]=(uint8_t)(180u+(rnd()&63u));
-#elif defined(FX_ROTOZOOM)
-    (void)0;
+    for(y=0;y<H;++y)for(x=0;x<W;++x)buf[y*W+x]=0;
+    for(x=0;x<W;++x)buf[(H-1)*W+x]=(uint8_t)(12u+(rnd()&3u));
 #endif
 }
 static void apply_frame(unsigned phase)
 {
     unsigned x,y;(void)phase;
 #if defined(FX_FLAMES)
-    for(x=0;x<W;++x)fire[(H-1)*W+x]=(uint8_t)(160u+(rnd()&95u));
+    for(x=0;x<W;++x)buf[(H-1)*W+x]=(uint8_t)(12u+(rnd()&3u));
     for(y=H-1;y>0;--y){
         for(x=0;x<W;++x){
-            unsigned a=fire[y*W+x];
-            unsigned l=(x?fire[y*W+x-1]:a),r=(x+1<W?fire[y*W+x+1]:a);
-            unsigned d=fire[(y+1<H?y+1:y)*W+x];
+            unsigned a=buf[y*W+x];
+            unsigned l=(x?buf[y*W+x-1]:a),r=(x+1<W?buf[y*W+x+1]:a);
+            unsigned d=buf[(y+1<H?y+1:y)*W+x];
             unsigned v=(a+l+r+d)>>2;
-            fire[(y-1)*W+x]=(uint8_t)(v>2u?v-2u:0u);
+            buf[(y-1)*W+x]=(uint8_t)(v>1u?v-1u:0u);
         }
     }
-    for(x=0;x<W*H;++x)buf[x]=(uint8_t)(fire[x]>>4);
     set_pal(firepal);
 #elif defined(FX_ROTOZOOM)
     int co=sin_tab[(phase*3+64)&255],si=sin_tab[(phase*3)&255];
@@ -259,7 +246,6 @@ int app_main(void)
     wy=(int16_t)(((int)scrh-(int)WH)/2);if(wy<8)wy=8;
     (void)gfx(GFX_WINDOW,((uint32_t)(uint16_t)wx<<16)|(uint16_t)wy,((uint32_t)WW<<16)|WH,0u);
     (void)gfx(GFX_TITLE,(uint32_t)(uintptr_t)effect_name(),0,0);
-    if(alloc_buf()!=0)return 1;
 #if defined(FX_PLASMA) || defined(FX_TUNNEL)
     draw_static();apply_frame(0);
 #else

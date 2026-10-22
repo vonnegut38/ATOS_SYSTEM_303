@@ -6,8 +6,8 @@
 
 | plik | efekt | rozmiar | metoda |
 |---|---|---|---|
-| PLASMA.APP | spirala/zoom/rotator | 320×200 | wzór + paleta 236..251, ~40 fps |
-| TUNNEL.APP | tunel | 320×200 | wzór + paleta, ~40 fps |
+| PLASMA.APP | spirala/zoom/rotator | 160×100 | wzór + paleta 236..251, ~40 fps |
+| TUNNEL.APP | tunel | 160×100 | wzór + paleta, ~40 fps |
 | FLAMES.APP | ogień | 160×100 | symulacja ognia + BLIT8, ~20 fps |
 | ROTOZOOM.APP | obrót+zoom tekstury | 160×100 | próbkowanie + BLIT8, ~20 fps |
 | SCALER.APP | skalowanie | 160×100 | próbkowanie + BLIT8, ~20 fps |
@@ -31,5 +31,15 @@ Gotowe aplikacje instalowane jako `\DEMOS\*.APP`.
 
 - folder/ikona: działa (zrzut `folder-icon.png`),
 - file window listuje sześć aplikacji (`folder-open.png`),
-- start efektu z file window w teście harness dawał `STARTED`, ale okno
-  nie pojawiało się — do dalszej diagnozy spawnu z pulpitu.
+- start SYSINFO z tego samego file window działa,
+- start PLASMA/demo z file window w harness dawał `STARTED`, ale okno
+  nie pojawiało się — problem specyficzny dla aplikacji BLIT8/PLASMA przy
+  spawnie z pulpitu; do dalszej diagnozy (nie folderu).
+
+
+## Korekta 160x100 (2026-10-22)
+
+Wszystkie efekty są teraz 160×100 i korzystają z **statycznego bufora**
+(bez `ATOS_CALL_ALLOC`), żeby wykluczyć limit heapu przy spawnie z pulpitu.
+PLASMA/TUNNEL nadal animują tylko paletę (~40 fps), pozostałe liczą
+16 tys. pikseli/klatkę (~20 fps).
