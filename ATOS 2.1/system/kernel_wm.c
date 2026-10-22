@@ -737,16 +737,33 @@ uint32_t kernel_gui_focus_pid(void);
 void kernel_gui_focus_set(uint32_t pid);
 
 static int console_fit(unsigned i);
+/* Pelny redraw bez limitu listy damage: przy drag/resize lista bywa pelna,
+   a wtedy dodanie calego ekranu bylo po cichu odrzucane - smieci zostawaly
+   do nastepnego, przypadkowego odswiezenia (1-2 s). */
+static void wm_redraw_rect(wm_rect_t r)
+{
+    if(!wm_ready)return;
+    wm_damage_clear(&wm);
+    wm_damage_add(&wm,r);
+    wm_force_compose=1;
+}
+static void wm_redraw_old_new(wm_rect_t oldr,wm_rect_t newr)
+{
+    if(!wm_ready)return;
+    wm_damage_clear(&wm);
+    wm_damage_add(&wm,oldr);
+    if(newr.x!=oldr.x||newr.y!=oldr.y||newr.w!=oldr.w||newr.h!=oldr.h)wm_damage_add(&wm,newr);
+    wm_force_compose=1;
+}
 static void window_minimize(unsigned i)
 {
     if(i>=wm.count)return;
     if(wm.win[i].flags&(4u|8u))return;         /* never minimize the background */
     wm.win[i].flags=(uint8_t)((wm.win[i].flags|8u)&(uint8_t)~1u);
-    wm_damage_add(&wm,wm.win[i].frame);
-    /* Pelny redraw: sama ramka nie zawsze pokrywa chrom okien pod nia
-       (artefakty po minimalizacji/zamknieciu nad innym oknem). */
-    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
     wm_rebuild_clip(&wm);
+    /* Sama ramka nie zawsze pokrywa chrom okien pod nia; wyczysc liste
+       damage (bywa pelna po drag) i odswiez ramke. */
+    wm_redraw_rect(wm.win[i].frame);
     /* A hidden window must not keep the keyboard: keys would go nowhere. */
     if(window_owner_pid(i)==kernel_gui_focus_pid())kernel_gui_focus_set(0u);
     wm_force_compose=1;task_strip_repaint=1u;
@@ -755,9 +772,8 @@ static void window_restore(unsigned i)
 {
     if(i>=wm.count||!(wm.win[i].flags&8u))return;
     wm.win[i].flags=(uint8_t)((wm.win[i].flags&(uint8_t)~8u)|1u);
-    wm_damage_add(&wm,wm.win[i].frame);
-    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
     wm_rebuild_clip(&wm);
+    wm_redraw_rect(wm.win[i].frame);
     kernel_gui_focus_set(window_owner_pid(i));
     {extern void kernel_user_notify_focus(uint32_t);kernel_user_notify_focus(window_owner_pid(i));}
     wm_raise(&wm,i);
@@ -882,13 +898,10 @@ static void window_close(unsigned i)
     for(j=i;j+1u<wm.count;++j)wm_window_copy(&wm.win[j],&wm.win[j+1u]);
     --wm.count;
     wm_rebuild_clip(&wm);
-    wm_damage_add(&wm,r);
-    /* Po zamknieciu okna nad innymi oknami sam prostokat bywa za maly:
-       chrom/klient pod nim zostaje z resztkami (zgloszenie "smieci w
-       gornej belce po zamknieciu PLASMA").  Jeden pelny redraw zamyka
-       sprawe; zamykanie okna nie jest czestym zdarzeniem. */
-    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
-    wm_force_compose=1;
+    /* Po zamknieciu okna nad innymi oknami sam prostokat bywa za maly;
+       wyczysc liste i odswiez stara ramke (bez pelnego ekranu - ten
+       zbyt dlugo trzymal smieci na 1024x768). */
+    wm_redraw_rect(r);
     /* Tell the owner that this window is gone: the desktop drops its cached
        file-window state instead of painting into a window that no longer
        exists (and reopens it on the next icon click). */
@@ -2730,6 +2743,7 @@ void kernel_wm_frame_tick(uint32_t now)
                     plain frame resize.  One commit per gesture: frame, work area
                     and clipping together, damaged once. */
                  if(window_owner_pid(rsz_win)!=0u){
+                     wm_rect_t oldr=wm.win[rsz_win].frame;
                      wm_resize_commit(&wm,rsz_win,(uint16_t)rsz_nw,(uint16_t)rsz_nh);
                      /* Zmiana rozmiaru okna aplikacji: stara deklaracja
                         content_h (sprzed resize) byla rowna STAREJ wysokosci
@@ -2739,23 +2753,25 @@ void kernel_wm_frame_tick(uint32_t now)
                         paska nie bylo widac ani przez chwile.  Aplikacja z
                         prawdziwa trescia przewijana zadeklaruje swoje
                         content_h przy najblizszym rysowaniu. */
-                     wm_force_compose=1;
+                     notify_geometry(rsz_win);
+                     wm_redraw_old_new(oldr,wm.win[rsz_win].frame);
                  }else{
+                     wm_rect_t oldr=wm.win[rsz_win].frame;
                      /* The shell window: the text area follows the frame too
                         (clamped to the 80x25 grid) and the view re-follows the
                         cursor, so the command line never ends up under the
                         bottom border. */
                      wm_resize(&wm,rsz_win,(uint16_t)rsz_nw,(uint16_t)rsz_nh);
                      if(console_fit(rsz_win))wm_force_compose=1;
+                     notify_geometry(rsz_win);
+                     wm_redraw_old_new(oldr,wm.win[rsz_win].frame);
                  }
-                 notify_geometry(rsz_win);
-                 wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
-                 wm_force_compose=1;
                  rsz_active=0;
              }
              if(drag_active){
                  wm_dbg_mvx=(uint32_t)drag_nx;wm_dbg_mvy=(uint32_t)drag_ny;wm_dbg_mvwin=drag_win;
                  if(drag_live){
+                     wm_rect_t oldr=wm.win[drag_win].frame;
                      /* Ostatni krok mogl wypasc przez limit tempa - domknij go
                         tym samym wm_move_live(), zeby nie zostal ani piksel
                         rozjazdu miedzy ramka a powierzchnia klienta. */
@@ -2763,11 +2779,10 @@ void kernel_wm_frame_tick(uint32_t now)
                         (int16_t)drag_ny!=wm.win[drag_win].frame.y)
                          wm_move(&wm,drag_win,(int16_t)drag_nx,(int16_t)drag_ny);
                      notify_geometry(drag_win);
-                     /* Po zakonczeniu przeciagania pelny redraw: stare polozenie
-                        okna moglo odslonic chrom okna pod spodem, a sam damage
-                        old/new nie zawsze go odtwarza (smieci w belce). */
-                     wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
-                     wm_force_compose=1;
+                     /* Wyczysc pelna liste damage i odswiez TYLKO stara i nowa
+                        ramke; pelny ekran na 1024x768 trwal 1-2 s i smieci
+                        byly widoczne do konca kompozycji. */
+                     wm_redraw_old_new(oldr,wm.win[drag_win].frame);
                      drag_active=0;drag_live=0;drag_step_valid=0;move_drawn_valid=0;++wm_dbg_drag_end;
                  }else{
                  /* Erase the XOR outline before the window is placed. */
@@ -2785,10 +2800,10 @@ void kernel_wm_frame_tick(uint32_t now)
                      }
                      move_drawn_valid=0;
                  }
+                 {wm_rect_t oldr=wm.win[drag_win].frame;
                  wm_move(&wm,drag_win,(int16_t)drag_nx,(int16_t)drag_ny);   /* final position */
                  notify_geometry(drag_win);
-                 wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
-                 wm_force_compose=1;
+                 wm_redraw_old_new(oldr,wm.win[drag_win].frame);}
                  drag_active=0;move_drawn_valid=0;++wm_dbg_drag_end;
                  /* No routine full refresh: wm_move() already damaged the OLD and
                     NEW frame, and wm_recompose() redraws the background plus every

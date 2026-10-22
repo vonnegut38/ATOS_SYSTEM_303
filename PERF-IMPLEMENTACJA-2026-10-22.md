@@ -121,10 +121,10 @@ Zamykanie/minimalizacja dodawały damage tylko ramki okna; przy oknach
 nachodzących na siebie chrom/klient pod spodem nie zawsze był odtwarzany w
 całości (zwłaszcza przy 1024×768 i częściowym przykryciu).
 
-`window_close`, `window_minimize` i `window_restore` dodają teraz **pełny
-redraw ekranu** (`wm_damage_add` całego obszaru + `wm_force_compose`).
-Zamknięcie/minimalizacja to rzadkie zdarzenie, więc jeden pełny frame jest
-akceptowalny; animacje nadal korzystają z przyciętego damage.
+`window_close`, `window_minimize` i `window_restore` **czyszczą listę damage**
+i dodają ramkę okna (bez pełnego ekranu). Pełny redraw 1024×768 trwał ~1–2 s
+i przez ten czas śmieci były widoczne; czyszczenie listy usuwa problem
+odrzuconego damage bez czekania na pełną kompozycję.
 
 Testy: `closeart-before/after` i `minart-before/after` (800×600) — czysto;
 `test-dock-input` i `test-dock-running` — PASS. Build `KERNEL.SYS`
@@ -143,10 +143,29 @@ starej pozycji okna — to **stary obszar po przeciągnięciu**, nie sam close.
 `wm_move()`/`wm_move_live()` uszkadzały old/new ramki, ale chrom okna pod
 spodem nie zawsze był odtwarzany w całości.
 
-Po zakończeniu **drag** (live i outline) oraz **resize** dodawany jest pełny
-redraw ekranu + `wm_force_compose`. To jednorazowy koszt przy puszczeniu
-myszy, nie przy każdym kroku.
+Po zakończeniu **drag** (live i outline) oraz **resize** lista damage jest
+czyszczona, a dodawane są **stara i nowa ramka** okna + `wm_force_compose`.
+To odświeża tylko obszar zmiany (szybko), zamiast pełnego ekranu, który na
+1024×768 trwał 1–2 s.
 
 Testy: golden, input, close/minimize; build `KERNEL.SYS` **233 668 B**
 (TOS=1) / 180 086 B (TOS=0). Commit:
 `fix: pelny redraw po drag/resize (smieci po przesunieciu PLASMA)`.
+
+
+---
+
+## 10. Poprawka: śmieci widoczne 1–2 s (2026-10-22)
+
+Pełny redraw po close/minimize/drag był poprawny wizualnie, ale na 1024×768
+trwał ~1–2 s — śmieci znikały dopiero po jego zakończeniu. Dodatkowo przy
+drag lista damage bywa pełna, więc `wm_damage_add(pełny ekran)` mógł zostać
+odrzucony i odświeżenie czekało na przypadkowy event.
+
+Teraz:
+- `wm_full_redraw_request` zastąpione przez `wm_redraw_rect` /
+  `wm_redraw_old_new`: **clear listy damage + tylko stara/nowa ramka**,
+- close/minimize/restore: clear + ramka okna,
+- drag/resize: clear + stara i nowa ramka.
+
+Testy close/min/input — PASS. Build **233 652 B** (TOS=1) / 180 066 B (TOS=0).
