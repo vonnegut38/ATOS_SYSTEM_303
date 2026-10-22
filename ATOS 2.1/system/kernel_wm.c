@@ -743,6 +743,9 @@ static void window_minimize(unsigned i)
     if(wm.win[i].flags&(4u|8u))return;         /* never minimize the background */
     wm.win[i].flags=(uint8_t)((wm.win[i].flags|8u)&(uint8_t)~1u);
     wm_damage_add(&wm,wm.win[i].frame);
+    /* Pelny redraw: sama ramka nie zawsze pokrywa chrom okien pod nia
+       (artefakty po minimalizacji/zamknieciu nad innym oknem). */
+    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
     wm_rebuild_clip(&wm);
     /* A hidden window must not keep the keyboard: keys would go nowhere. */
     if(window_owner_pid(i)==kernel_gui_focus_pid())kernel_gui_focus_set(0u);
@@ -753,6 +756,7 @@ static void window_restore(unsigned i)
     if(i>=wm.count||!(wm.win[i].flags&8u))return;
     wm.win[i].flags=(uint8_t)((wm.win[i].flags&(uint8_t)~8u)|1u);
     wm_damage_add(&wm,wm.win[i].frame);
+    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
     wm_rebuild_clip(&wm);
     kernel_gui_focus_set(window_owner_pid(i));
     {extern void kernel_user_notify_focus(uint32_t);kernel_user_notify_focus(window_owner_pid(i));}
@@ -879,6 +883,12 @@ static void window_close(unsigned i)
     --wm.count;
     wm_rebuild_clip(&wm);
     wm_damage_add(&wm,r);
+    /* Po zamknieciu okna nad innymi oknami sam prostokat bywa za maly:
+       chrom/klient pod nim zostaje z resztkami (zgloszenie "smieci w
+       gornej belce po zamknieciu PLASMA").  Jeden pelny redraw zamyka
+       sprawe; zamykanie okna nie jest czestym zdarzeniem. */
+    wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
+    wm_force_compose=1;
     /* Tell the owner that this window is gone: the desktop drops its cached
        file-window state instead of painting into a window that no longer
        exists (and reopens it on the next icon click). */

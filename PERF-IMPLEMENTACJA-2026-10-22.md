@@ -95,7 +95,7 @@ bieżącą klatkę po odsłonięciu. Arkanoid (GUI_FRAME) uruchamia się z ikony
 jego okno nie pojawiło się w szybkim teście — do sprawdzenia osobno, krok 6
 go dotyczy.
 
-Build: `KERNEL.SYS` **233 344 B** (TOS=1), 179 762 B (TOS=0),
+Build: `KERNEL.SYS` **233 508 B** (TOS=1), 179 926 B (TOS=0),
 `PLASMA.APP` **1 828 B**.
 
 ---
@@ -110,3 +110,24 @@ Build: `KERNEL.SYS` **233 344 B** (TOS=1), 179 762 B (TOS=0),
 
 Rekomendacja: zostało tylko **per-command (5)**; po nim powtórzyć golden,
 kliknięcia i pomiar. Kroki 1–4, 6–7 są w `bd1791a`/następnym commicie.
+
+
+---
+
+## 8. Poprawka: śmieci po zamknięciu PLASMA (2026-10-22)
+
+Zgłoszenie: po zamknięciu PLASMA w górnej belce zostawały kolorowe piksele.
+Zamykanie/minimalizacja dodawały damage tylko ramki okna; przy oknach
+nachodzących na siebie chrom/klient pod spodem nie zawsze był odtwarzany w
+całości (zwłaszcza przy 1024×768 i częściowym przykryciu).
+
+`window_close`, `window_minimize` i `window_restore` dodają teraz **pełny
+redraw ekranu** (`wm_damage_add` całego obszaru + `wm_force_compose`).
+Zamknięcie/minimalizacja to rzadkie zdarzenie, więc jeden pełny frame jest
+akceptowalny; animacje nadal korzystają z przyciętego damage.
+
+Testy: `closeart-before/after` i `minart-before/after` (800×600) — czysto;
+`test-dock-input` i `test-dock-running` — PASS. Build `KERNEL.SYS`
+**233 508 B** (TOS=1).
+
+Commit: `fix: pelny redraw po close/minimize/restore (smieci po PLASMA)`.
