@@ -2463,7 +2463,7 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
         }
         (void)kgfx_set_target(previous);
         drawn=kernel_user_hires_clock();
-        kernel_wm_compose_now();
+        {extern void kernel_wm_compose_request(void);kernel_wm_compose_request();}
         ended=kernel_user_hires_clock();
         ++kdbg_gui_frame_stats[0];
         kdbg_gui_frame_stats[1]+=drawn-started;

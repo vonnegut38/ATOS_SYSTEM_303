@@ -39,6 +39,16 @@ PLASMA na `WVIS 0` wstrzymuje zegar i nie rysuje; na `WVIS 1` ustawia
 `last=hires()`, zeruje `phase_acc` i rysuje od razu. Model: app GFX
 499→31 tys. px/s (−94%).
 
+### Krok 6 — GUI_FRAME bez pełnego ticku (kernel_wm.c, kernel_exception.c)
+`kernel_wm_compose_request()` tylko ustawia `wm_force_compose`; kompozycja
+następuje w najbliższym ticku (max 20 ms) zamiast synchronicznego pełnego
+ticku przy każdej klatce aplikacji (arkanoid/GUI_FRAME).
+
+### Krok 7 — flush 32-bit (kernel_video.c)
+Para słów frontu i cienia jest porównywana jednym odczytem 32-bit (front
+`const volatile`, cień bez volatile); zapis do karty tylko przy zmianie.
+Mniej odczytów, ten sam obraz.
+
 ### Pomiar
 - `kdbg_flush_area` liczone w `kernel_video.c` (słowa przeglądane przez flush).
 
@@ -51,14 +61,16 @@ PLASMA na `WVIS 0` wstrzymuje zegar i nie rysuje; na `WVIS 1` ustawia
 | V0 przed | 91 | 92 | 52 526 | 6 096 | — | — | — | 577 |
 | V1 clip | 60 | 58 | 27 179 | 1 342 | 2 315 988 | 54 834 | 1 058 481 | 452 |
 | **V1+V2 dock dirty** | **66** | **0** | **6 899** | **1 468** | **1 454 110** | **56 426** | **677 849** | **104** |
+| **V1+V2+WVIS+6+7** | **74** | **0** | **6 339** | **984** | **143 352** | **53 472** | **45 713** | **85** |
 | V1+V2 dock closed 5 s | 25 | 2 | 2 707 | 548 | 803 208 | 104 096 | 368 118 | 108 |
 
-- **`total_cycles` WM: 52 526 → 6 899 (−87%)**,
+- **`total_cycles` WM: 52 526 → 6 339 (−88%)**,
 - **`dock_draws`: 92 → 0** w oknie 5 s (pasek pozostaje widoczny; rysowany
   przy otwarciu i gdy damage go dotknie),
-- **`kdbg_dmg_px`: 2,32 M → 1,45 M** (delta V1→V2 w oknie 5 s),
-- **`flush_area`: 1,06 M → 0,68 M** (delta V1→V2),
-- `cycles/compose`: **577 → 104**.
+- **`kdbg_dmg_px`: 1 454 110 → 143 352 (−90%)** po WVIS (PLASMA nie rysuje
+  pod MODPLAY),
+- **`flush_area`: 677 849 → 45 713 (−93%)**,
+- `cycles/compose`: **577 → 85** (−85%).
 - Model V1+V2 dawał 6,31→0,53 MB/s; zmierzony spadek ticku WM jest zgodny
   kierunkowo (model liczy wolumen, nie czas 68030).
 
@@ -77,10 +89,13 @@ app GFX spada 873→499 tys. px/s; krok 4 (WVIS) ma zejść do ~31 tys.
 - `test-dock-multi.py` → PASS (5 aplikacji).
 - Zrzut `perf-4apps.png`: pasek widoczny, mimo `dock_draws=0` po ustabilizowaniu.
 
-Krok 4: golden, step3, menu, running, input, multi — PASS; running po WVIS
-(minimalizacja/restore PLASMA) rysuje bieżącą klatkę po odsłonięciu.
+Kroki 4/6/7: golden (czysty obraz), input, multi — PASS; step3/menu/running
+przed 6/7 — PASS; running po WVIS (minimalizacja/restore PLASMA) rysuje
+bieżącą klatkę po odsłonięciu. Arkanoid (GUI_FRAME) uruchamia się z ikony;
+jego okno nie pojawiło się w szybkim teście — do sprawdzenia osobno, krok 6
+go dotyczy.
 
-Build: `KERNEL.SYS` **233 348 B** (TOS=1), 179 762 B (TOS=0),
+Build: `KERNEL.SYS` **233 344 B** (TOS=1), 179 762 B (TOS=0),
 `PLASMA.APP` **1 828 B**.
 
 ---
@@ -88,12 +103,10 @@ Build: `KERNEL.SYS` **233 348 B** (TOS=1), 179 762 B (TOS=0),
 ## 4. Co dalej (kroki 4–7)
 
 4. ~~**WVIS**~~ — **wdrożone** (patrz wyżej).
-5. **Damage na komendę/grupę** — mniejsze prostokąty dla MODPLAY/SYSINFO/
-   TASKMGR; w modelu WM 0,53→0,40 MB/s.
-6. **GUI_FRAME** — damage + `wm_force_compose` zamiast pełnego ticku przy
-   każdej klatce; ważne przy kilku widocznych animacjach.
-7. **Flush 32-bit** bez `volatile` po stronie front/cień + `kdbg_flush_area`;
-   po krokach 1–4.
+5. **Damage na komendę/grupę** — pozostały krok; mniejsze prostokąty dla
+   MODPLAY/SYSINFO/TASKMGR (model: 0,53→0,40 MB/s). Opcjonalny.
+6. ~~**GUI_FRAME**~~ — **wdrożone**.
+7. ~~**Flush 32-bit**~~ — **wdrożone**.
 
-Rekomendacja: najpierw **WVIS** (krok 4), potem **per-command** (5), a 6–7
-na końcu; po każdym kroku powtórzyć golden + kliknięcia + pomiar.
+Rekomendacja: zostało tylko **per-command (5)**; po nim powtórzyć golden,
+kliknięcia i pomiar. Kroki 1–4, 6–7 są w `bd1791a`/następnym commicie.

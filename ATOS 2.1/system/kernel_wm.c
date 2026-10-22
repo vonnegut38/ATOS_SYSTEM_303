@@ -638,6 +638,14 @@ void kernel_wm_compose_now(void)
     kernel_wm_frame_tick(kernel_user_clock());
     wm_compose_forced=0u;
 }
+
+/* GUI_FRAME: tylko zamow kompozycje na najblizszy tick.  Wczesniej kazda
+   klatka aplikacji wymuszala pelny tick WM (dock, kursor, flush), wiec kilka
+   widocznych animacji mnozylo kompozycje. */
+void kernel_wm_compose_request(void)
+{
+    if(wm_ready)wm_force_compose=1u;
+}
 static uint8_t console_hidden;   /* desktop mode: shell window not shown */
 static uint8_t console_focused=1;/* keyboard focus: shell window vs desktop */
 /* Desktop mouse pointer: drawn last, after every composite, so it is never

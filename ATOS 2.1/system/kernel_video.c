@@ -324,10 +324,14 @@ void kvideo_flush(void)
    kdbg_flush_area+=(uint32_t)(end-begin);
    for(x=begin;x+1u<end;x+=2u){
     unsigned offset=y*(unsigned)maxw+x;
-    uint16_t lo=src[offset],hi=src[offset+1];
-    if(full||shadow[offset]!=lo||shadow[offset+1]!=hi){
-     card_put32(card,offset,lo,hi);
-     shadow[offset]=lo;shadow[offset+1]=hi;kdbg_flush_words+=2u;
+    /* Para slow: jedno porownanie 32-bit zamiast czterech odczytow 16-bit
+       (front i cien sa w RAM; karta dostaje zapis tylko przy zmianie). */
+    const volatile uint32_t *s32=(const volatile uint32_t *)(const void *)(src+offset);
+    const uint32_t *sh32=(const uint32_t *)(const void *)(shadow+offset);
+    uint32_t v=*s32;
+    if(full||*sh32!=v){
+     card_put32(card,offset,(uint16_t)(v>>16),(uint16_t)v);
+     *((uint32_t *)(void *)(shadow+offset))=v;kdbg_flush_words+=2u;
     }
    }
    if(x<end){
