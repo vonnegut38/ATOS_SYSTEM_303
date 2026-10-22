@@ -43,3 +43,15 @@ Wszystkie efekty są teraz 160×100 i korzystają z **statycznego bufora**
 (bez `ATOS_CALL_ALLOC`), żeby wykluczyć limit heapu przy spawnie z pulpitu.
 PLASMA/TUNNEL nadal animują tylko paletę (~40 fps), pozostałe liczą
 16 tys. pikseli/klatkę (~20 fps).
+
+
+## Stan WIP (2026-10-22, do dokończenia)
+
+- folder `\DEMOS` + ikona + file window: **działa**,
+- SYSINFO uruchomiony z tego samego file window: **działa**,
+- PLASMA/demo apps: proces `STARTED`, ale **app_main nie dochodzi do okna**;
+  ślad `FXT0..` nie powstaje, więc problem jest przed/na starcie aplikacji,
+  nie w folderze ani w 160×100.
+- następny krok: minimalna aplikacja zapisująca etapy (lookup GFX/GUI,
+  GUI_BEGIN_KEYS, VIDEO_MODE, WINDOW, CONTENT, BLIT8) do **osobnych plików**
+  `\FXTn.TXT` i porównanie z SYSINFO; potem poprawka.

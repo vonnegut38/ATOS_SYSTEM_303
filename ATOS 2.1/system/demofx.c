@@ -246,12 +246,12 @@ int app_main(void)
     wy=(int16_t)(((int)scrh-(int)WH)/2);if(wy<8)wy=8;
     (void)gfx(GFX_WINDOW,((uint32_t)(uint16_t)wx<<16)|(uint16_t)wy,((uint32_t)WW<<16)|WH,0u);
     (void)gfx(GFX_TITLE,(uint32_t)(uintptr_t)effect_name(),0,0);
+    (void)gfx(GFX_CONTENT,CLIENT_H,0,0);
 #if defined(FX_PLASMA) || defined(FX_TUNNEL)
     draw_static();apply_frame(0);
 #else
     init_effect();apply_frame(0);
 #endif
-    (void)gfx(GFX_CONTENT,CLIENT_H,0,0);
     last=hires();
     while(!quit){
         unsigned events;
