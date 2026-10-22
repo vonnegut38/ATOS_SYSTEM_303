@@ -3386,6 +3386,31 @@ int kernel_wm_client_origin(uint8_t *surface,int32_t *x,int32_t *y)
     }
     return 0;
 }
+int kernel_wm_app_blit8(uint32_t pid,const uint8_t *src,uint32_t w,uint32_t h)
+{
+    uint8_t *surface;unsigned y;uint16_t pitch;
+    if(!pid||!src||!w||!h)return -0x3e0;
+    if(wm_bpp!=8u)return -0x3e5;
+    if(w>wm_surface_w)w=wm_surface_w;
+    if(h>wm_surface_h)h=wm_surface_h;
+    surface=kernel_wm_app_surface(pid,0u);
+    if(!surface)return -0x3f0;
+    pitch=wm_surface_pitch;
+    for(y=0;y<h;++y){
+        const uint8_t *s=src+(uint32_t)y*w;
+        uint8_t *d=surface+(uint32_t)y*pitch;
+        unsigned x;
+        if((((uintptr_t)s|(uintptr_t)d|w)&3u)==0u){
+            uint32_t *dw=(uint32_t *)(void *)d;
+            const uint32_t *sw=(const uint32_t *)(const void *)s;
+            for(x=0;x<w/4u;++x)dw[x]=sw[x];
+        }else{
+            for(x=0;x<w;++x)d[x]=s[x];
+        }
+    }
+    kernel_wm_app_dirty(surface,0,0,(int32_t)w,(int32_t)h);
+    return 0;
+}
 void kernel_wm_app_dirty(uint8_t *surface,int32_t l,int32_t t,int32_t r,int32_t b)
 {
     unsigned i,j;wm_rect_t d,c;

@@ -1,13 +1,16 @@
-/* PLASMA: timer-driven animation; no input required to advance frames. */
+/* PLASMA (demoscene): pelnoekranowa 320x200, 8bpp, klasyczny interferencyjny
+   wzor + cykliczna paleta.  Wzór liczymy raz; każda klatka to tylko
+   base[i]+phase -> paleta i JEDEN blit do powierzchni okna (ATOS_CALL_BLIT8). */
 #include "gui_app.h"
 #include "app_abi.h"
 #include "icons_ids.h"
-#define FRAME_COUNTS 246u /* ~50 fps ceiling at 12288 counts/s; skip missed deadlines */
-/* The ripple advances with REAL time, not with the frame rate: 15 palette steps
-   every 1229 counts is the speed the effect always had, so a higher refresh rate
-   makes it smoother instead of faster. */
-#define PHASE_COUNTS 1229u
-#define PHASE_STEP 15u
+
+#define FRAME_COUNTS 492u      /* ~25 fps (12288/492) */
+#define W 320u
+#define H 200u
+#define WW W
+#define WH (H+16u)
+#define CLIENT_H H
 
 #define KKEY 0x4b4b4559u
 #define KMOU 0x4b4d4f55u
@@ -16,34 +19,39 @@
 #define WVIS 0x57564953u
 #define GFX_RESTORE 6u
 #define GFX_DESKTOP 13u
-#define GFX_BATCH 18u
 #define GFX_WINDOW 20u
 #define GFX_TITLE 21u
 #define GFX_CONTENT 29u
 #define GFX_VIDEO_MODE 30u
 #define GUI_BEGIN_KEYS 6u
 #define GUI_END_KEYS 7u
-#define GUI_FILL 2u
-
-/* The plasma canvas IS the client area: 26x18 cells of 10x10 pixels = 260x180.
-   The canvas size is the ONLY real speed lever: the cost is one write per
-   canvas pixel per frame, so a smaller canvas is proportionally faster. */
-#define CW 26u
-#define CH 18u
-#define CELL 10u
-#define PW (CW*CELL)        /* 260 */
-#define PH (CH*CELL)        /* 180 */
-#define WW PW
-#define WH (PH+16u)         /* + title bar */
-#define CLIENT_H PH
 
 static gui_message_t m;
 static int32_t gfx_pid,gui_pid;
-static gui_draw_t list[80];
-static unsigned n;
 static uint8_t quit,fullscreen,chunky;
 static int16_t wx=100,wy=80;
 static uint16_t scrw=640,scrh=400;
+
+static uint8_t *base,*buf;
+static uint8_t pal[256];
+static const signed char sin_tab[256]={
+    0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46,
+    49, 51, 54, 57, 60, 63, 65, 68, 71, 73, 76, 78, 81, 83, 85, 88,
+    90, 92, 94, 96, 98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116,
+    117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127,
+    127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118,
+    117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100, 98, 96, 94, 92,
+    90, 88, 85, 83, 81, 78, 76, 73, 71, 68, 65, 63, 60, 57, 54, 51,
+    49, 46, 43, 40, 37, 34, 31, 28, 25, 22, 19, 16, 12, 9, 6, 3,
+    0, -3, -6, -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46,
+    -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88,
+    -90, -92, -94, -96, -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116,
+    -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127,
+    -127, -127, -127, -127, -126, -126, -126, -125, -125, -124, -123, -122, -122, -121, -120, -118,
+    -117, -116, -115, -113, -112, -111, -109, -107, -106, -104, -102, -100, -98, -96, -94, -92,
+    -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
+    -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12, -9, -6, -3,
+};
 
 static gui_message_t pend[16];static unsigned pend_head,pend_tail;
 static void pend_push(const gui_message_t *s)
@@ -72,56 +80,48 @@ static int32_t gui_op(uint32_t op)
         pend_push(&m);
     }
 }
-/* BSS clears the unused text/flags once; fills only change geometry/colour. */
-static void add_fill(int16_t x,int16_t y,uint16_t w,uint16_t h,uint16_t color)
-{
-    gui_draw_t *d;
-    if(n>=GUI_DRAW_MAX)return;
-    d=&list[n++];d->kind=GUI_FILL;d->x=x;d->y=y;
-    d->w=w;d->h=h;d->color=color;
-}
-static void flush(void)
-{
-    if(!n)return;
-    (void)gfx(GFX_BATCH,(uint32_t)(uintptr_t)list,(uint32_t)n,0);
-    n=0;
-}
-
-static uint8_t base[CH][CW];
 static void prepare(void)
 {
     unsigned x,y;
-    for(y=0;y<CH;++y)for(x=0;x<CW;++x)
-        base[y][x]=(uint8_t)(((x*x*3u+y*y*2u)>>4u)%ICON_PAL_COLORS);
-}
-static uint16_t colour(unsigned x,unsigned y,uint32_t phase)
-{
-    unsigned v=base[y][x]+phase;
-    if(v>=ICON_PAL_COLORS)v-=ICON_PAL_COLORS;
-    return chunky?(uint16_t)(ICON_PAL_BASE+v):(uint16_t)((v>>3u)&1u);
-}
-static void frame(uint32_t phase)
-{
-    unsigned x,y;
-    n=0;
-    for(y=0;y<CH;++y)for(x=0;x<CW;){
-        unsigned start=x;uint16_t c=colour(x,y,phase);
-        while(++x<CW&&colour(x,y,phase)==c){}
-        add_fill((int16_t)(start*CELL),(int16_t)(y*CELL),
-                 (uint16_t)((x-start)*CELL),CELL,c);
-        if(n>=GUI_DRAW_MAX)flush();
+    for(y=0;y<H;++y)for(x=0;x<W;++x){
+        /* Klasyczne interferencje + skladowa radialna: gladkie kontury
+           (fale + pierscienie), bez szumu. */
+        int dx=(int)x-160,dy=(int)y-100;
+        int a=sin_tab[((int)x*2+(int)y*3)&255];
+        int b=sin_tab[((int)x*3-(int)y*2+64)&255];
+        int c=sin_tab[(((int)x+(int)y)*2)&255];
+        int d=sin_tab[((dx*dx+dy*dy)>>7)&255];
+        int v=a+b+c+d;                    /* -508..508 */
+        v=(v+508)*255/1016;               /* 0..255 */
+        base[y*W+x]=(uint8_t)v;
     }
-    flush();
+}
+/* 16-stopniowa rampa z palety systemowej (0..19): czern -> granat -> blue ->
+   jasny blue -> szarosc -> biel -> teal.  Ikony maja wlasna, przypadkowa
+   kolejnosc kolorow, wiec uzycie ICON_PAL_BASE dawalo szum zamiast gradientu. */
+static const uint8_t ramp[16]={0u,16u,16u,17u,17u,18u,18u,19u,
+                               19u,15u,14u,13u,3u,1u,2u,0u};
+static void frame(unsigned phase)
+{
+    unsigned x,y,i;
+    for(i=0;i<256u;++i)pal[i]=ramp[(i>>4)&15u];
+    for(y=0;y<H;++y){
+        unsigned p=(phase+(y*2u))&255u;
+        const uint8_t *bp=base+y*W;uint8_t *dp=buf+y*W;
+        for(x=0;x<W;++x)dp[x]=pal[(bp[x]+p)&255u];
+    }
+    (void)gui_call(ATOS_CALL_BLIT8,W,H,buf,0u);
 }
 
 int app_main(void)
 {
-    uint32_t phase=0,last,phase_acc=0;uint8_t visible=1;
+    uint32_t phase=0,last;uint8_t visible=1;
     gfx_pid=lookup("SYSTEM.GFX");if(gfx_pid<0)return 1;
     gui_pid=lookup("SYSTEM.GUI");if(gui_pid<0)return 1;
     {int32_t v=gfx(GFX_VIDEO_MODE,0,0,0);
      if(v>0){scrw=(uint16_t)((uint32_t)v>>16);scrh=(uint16_t)((uint32_t)v&0xffffu);}
      chunky=(uint8_t)(gfx(35u,0,0,0)==8u);}
+    if(!chunky)return 1;                  /* efekt 8bpp */
     if(gui_op(GUI_BEGIN_KEYS)==0){
         if(gfx(GFX_DESKTOP,0,0,0)==0)fullscreen=1;
         else (void)gui_op(GUI_END_KEYS);
@@ -132,13 +132,15 @@ int app_main(void)
         (void)gfx(GFX_WINDOW,((uint32_t)(uint16_t)wx<<16)|(uint16_t)wy,((uint32_t)WW<<16)|WH,0u);
         (void)gfx(GFX_TITLE,(uint32_t)(uintptr_t)"PLASMA",0,0);
     }
+    base=(uint8_t *)(uintptr_t)gui_call(ATOS_CALL_ALLOC,W*H,1u,0,0);
+    buf=(uint8_t *)(uintptr_t)gui_call(ATOS_CALL_ALLOC,W*H,1u,0,0);
+    if(!base||!buf)return 1;
     prepare();
-    add_fill(0,0,WW,CLIENT_H,0);flush();
-    (void)gfx(GFX_CONTENT,CLIENT_H,0,0); /* geometry, not a per-frame operation */
-    frame(phase);last=hires();
+    frame(0);
+    (void)gfx(GFX_CONTENT,CLIENT_H,0,0);
+    last=hires();
     while(!quit){
         unsigned events;
-        /* Bound input work, so a stream of motion cannot starve animation. */
         for(events=0;events<16u;++events){
             if(!pend_pop(&m)&&receive(&m,0))break;
             if(m.sender)continue;
@@ -148,26 +150,20 @@ int app_main(void)
             }else if(m.v[0]==WCLS)quit=1;
             else if(m.v[0]==WVIS){
                 unsigned nv=m.v[1]&1u;
-                if(nv&&!visible){visible=1;last=hires();phase_acc=0;frame(phase);}
+                if(nv&&!visible){visible=1;last=hires();frame(phase);}
                 else if(!nv)visible=0;
-            }
-            else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)m.v[1];}
+            }else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)m.v[1];}
             if(quit)break;
         }
         if(quit)break;
         if(!visible){pause_tick();continue;}
         {uint32_t now=hires(),elapsed=now-last;
          if(elapsed>=FRAME_COUNTS){
-             uint32_t steps=elapsed/FRAME_COUNTS;int redraw=0;
+             uint32_t steps=elapsed/FRAME_COUNTS;
              last+=steps*FRAME_COUNTS;
-             phase_acc+=steps*FRAME_COUNTS;
-             while(phase_acc>=PHASE_COUNTS){phase_acc-=PHASE_COUNTS;
-                 phase=(phase+PHASE_STEP)%ICON_PAL_COLORS;redraw=1;}
-             /* Identyczna faza = identyczny obraz.  Nie wysylaj partii
-                46 800 px, gdy nic sie nie zmienilo (4 z 5 klatek przy
-                50 Hz, 44% przy 18 Hz). */
-             if(redraw)frame(phase);
-             (void)gui_call(ATOS_CALL_SLEEP,0u,0u,0,0); /* input and peer apps between frames */
+             phase=(phase+steps)&255u;
+             frame(phase);
+             (void)gui_call(ATOS_CALL_SLEEP,0u,0u,0,0);
          }else pause_tick();}
     }
     if(fullscreen){(void)gui_op(GUI_END_KEYS);(void)gfx(GFX_RESTORE,0,0,0);}

@@ -2432,6 +2432,16 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
         if(!user_write_range(destination,64u)){user_syscall_result=-0x3a2;return 0;}
         for(j=0;j<64u;++j){destination[j]=system_exec_path[j];if(!system_exec_path[j])break;}
         user_syscall_result=0;return 0;}
+    if(call==89u){
+        /* BLIT8: wlasna powierzchnia okna, 8bpp, 0,0,w,h.  Bufor jest
+           uzytkownika - walidujemy caly zakres przed kopiowaniem. */
+        uint32_t w=argument0,h=argument1;
+        const uint8_t *src=(const uint8_t *)pointer0;
+        if(!src||!w||!h||w>1024u||h>768u||w>65535u||h>65535u){user_syscall_result=-0x3e0;return 0;}
+        if(!user_range(src,w*h)){user_syscall_result=-0x3a2;return 0;}
+        user_syscall_result=kernel_wm_app_blit8(current_process->pid,src,w,h);
+        return 0;
+    }
     if(call==81u){
         const gui_draw_t *list=(const gui_draw_t *)pointer0;
         const uint16_t *groups=(const uint16_t *)pointer1;

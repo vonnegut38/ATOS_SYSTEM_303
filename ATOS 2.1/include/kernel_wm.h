@@ -72,6 +72,8 @@ int kernel_wm_chrome_at(int32_t x,int32_t y);
 int kernel_wm_dock_at(int32_t x,int32_t y);
 /* Release every compositor window owned by a process that is exiting. */
 void kernel_wm_close_pid(uint32_t pid);
+/* Szybki blit 8bpp do powierzchni okna aplikacji (0,0,w,h); app->WM. */
+int kernel_wm_app_blit8(uint32_t pid,const uint8_t *src,uint32_t w,uint32_t h);
 /* Close just one window of a client.  A TOS program registers its window under
    the pid of the application that launched it, so kernel_wm_close_pid() would
    take that application's own dialogs down with it. */
