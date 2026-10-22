@@ -234,10 +234,24 @@ WCLS. Kompromis: nowe procesy pojawiają się na liście po REFRESH.
 **Testy:** `test-dock-input.py` (4 aplikacje, taby SYSINFO, WCLS + zakończenie
 procesu) PASS; step3/menu/running/multi/golden PASS.
 
-**Do zrobienia później (wydajność):** usunąć aktywne odpytywanie TASKMGR,
-odmalowywać tylko zmienione wiersze, ograniczyć odświeżanie zminimalizowanych
-okien. Pliki `outputs/...` z audytu nie były obecne w workspace — analiza
-na podstawie źródeł.
+**Do zrobienia później (wydajność):** odmalowywać tylko zmienione wiersze,
+ograniczyć odświeżanie zminimalizowanych okien. Pliki `outputs/...` z audytu
+nie były obecne w workspace — analiza na podstawie źródeł.
+
+### 2.11 Input cap 6→4: miejsce na odpowiedzi usług (2026-10-22)
+
+**Objaw:** SYSINFO zamierał po DISK dopiero przy **ruchu myszy**; testy
+wstrzykujące same kliknięcia przechodziły. Ruch zapełniał skrzynkę inputu do
+6 komunikatów; odpowiedź GFX nie miała miejsca (`-0x3c2`), GFX.APP ponawiał
+i blokował usługę — okna „aktywne”, aplikacje martwe, mysz zwalniała.
+
+**Naprawa:** `USER_MAILBOX_INPUT_DEPTH` **6→4** — input nie zajmuje całej
+skrzynki, więc odpowiedź usługi mieści się przy 4 (do 7 evict tylko
+WMOV/motion). TASKMGR nie ma auto-refresh (10bj), więc nie dokłada ruchu.
+
+**Test:** `test-dock-input.py` dodaje **20 zdarzeń ruchu** przed kliknięciem
+DISK; potem DISK→BENCHMARK przełącza treść, WCLS kończy proces (`launch 4→5`).
+Zrzuty `input-4-*`, `input-taskmgr-*`.
 
 ---
 

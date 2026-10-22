@@ -72,7 +72,7 @@ void kernel_fault_report(void (*puts)(const char *),void (*put_u32)(uint32_t))
    okien aplikacji: 4+6=10, wiec 12 daje jeszcze zapas na procesy potomne. */
 #define USER_PROCESS_SLOTS 12u
 #define USER_MAILBOX_CLIENT_DEPTH 4u
-#define USER_MAILBOX_INPUT_DEPTH 6u
+#define USER_MAILBOX_INPUT_DEPTH 4u
 #define USER_MAILBOX_DEPTH 8u
 #define USER_SERVICE_SLOTS 8u
 #define USER_PROCESS_FREE 0u
@@ -378,8 +378,8 @@ static int32_t user_message_send(uint32_t pid,const uint32_t value[4])
         target->state=USER_PROCESS_READY;return 0;
     }
     /* Leave ONE slot for kernel lifecycle events (KEXI).  Input routing caps
-       at USER_MAILBOX_INPUT_DEPTH (6), so a service reply can normally queue
-       at 6 without touching anything.  Only at 7 do we evict disposable
+       at USER_MAILBOX_INPUT_DEPTH (4), so a service reply can normally queue
+       at 4 without touching anything.  Only at 7 do we evict disposable
        motion/geometry - never clicks, keys, WCLS, replies or KEXI. */
     if(target->mailbox_count>=USER_MAILBOX_DEPTH-1u){
         index=target->mailbox_tail;

@@ -1880,3 +1880,13 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    TASKMGR.APP 4296 B.  Dalej: gdyby DISK nadal zamieral - sprawdzic
    disk_view/refresh i GUI service, ale bez obciazenia z TASKMGR to nie
    powinno wystapic.
+
+10bk. INPUT CAP 6->4: MIEJSCE NA ODPOWIEDZI USLUG (22.10):
+   Objaw: SYSINFO zamieral po DISK dopiero przy RUCHU myszy; same klikniecia
+   w testach przechodzily.  Ruch wypelnial skrzynke inputu do 6; odpowiedz
+   GFX nie miala miejsca (-0x3c2), GFX.APP ponawial i blokowal usluge.
+   Naprawa: USER_MAILBOX_INPUT_DEPTH 6->4; odpowiedz queue przy 4, do 7
+   evict tylko WMOV/motion.  TASKMGR bez auto-refresh (10bj).
+   TEST: test-dock-input.py dodaje 20 zdarzen ruchu przed DISK; DISK->
+   BENCHMARK przelacza tresc, WCLS launch 4->5 PASS.
+   KERNEL.SYS 232166 B (TOS=1), 178608 B (TOS=0); TASKMGR 4296 B.

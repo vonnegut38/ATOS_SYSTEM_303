@@ -101,6 +101,11 @@ def main():
         session.click_fast(*SYSINFO_SLOT)  # podnies SYSINFO
         time.sleep(1.0)
         session.shot("input-4-hardware")
+        # Realna mysz generuje strumien ruchu; zasymuluj go, zeby sprawdzic
+        # backpressure IPC (wstrzykiwane same klikniecia tego nie robia).
+        for k in range(20):
+            session.inject_nowait(250 + (k % 8) * 20, 250 + (k % 5) * 20, 0)
+        time.sleep(0.5)
         session.click_fast(260, 108)      # DISK
         time.sleep(1.0)
         session.shot("input-4-disk")
