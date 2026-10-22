@@ -1032,6 +1032,8 @@ static unsigned dock_short_count;
 static uint8_t dock_short_state;    /* 0 = jeszcze nie czytane, 1 = wczytane */
 static uint8_t dock_cfg[768];       /* LAUNCH.CFG jest maly; czytamy leniwie */
 static uint8_t dock_open;
+static uint8_t dock_dirty=1u;        /* pasek do przerysowania (stan/zmiana) */
+static unsigned dock_state_sig_cache; /* sygnatura okien widocznych w pasku */
 static uint8_t dock_press_active,dock_press_part;
 static uint32_t dock_press_pid;
 static uint8_t dock_tip_shown,dock_tip_slot;
@@ -1452,6 +1454,35 @@ static int dock_inside(int16_t x,int16_t y)
     dock_geometry(&r);
     return x>=r.x&&y>=r.y&&x<(int16_t)(r.x+r.w)&&y<(int16_t)(r.y+r.h);
 }
+
+static void dock_redraw_request(void)
+{
+    wm_rect_t r;
+    dock_dirty=1u;
+    if(!wm_ready)return;
+    dock_geometry(&r);
+    wm_damage_add(&wm,r);
+    wm_force_compose=1u;
+}
+static int dock_damage_hit(void)
+{
+    wm_rect_t d,c;unsigned i;
+    if(!wm_ready)return 1;
+    dock_geometry(&d);
+    for(i=0;i<wm.damage_count;++i)
+        if(wm_rect_intersect(&wm.damage[i],&d,&c))return 1;
+    return 0;
+}
+static unsigned dock_state_sig(void)
+{
+    unsigned i,s=2166136261u;
+    for(i=0;i<wm.count;++i){
+        if(wm.win[i].flags&4u)continue;
+        s=(s^(uint32_t)wm.win[i].pid)*16777619u;
+        s=(s^(uint32_t)wm.win[i].flags)*16777619u;
+    }
+    return s;
+}
 static uint8_t dock_part_at(int16_t x,int16_t y)
 {
     wm_rect_t r,s;unsigned i;
@@ -1524,6 +1555,7 @@ static void dock_hover_poll(void)
     if(!dock_open)return;
     hover=dock_hover_target();
     if(hover==dock_hover_drawn)return;
+    dock_dirty=1u;
     {wm_rect_t r;dock_geometry(&r);wm_damage_add(&wm,r);}
     wm_force_compose=1;
 }
@@ -1622,6 +1654,7 @@ static void dock_menu_close(void)
     wm_damage_add(&wm,dock_menu_rect);
     wm_force_compose=1;
     dock_menu_open=0u;dock_menu_hover=-1;dock_menu_rows=0u;
+    dock_dirty=1u;
 }
 static void dock_menu_open_at(int16_t x,int16_t y)
 {
@@ -1632,6 +1665,7 @@ static void dock_menu_open_at(int16_t x,int16_t y)
     if(part>=1u&&part<=DOCK_MAX_SHORT)dock_menu_slot=(uint8_t)(part-1u);
     dock_menu_build();
     dock_menu_open=1u;
+    dock_dirty=1u;
     ++kdbg_dock_menu;
     wm_damage_add(&wm,dock_menu_rect);
     wm_force_compose=1;
@@ -1810,6 +1844,7 @@ static void dock_draw(void)
         wm_rect_t s;dock_slot_rect((unsigned)hover,&s);
         dock_tip_show(hover,s.x,dock_short[hover].label);
     }else dock_tip_hide();
+    dock_dirty=0u;
 }
 /* Klik dziala na PUSZCZENIU (MagiC/Win98): press tylko zapamietuje slot, a
    akcja jest, gdy release wypadnie w tym samym slocie.  Dzieki temu "wiszący"
@@ -1837,6 +1872,7 @@ static void dock_release(int16_t x,int16_t y)
         wm_rect_t old_rect,new_rect;
         dock_geometry(&old_rect);
         dock_open=(uint8_t)!dock_open;
+        dock_dirty=1u;
         dock_geometry(&new_rect);
         /* Zwiniete 24x24, rozwiniety caly pas: damage OBU prostokatow, bo przy
            zamykaniu trzeba zamazac caly pasek, a przy otwieraniu domalowac go. */
@@ -2706,6 +2742,9 @@ void kernel_wm_frame_tick(uint32_t now)
        their surface changes, moves or is raised, and the compositor already
        re-blits the windows on top of the desktop canvas for those rects. */
     if(0&&kernel_wm_desktop_session()&&wm.count)kernel_wm_damage_all();
+    /* Dock: sygnatura widocznych okien (open/minimize/close) wymusza redraw
+       tylko wtedy, gdy stan paska naprawde sie zmienil. */
+    {unsigned ds=dock_state_sig();if(ds!=dock_state_sig_cache){dock_state_sig_cache=ds;dock_redraw_request();}}
     /* Cursor save/restore produces video damage without WM damage. */
     if(!wm.damage_count){kvideo_flush();return;}
     if(now==wm_last_frame&&!wm_force_compose&&!wm_compose_forced)return;
@@ -2752,6 +2791,7 @@ void kernel_wm_frame_tick(uint32_t now)
        pixels under it, and XOR-ing it off afterwards would leave traces. */
     {wm_fb_t d;d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
      outline_xor_active(&d);}
+    int dock_hit=dock_damage_hit();
     {extern uint32_t kernel_user_hires_clock(void);uint32_t t0=kernel_user_hires_clock();
      wm_recompose(&wm,glue_blit,0);kdbg_recompose_cycles+=kernel_user_hires_clock()-t0;}
     /* Composing client damage cannot erase the top strip.  Repaint it only
@@ -2900,7 +2940,7 @@ void kernel_wm_frame_tick(uint32_t now)
        jest overlayem NAD nimi (wymaganie), a nie elementem pulpitu.  Wczesniej
        stal przed petla dekoracji, wiec dolna ramka/uchwyt okna zaslanialy pasek
        i klik w slot bywal niewidoczny. */
-    dock_draw();
+    if(dock_dirty||dock_hit||dock_menu_open)dock_draw();
     dock_menu_paint();   /* PPM-menu paska: nad paskiem, pod kursorem */
     /* Redraw the dashed outline on top of the freshly composed pixels. */
     {wm_fb_t d;d.data=wm_framebuffer;d.pitch=wm_pitch;d.w=(uint16_t)wm.screen_w;d.h=(uint16_t)wm.screen_h;d.bpp=wm_bpp;
@@ -3252,14 +3292,22 @@ int kernel_wm_client_origin(uint8_t *surface,int32_t *x,int32_t *y)
 }
 void kernel_wm_app_dirty(uint8_t *surface,int32_t l,int32_t t,int32_t r,int32_t b)
 {
-    unsigned i;wm_rect_t d;
+    unsigned i,j;wm_rect_t d,c;
     if(!wm_ready||!surface)return;
     for(i=0;i<wm.count;++i)if(wm.win[i].pid==(uint32_t)(uintptr_t)surface){
-        if(l>=r||t>=b){wm_damage_add(&wm,wm.win[i].client);return;}
-        d.x=(int16_t)(wm.win[i].client.x+(int16_t)l);
-        d.y=(int16_t)(wm.win[i].client.y+(int16_t)t);
-        d.w=(uint16_t)(r-l);d.h=(uint16_t)(b-t);
-        wm_damage_add(&wm,d);
+        /* Niewidoczne/zwinięte okno nie ma czego składać.  Dla widocznego
+           okna damage jest przycinany do wm.clip[] - czyli do faktycznie
+           widocznej części (okna wyżej, ekran, inna sesja). */
+        if(!(wm.win[i].flags&1u)||(wm.win[i].flags&8u))return;
+        if(l>=r||t>=b)d=wm.win[i].client;
+        else{
+            /* wspolrzedne powierzchni -> ekran, z przewinieciem WM */
+            d.x=(int16_t)(wm.win[i].client.x+(int16_t)(l-wm.win[i].src_x));
+            d.y=(int16_t)(wm.win[i].client.y+(int16_t)(t-wm.win[i].src_y));
+            d.w=(uint16_t)(r-l);d.h=(uint16_t)(b-t);
+        }
+        for(j=0;j<wm.clip_count[i];++j)
+            if(wm_rect_intersect(&d,&wm.clip[i][j],&c))wm_damage_add(&wm,c);
         return;}
 }
 void kernel_wm_damage_all(void)

@@ -321,6 +321,7 @@ void kvideo_flush(void)
     if(full||shadow[offset]!=v){card_put16(card,offset,v);shadow[offset]=v;++kdbg_flush_words;}
     ++begin;
    }
+   kdbg_flush_area+=(uint32_t)(end-begin);
    for(x=begin;x+1u<end;x+=2u){
     unsigned offset=y*(unsigned)maxw+x;
     uint16_t lo=src[offset],hi=src[offset+1];

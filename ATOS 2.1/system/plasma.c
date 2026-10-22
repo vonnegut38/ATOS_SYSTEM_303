@@ -151,12 +151,15 @@ int app_main(void)
         if(quit)break;
         {uint32_t now=hires(),elapsed=now-last;
          if(elapsed>=FRAME_COUNTS){
-             uint32_t steps=elapsed/FRAME_COUNTS;
+             uint32_t steps=elapsed/FRAME_COUNTS;int redraw=0;
              last+=steps*FRAME_COUNTS;
              phase_acc+=steps*FRAME_COUNTS;
              while(phase_acc>=PHASE_COUNTS){phase_acc-=PHASE_COUNTS;
-                 phase=(phase+PHASE_STEP)%ICON_PAL_COLORS;}
-             frame(phase);
+                 phase=(phase+PHASE_STEP)%ICON_PAL_COLORS;redraw=1;}
+             /* Identyczna faza = identyczny obraz.  Nie wysylaj partii
+                46 800 px, gdy nic sie nie zmienilo (4 z 5 klatek przy
+                50 Hz, 44% przy 18 Hz). */
+             if(redraw)frame(phase);
              (void)gui_call(ATOS_CALL_SLEEP,0u,0u,0,0); /* input and peer apps between frames */
          }else pause_tick();}
     }
