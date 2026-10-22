@@ -39,7 +39,7 @@ przez `kernel_wm_app_dirty()` (z clip/WVIS).
 - zrzut: `display-demo/dockrun-right-restored.png`.
 
 Build: `KERNEL.SYS` **234 328 B** (TOS=1) / 180 762 B (TOS=0),
-`PLASMA.APP` **2 130 B**.
+`PLASMA.APP` **2 176 B**.
 
 
 ## Optymalizacja 2026-10-22 (wydajność)
@@ -56,3 +56,12 @@ Dodana składowa liniowa `x + 2*y` do wzoru: przy animacji palety kolory
 wędrują po skosie, co daje efekt przewijania jak w demach — nadal tylko
 16 zapisów DAC na klatkę, **40 fps**. To nie jest fizyczne przesuwanie
 kształtu (to wymagałoby pełnego blitu 320×200 i spadku do ~8 fps).
+
+
+## Spirala: zoom + rotator (2026-10-22)
+
+Wzór jest teraz w współrzędnych biegunowych (`atan2` 8-bit + `isqrt`
+policzone raz przy starcie). Animowana jest tylko paleta 236..251;
+kolory wędrują po spirali, więc widać **obrót i zoom** przy **40 fps**
+i znikomym obciążeniu CPU. To efekty „paletowe”: kształt jest statyczny,
+ale ruch kolorów po spirali daje wrażenie rotacji i zbliżania.

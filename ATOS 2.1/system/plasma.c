@@ -95,6 +95,28 @@ static void restore_palette(void)
     unsigned i;for(i=0;i<16u;++i)rgb[i]=0u;
     (void)gui_call(ATOS_CALL_PALETTE,236u,16u,rgb,0u);
 }
+static unsigned isqrt_u(unsigned n)
+{
+    unsigned r=0u,bit=1u<<15;
+    while(bit>n)bit>>=2;
+    while(bit){
+        if(n>=r+bit){n-=r+bit;r=(r>>1)+bit;}
+        else r>>=1;
+        bit>>=2;
+    }
+    return r;
+}
+/* atan2 w 0..255 (8 bitow na pelne kolo), bez zmiennych zmiennoprzecinkowych. */
+static unsigned atan2_8(int y,int x)
+{
+    int ax=x<0?-x:x,ay=y<0?-y:y;unsigned a;
+    if(!ax&&!ay)return 0u;
+    if(ax>=ay)a=(unsigned)(32*ay/ax);          /* 0..32 */
+    else a=(unsigned)(64-32*ax/ay);            /* 32..64 */
+    if(x<0)a=128u-a;
+    if(y<0)a=256u-a;
+    return a&255u;
+}
 static int draw_pattern(void)
 {
     uint8_t *buf;unsigned x,y;
@@ -102,15 +124,13 @@ static int draw_pattern(void)
     if(!buf)return -1;
     for(y=0;y<H;++y)for(x=0;x<W;++x){
         int dx=(int)x-160,dy=(int)y-100;
-        int a=sin_tab[((int)x*2+(int)y*3)&255];
-        int b=sin_tab[((int)x*3-(int)y*2+64)&255];
-        int c=sin_tab[(((int)x+(int)y)*2)&255];
-        int d=sin_tab[((dx*dx+dy*dy)>>7)&255];
-        /* Skladowa liniowa (x+2y) daje kierunkowy "przesuw" kolorow przy
-           obrocie palety; fale dokladaja kontury. */
-        int v=a+b+c+d+(int)x*2+(int)y*3;  /* -508..1743 */
-        v=(v+508)*16/2256;                /* 0..15 */
-        buf[y*W+x]=(uint8_t)(236+v);      /* prywatne 236..251 */
+        unsigned r=isqrt_u((unsigned)(dx*dx+dy*dy));  /* 0..190 */
+        unsigned ang=atan2_8(dy,dx);                 /* 0..255 */
+        /* Spirala: kat + promien.  Obrót palety przewija kolory po spirali,
+           co daje jednoczesny obrot i zoom bez rysowania pikseli. */
+        int v=(int)(ang*3u+r*3u)+ (sin_tab[(ang*2u+r*5u)&255]>>1);
+        v&=255;
+        buf[y*W+x]=(uint8_t)(236+(v>>4));            /* 16 poziomow */
     }
     (void)gui_call(ATOS_CALL_BLIT8,W,H,buf,0u);
     (void)gui_call(ATOS_CALL_FREE,(uint32_t)(uintptr_t)buf,0u,0u,0u);
