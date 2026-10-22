@@ -168,4 +168,8 @@ Teraz:
 - close/minimize/restore: clear + ramka okna,
 - drag/resize: clear + stara i nowa ramka.
 
-Testy close/min/input — PASS. Build **233 652 B** (TOS=1) / 180 066 B (TOS=0).
+Do listy damage dodawane są też **ramki okien przykrytych** (bez tła
+pulpitu) — dokładnie to, co robi kliknięcie w okno. Dzięki temu odsłonięty
+terminal/SYSINFO/TASKMGR jest odtwarzany od razu, bez czekania na klik.
+
+Testy close/min/input — PASS. Build **233 788 B** (TOS=1) / 180 206 B (TOS=0).

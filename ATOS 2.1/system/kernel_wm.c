@@ -740,11 +740,21 @@ static int console_fit(unsigned i);
 /* Pelny redraw bez limitu listy damage: przy drag/resize lista bywa pelna,
    a wtedy dodanie calego ekranu bylo po cichu odrzucane - smieci zostawaly
    do nastepnego, przypadkowego odswiezenia (1-2 s). */
+static void wm_add_covering_windows(wm_rect_t r)
+{
+    unsigned i;wm_rect_t c;
+    for(i=0;i<wm.count;++i){
+        if(wm.win[i].flags&4u)continue;       /* desktop canvas: r wystarczy */
+        if(!(wm.win[i].flags&1u))continue;
+        if(wm_rect_intersect(&wm.win[i].frame,&r,&c))wm_damage_add(&wm,wm.win[i].frame);
+    }
+}
 static void wm_redraw_rect(wm_rect_t r)
 {
     if(!wm_ready)return;
     wm_damage_clear(&wm);
     wm_damage_add(&wm,r);
+    wm_add_covering_windows(r);
     wm_force_compose=1;
 }
 static void wm_redraw_old_new(wm_rect_t oldr,wm_rect_t newr)
@@ -752,7 +762,11 @@ static void wm_redraw_old_new(wm_rect_t oldr,wm_rect_t newr)
     if(!wm_ready)return;
     wm_damage_clear(&wm);
     wm_damage_add(&wm,oldr);
-    if(newr.x!=oldr.x||newr.y!=oldr.y||newr.w!=oldr.w||newr.h!=oldr.h)wm_damage_add(&wm,newr);
+    wm_add_covering_windows(oldr);
+    if(newr.x!=oldr.x||newr.y!=oldr.y||newr.w!=oldr.w||newr.h!=oldr.h){
+        wm_damage_add(&wm,newr);
+        wm_add_covering_windows(newr);
+    }
     wm_force_compose=1;
 }
 static void window_minimize(unsigned i)
