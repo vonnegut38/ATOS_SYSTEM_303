@@ -1869,3 +1869,14 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    TEST: test-dock-input.py PASS (taby + WCLS launch 4->5).
    TASKMGR.APP 4346 B.  Docelowo: usunac polling calkiem / odmalowywac
    tylko zmienione wiersze / ograniczyc odswiezanie zminimalizowanych.
+
+10bj. TASKMGR: CALKOWICIE BEZ AUTO-REFRESH (21.10, PO "DISK ZAMIERA"):
+   Po 0,5 Hz SYSINFO nadal zamieral po przelaczeniu na DISK przy otwartym
+   TASKMGR.  Auto snapshot/paint usuniety calkowicie: lista odswieza sie
+   tylko REFRESH/F1 i po akcjach (KILL/SUSPEND/RESUME); petla dalej odbiera
+   klikniecia i WCLS w kazdej iteracji.  Kompromis: nowe procesy pojawiaja
+   sie po REFRESH.
+   TEST: test-dock-input.py PASS (taby + WCLS launch 4->5).
+   TASKMGR.APP 4296 B.  Dalej: gdyby DISK nadal zamieral - sprawdzic
+   disk_view/refresh i GUI service, ale bez obciazenia z TASKMGR to nie
+   powinno wystapic.

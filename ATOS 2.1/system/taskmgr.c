@@ -254,7 +254,6 @@ static void key_event(uint32_t scan)
 
 int app_main(void)
 {
-    uint32_t last_refresh=0;
     gfx_pid=lookup("SYSTEM.GFX");if(gfx_pid<0)return 1;
     gui_pid=lookup("SYSTEM.GUI");if(gui_pid<0)return 1;
     {int32_t v=gfx(GFX_VIDEO_MODE,0,0,0);
@@ -272,7 +271,7 @@ int app_main(void)
     }
     snapshot();paint();
     for(;;){
-        uint32_t now;int got=pend_pop(&m);
+        int got=pend_pop(&m);
         /* receive(...,0) = nieblokujacy polling: receive(...,1) czekal na
            komunikat (bez timeoutu), wiec lista procesow nie odswiezala sie
            sama, gdy uzytkownik nic nie klikal.  Teraz co tick sprawdzamy
@@ -292,12 +291,10 @@ int app_main(void)
         }
         m.sender=0;
         if(quit)break;
-        /* Odswiezanie ~0,5 Hz (bylo ~2 Hz): pelny snapshot 12 slotow i
-           pelny paint przy 2 Hz obciazaly jednowatkowa usluge GUI i mysz
-           zwalniala przy TASKMGR + SYSINFO.  Klikniecia i WCLS obslugujemy
-           w kazdej iteracji. */
-        now=(uint32_t)hires();
-        if((uint32_t)(now-last_refresh)>=24576u){last_refresh=now;snapshot();paint();}
+        /* Bez automatycznego snapshot/paint: kazdy pelny snapshot to ok. 36
+           wywolan uslugi GUI i pelny paint; nawet 0,5 Hz dlawilo SYSINFO przy
+           otwartym TASKMGR.  Liste odswieza REFRESH/F1 oraz akcje; petla
+           nadal odbiera klikniecia/WCLS w kazdej iteracji. */
     }
     if(fullscreen){(void)gui_op(GUI_END_KEYS);(void)gfx(GFX_RESTORE,0,0,0);}
     return 0;

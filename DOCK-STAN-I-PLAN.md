@@ -206,9 +206,10 @@ sama się odświeża (polling), wybór wiersza trzyma się po PID
 klikania; `sel_pid` zamiast indeksu, więc snapshot nie gubi zaznaczenia.
 **21.10 (później):** pełny snapshot 12 slotów i pełny paint przy **2 Hz**
 obciążały jednowątkową usługę GUI — przy TASKMGR + SYSINFO mysz zwalniała,
-a taby nie reagowały. Odświeżanie zredukowane do **0,5 Hz** (24576 jednostek
-`hires`); kliknięcia i WCLS obsługiwane w każdej iteracji. Docelowo: tylko
-zmienione wiersze / timer zamiast pollingu.
+a taby nie reagowały. Najpierw 0,5 Hz, ale SYSINFO nadal zamierał po
+przełączeniu na DISK. **Auto-refresh usunięty całkowicie**: lista odświeża
+się tylko na **REFRESH/F1** i po akcjach; pętla nadal odbiera kliknięcia/
+WCLS. Kompromis: nowe procesy pojawiają się na liście po REFRESH.
 
 ### 2.10 Audyt 21.10: receive/TASKMGR i priorytety IPC
 
