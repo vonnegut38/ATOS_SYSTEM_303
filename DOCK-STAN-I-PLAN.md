@@ -253,6 +253,16 @@ WMOV/motion). TASKMGR nie ma auto-refresh (10bj), więc nie dokłada ruchu.
 DISK; potem DISK→BENCHMARK przełącza treść, WCLS kończy proces (`launch 4→5`).
 Zrzuty `input-4-*`, `input-taskmgr-*`.
 
+### 2.12 TASKMGR odświeża się na fokus (bez pollingu) — 2026-10-22
+
+Auto-refresh usunięty (10bj) oznaczał, że nowe aplikacje nie pojawiały się na
+liście. Zamiast pollingu WM wysyła teraz **`WFOC`** (`0x57464f43`) do
+właściciela okna przy: `wm_raise`/restore/zoom/click-to-focus. TASKMGR na
+`WFOC` robi `snapshot(); paint();`. Efekt: po kliknięciu/przywróceniu
+TASKMGR lista pokazuje wszystkie uruchomione aplikacje, a w tle nie ma
+żadnego odświeżania. Test: `input-taskmgr-top.png` — SYSINFO, TASKMGR,
+PLASMA, MODPLAY na liście po fokusie.
+
 ---
 
 ## 3. CZEGO BRAKUJE (do zrobienia)

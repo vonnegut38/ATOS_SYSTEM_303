@@ -356,6 +356,17 @@ static int32_t user_message_post_from(uint32_t from,uint32_t pid,const uint32_t 
     ++target->mailbox_count;return 0;
 }
 
+/* Powiadom aplikacje o nowym fokusie (WM -> app).  TASKMGR odswieza liste
+   tylko wtedy, gdy uzytkownik faktycznie go aktywuje - bez pollingu. */
+void kernel_user_notify_focus(uint32_t pid)
+{
+    uint32_t value[4];
+    if(!pid)return;
+    value[0]=0x57464f43u;   /* "WFOC" */
+    value[1]=pid;value[2]=0u;value[3]=0u;
+    (void)user_message_post_from(0u,pid,value);
+}
+
 static int32_t user_message_send(uint32_t pid,const uint32_t value[4])
 {
     /* Bridge: a client addressing the kernel's GFX service with the message

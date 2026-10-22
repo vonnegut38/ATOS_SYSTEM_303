@@ -747,6 +747,7 @@ static void window_restore(unsigned i)
     wm_damage_add(&wm,wm.win[i].frame);
     wm_rebuild_clip(&wm);
     kernel_gui_focus_set(window_owner_pid(i));
+    {extern void kernel_user_notify_focus(uint32_t);kernel_user_notify_focus(window_owner_pid(i));}
     wm_raise(&wm,i);
     wm_force_compose=1;task_strip_repaint=1u;
 }
@@ -783,6 +784,7 @@ static void window_zoom(unsigned i)
     }
     notify_geometry(i);
     kernel_gui_focus_set(window_owner_pid(i));
+    {extern void kernel_user_notify_focus(uint32_t);kernel_user_notify_focus(window_owner_pid(i));}
     wm_force_compose=1;
     wm_damage_add(&wm,wm.win[i].frame);
     wm_rebuild_clip(&wm);
@@ -2416,7 +2418,10 @@ void kernel_wm_frame_tick(uint32_t now)
                      /* Click-to-focus: the pressed window's client takes the
                         keyboard; the desktop canvas / task bar clears it. */
                      {extern void kernel_gui_focus_set(uint32_t);
-                      kernel_gui_focus_set(hit==WM_NO_WINDOW?0u:window_owner_pid(hit));}
+                      extern uint32_t kernel_gui_focus_pid(void);
+                      extern void kernel_user_notify_focus(uint32_t);
+                      uint32_t nf=hit==WM_NO_WINDOW?0u:window_owner_pid(hit);
+                      if(nf!=kernel_gui_focus_pid()){kernel_gui_focus_set(nf);if(nf)kernel_user_notify_focus(nf);}}
                      /* Only manageable windows are hit-testable, so a hit means
                         the shell; anywhere else focuses the desktop app. */
                      console_focused=(hit!=WM_NO_WINDOW)?1u:0u;
@@ -3534,6 +3539,7 @@ int kernel_wm_activate_pid(uint32_t pid)
         else {wm_damage_add(&wm,wm.win[i].frame);wm_raise(&wm,i);}
         wm_force_compose=1;
         kernel_gui_focus_set(pid);
+        {extern void kernel_user_notify_focus(uint32_t);kernel_user_notify_focus(pid);}
         return 1;
     }
     return 0;

@@ -1890,3 +1890,11 @@ display-demo/hatari-scalony-20261017    scalona binarka (audio + 4/16 bpp); zrod
    TEST: test-dock-input.py dodaje 20 zdarzen ruchu przed DISK; DISK->
    BENCHMARK przelacza tresc, WCLS launch 4->5 PASS.
    KERNEL.SYS 232166 B (TOS=1), 178608 B (TOS=0); TASKMGR 4296 B.
+
+10bl. TASKMGR ODSWIEZA SIE NA FOKUS (22.10, "NIE POKAZUJE APLIKACJI"):
+   Po usunieciu auto-refresh lista byla stara.  WM wysyla WFOC
+   (0x57464f43) do wlasciciela przy wm_raise/restore/zoom/click-to-focus;
+   TASKMGR na WFOC robi snapshot+paint.  Po kliknieciu TASKMGR lista
+   pokazuje SYSINFO/TASKMGR/PLASMA/MODPLAY (input-taskmgr-top.png), a w tle
+   nie ma zadnego odswiezania.
+   KERNEL.SYS 232434 B (TOS=1); TASKMGR.APP 4310 B.

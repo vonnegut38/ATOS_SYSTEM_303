@@ -288,6 +288,7 @@ int app_main(void)
                 prev_left=buttons&1u;}
             else if(m.v[0]==WMOV){wx=(int16_t)(m.v[1]>>16);wy=(int16_t)(m.v[1]&0xffffu);}
             else if(m.v[0]==WCLS)quit=1;
+            else if(m.v[0]==0x57464f43u){snapshot();paint();}   /* WFOC */
         }
         m.sender=0;
         if(quit)break;
