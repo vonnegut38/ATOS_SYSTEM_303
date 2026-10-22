@@ -798,8 +798,8 @@ static void icons_build(void)
     icon_add(3,2,"TRASH",0,1,-1);      /* recycle-bin window */
     icon_add(1,1,"TERMINAL",0,2,-1);   /* shell console window */
     for(i=0;i<launch_count;++i)
-        if(launch[i].builtin==0u)      /* real program path */
-            icon_add(1,0,launch[i].label,1,(int8_t)(pi++),(int8_t)i);
+        if(launch[i].builtin==0u||launch[i].builtin==3u)
+            icon_add(1,(uint8_t)(launch[i].builtin==3u?3u:0u),launch[i].label,1,(int8_t)(pi++),(int8_t)i);
 }
 
 /* ---- File window: directory listing -------------------------------------- */
@@ -1721,6 +1721,10 @@ static void icon_key(char *out,int i)
     if(icons[i].builtin==5u){copytext(out,"builtin:my-atari",IC_KEY_LEN);}
     else if(icons[i].res==3u){copytext(out,"builtin:trash",IC_KEY_LEN);}
     else if(icons[i].builtin==1u){copytext(out,"builtin:terminal",IC_KEY_LEN);}
+    else if(icons[i].builtin==3u){unsigned k=0;out[k++]='d';out[k++]=':';
+        {const char *p=(icons[i].li>=0)?launch[icons[i].li].path:icons[i].label;
+         while(p&&*p&&k<IC_KEY_LEN-1u)out[k++]=*p++;}
+        out[k]=0;}
     else if(icons[i].builtin==0u){
         const char *p=(icons[i].li>=0)?launch[icons[i].li].path:icons[i].label;
         unsigned k=0;out[k++]='a';out[k++]='p';out[k++]='p';out[k++]=':';
@@ -2008,7 +2012,10 @@ static void launch_load(void)
         text[b]=0;
         v=eq+1;while(v<len&&(text[v]==' '||text[v]=='\t'))++v;
         if(v>=len)continue;
-        launch_add(text+a,text+v,(uint8_t)(text[v]=='*'?((text[v+1]=='T'||text[v+1]=='t')?1u:2u):0u));
+        {uint8_t bi=0u;
+         if(text[v]=='*'&&(text[v+1]=='D'||text[v+1]=='d')){bi=3u;v+=2u;}
+         else if(text[v]=='*')bi=(uint8_t)((text[v+1]=='T'||text[v+1]=='t')?1u:2u);
+         launch_add(text+a,text+v,bi);}
     }}
     if(!launch_count)launch_defaults();
     launch_loaded=1;
@@ -2095,6 +2102,7 @@ static void launch_run(unsigned index)
 {
     gui_spawn_t sp;unsigned j;int32_t r;uint32_t st2[2];int32_t a=0;int32_t app_chk=0;uint32_t where[2]={0,0};
     if(index>=launch_count)return;
+    if(launch[index].builtin==3u){fb_open_at(launch[index].path,launch[index].label);return;}
     if(launch[index].builtin==1u){
         (void)gfx(GFX_CONSOLE_SHOW,0,0,0);
         copytext(status,"TERMINAL",sizeof(status));paint();return;

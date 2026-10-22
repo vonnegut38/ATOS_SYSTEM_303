@@ -363,6 +363,19 @@ build/system/PLASMA.APP: build/system/gui_app_runtime.o build/system/plasma.o li
 	$(OBJCOPY) -O binary build/system/plasma.elf $@
 	python3 tools/patch_boot_checksum.py $@
 	python3 tools/patch_boot_checksum.py $@
+
+# ---- DEMOS: six demoscene effects in one source ---------------------------
+DEMO_FX := PLASMA TUNNEL FLAMES ROTOZOOM SCALER WOBBLE
+DEMO_APPS := $(addprefix build/system/DEMO_,$(addsuffix .APP,$(DEMO_FX)))
+demos: $(DEMO_APPS)
+
+build/system/demo_%.o: system/demofx.c include/gui_app.h include/app_abi.h system/icons_ids.h
+	$(CC) $(GUI_APP_CFLAGS) -DFX_$* -MMD -MP -c $< -o $@
+build/system/DEMO_%.APP: build/system/gui_app_runtime.o build/system/demo_%.o linker/app-sys.ld include/gui_app.h include/app_abi.h
+	$(CC) $(CFLAGS) -nostdlib -nostartfiles -Wl,-T,linker/app-sys.ld -Wl,--gc-sections -o build/system/demo_$*.elf $(filter %.o,$^) -lgcc
+	$(OBJCOPY) -O binary build/system/demo_$*.elf $@
+	python3 tools/patch_boot_checksum.py $@
+	@python3 tools/check_gui_apps.py $@ >/dev/null 2>&1 || true
 all: build/system/HW.APP
 
 build/system/dirtest_app.o: system/dirtest_app.S
