@@ -38,7 +38,7 @@ przez `kernel_wm_app_dirty()` (z clip/WVIS).
 - golden — PASS (bez zmian startu),
 - zrzut: `display-demo/dockrun-right-restored.png`.
 
-Build: `KERNEL.SYS` **234 328 B** (TOS=1) / 180 756 B (TOS=0),
+Build: `KERNEL.SYS` **234 328 B** (TOS=1) / 180 762 B (TOS=0),
 `PLASMA.APP` **2 116 B**.
 
 
