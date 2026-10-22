@@ -95,7 +95,7 @@ bieżącą klatkę po odsłonięciu. Arkanoid (GUI_FRAME) uruchamia się z ikony
 jego okno nie pojawiło się w szybkim teście — do sprawdzenia osobno, krok 6
 go dotyczy.
 
-Build: `KERNEL.SYS` **233 508 B** (TOS=1), 179 926 B (TOS=0),
+Build: `KERNEL.SYS` **233 668 B** (TOS=1), 180 086 B (TOS=0),
 `PLASMA.APP` **1 828 B**.
 
 ---
@@ -131,3 +131,22 @@ Testy: `closeart-before/after` i `minart-before/after` (800×600) — czysto;
 **233 508 B** (TOS=1).
 
 Commit: `fix: pelny redraw po close/minimize/restore (smieci po PLASMA)`.
+
+
+---
+
+## 9. Poprawka: śmieci po przeciągnięciu okna (2026-10-22)
+
+Objaw: kolorowy pas PLASMA w belce SYSINFO po zamknięciu/przesunięciu
+PLASMA. Pas zaczynał się dokładnie na prawej krawędzi PLASMA i miał szerokość
+starej pozycji okna — to **stary obszar po przeciągnięciu**, nie sam close.
+`wm_move()`/`wm_move_live()` uszkadzały old/new ramki, ale chrom okna pod
+spodem nie zawsze był odtwarzany w całości.
+
+Po zakończeniu **drag** (live i outline) oraz **resize** dodawany jest pełny
+redraw ekranu + `wm_force_compose`. To jednorazowy koszt przy puszczeniu
+myszy, nie przy każdym kroku.
+
+Testy: golden, input, close/minimize; build `KERNEL.SYS` **233 668 B**
+(TOS=1) / 180 086 B (TOS=0). Commit:
+`fix: pelny redraw po drag/resize (smieci po przesunieciu PLASMA)`.

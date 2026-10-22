@@ -2749,6 +2749,8 @@ void kernel_wm_frame_tick(uint32_t now)
                      if(console_fit(rsz_win))wm_force_compose=1;
                  }
                  notify_geometry(rsz_win);
+                 wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
+                 wm_force_compose=1;
                  rsz_active=0;
              }
              if(drag_active){
@@ -2761,6 +2763,10 @@ void kernel_wm_frame_tick(uint32_t now)
                         (int16_t)drag_ny!=wm.win[drag_win].frame.y)
                          wm_move(&wm,drag_win,(int16_t)drag_nx,(int16_t)drag_ny);
                      notify_geometry(drag_win);
+                     /* Po zakonczeniu przeciagania pelny redraw: stare polozenie
+                        okna moglo odslonic chrom okna pod spodem, a sam damage
+                        old/new nie zawsze go odtwarza (smieci w belce). */
+                     wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
                      wm_force_compose=1;
                      drag_active=0;drag_live=0;drag_step_valid=0;move_drawn_valid=0;++wm_dbg_drag_end;
                  }else{
@@ -2781,6 +2787,8 @@ void kernel_wm_frame_tick(uint32_t now)
                  }
                  wm_move(&wm,drag_win,(int16_t)drag_nx,(int16_t)drag_ny);   /* final position */
                  notify_geometry(drag_win);
+                 wm_damage_add(&wm,(wm_rect_t){0,0,(uint16_t)wm.screen_w,(uint16_t)wm.screen_h});
+                 wm_force_compose=1;
                  drag_active=0;move_drawn_valid=0;++wm_dbg_drag_end;
                  /* No routine full refresh: wm_move() already damaged the OLD and
                     NEW frame, and wm_recompose() redraws the background plus every
