@@ -132,8 +132,10 @@ enum atos_app_syscall {
                                    -> dlugosc odpowiedzi albo kod ujemny */
     ATOS_CALL_VOLUME = 88,          /* d1=0 stan woluminu (fat_health), d1=1 naprawa */
     ATOS_CALL_SOUND_INFO = 87,  /* a0=uint32[4]: dostepnosc, sesja, wersja, liczniki */
-    ATOS_CALL_BLIT8 = 89         /* d1=w d2=h a0=uint8_t[w*h]: 8bpp do wlasnej
+    ATOS_CALL_BLIT8 = 89,        /* d1=w d2=h a0=uint8_t[w*h]: 8bpp do wlasnej
                                    powierzchni okna (0,0); 0=ok, <0=blad */
+    ATOS_CALL_PALETTE = 90       /* d1=first d2=count a0=uint16_t rgb[count];
+                                   count=0 przywraca palete motywu */
 };
 
 /* App-visible directory entry (opcodes 13/52); mirrors the kernel's

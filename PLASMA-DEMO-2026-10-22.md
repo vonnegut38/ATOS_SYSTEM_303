@@ -5,15 +5,18 @@
 - **320×200, 8 bpp**, pełna rozdzielczość (bez klocków 10×10).
 - Klasyczny wzór interferencyjny: fale X/Y + pierścienie radialne,
   policzony **raz** do bufora `base` przy starcie.
-- Każda klatka: `base[i] + phase` → 256-entry paleta → bufor `buf`
-  i **jeden blit** do powierzchni okna.
+- Wzór rysowany **raz** (`ATOS_CALL_BLIT8`); animacja to wyłącznie
+  **16 wpisów DAC 236..251** (prywatny zakres TOS), obracane kołem barw.
+  Zero kopiowania pikseli na klatkę, zero damage WM przy animacji.
 - Rampa kolorów z **palety systemowej 0..19** (czerń → granat → blue →
   jasny blue → szarość → biel → teal), więc **nie zmieniamy globalnej
   palety** i nie recolorem ikon innych okien.
-- ~25 fps (`FRAME_COUNTS 492`), animacja phase; WVIS 0/1 wstrzymuje/
-  wznawia rysowanie.
-- Bufor `base` i `buf` (2×64 KB) w **heapie aplikacji** (`ATOS_CALL_ALLOC`,
-  TT-RAM), nie w BSS — aplikacja PC-relative mieści się w ±32 KB.
+- ~40–50 fps (`FRAME_COUNTS 246`); pomiar: **40,3 fps**.
+  WVIS 0/1 wstrzymuje animację i przywraca paletę.
+- Bufor wzoru (64 KB) w **heapie aplikacji** (`ATOS_CALL_ALLOC`), zwalniany
+  po pierwszym blicie; aplikacja PC-relative mieści się w ±32 KB.
+- Zakres 236..251 to paleta klienta TOS; gdy równolegle działa program TOS,
+  jego kolory będą animowane razem z PLASMA (do dopracowania, jeśli przeszkadza).
 
 ## Nowe ABI
 
@@ -25,9 +28,9 @@ przez `kernel_wm_app_dirty()` (z clip/WVIS).
 ## Pliki
 
 - `system/plasma.c` — nowy efekt,
-- `include/app_abi.h` — BLIT8,
+- `include/app_abi.h` — BLIT8 (89), PALETTE (90),
 - `system/kernel_wm.c` — `kernel_wm_app_blit8()`,
-- `system/kernel_exception.c` — syscall 89.
+- `system/kernel_exception.c` — syscall 89/90.
 
 ## Testy
 
@@ -35,5 +38,13 @@ przez `kernel_wm_app_dirty()` (z clip/WVIS).
 - golden — PASS (bez zmian startu),
 - zrzut: `display-demo/dockrun-right-restored.png`.
 
-Build: `KERNEL.SYS` **234 148 B** (TOS=1) / 180 582 B (TOS=0),
-`PLASMA.APP` **2 114 B**.
+Build: `KERNEL.SYS` **234 328 B** (TOS=1) / 180 756 B (TOS=0),
+`PLASMA.APP` **2 116 B**.
+
+
+## Optymalizacja 2026-10-22 (wydajność)
+
+Wcześniej: pełny blit 320×200 + WM + flush na każdą klatkę → **8,4 fps**.
+Teraz: wzór statyczny, animowana tylko paleta 16 wpisów → **40,3 fps**
+(`kdbg_palette_calls`, 5 s). Brak per-frame BLIT8/damage WM, więc okna pod
+PLASMA nie są co klatkę przemalowywane.

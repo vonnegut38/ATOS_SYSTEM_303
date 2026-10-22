@@ -263,7 +263,7 @@ static uint8_t *wm_get_fb(uint16_t *pitch,uint8_t *bpp)
 uint32_t kblit_calls,kblit_hw,kblit_cpu;
 
 /* The core passes the window pid; the glue maps it to the surface pointer. */
-uint32_t kdbg_blit_calls,kdbg_blit_px;
+uint32_t kdbg_blit_calls,kdbg_blit_px,kdbg_blit8_calls;
 static void glue_blit(void *ctx,uint32_t pid,const wm_rect_t *dst,uint16_t sx,uint16_t sy)
 {
     wm_fb_t d;wm_fb_t s;uint32_t i;
@@ -3408,6 +3408,7 @@ int kernel_wm_app_blit8(uint32_t pid,const uint8_t *src,uint32_t w,uint32_t h)
             for(x=0;x<w;++x)d[x]=s[x];
         }
     }
+    ++kdbg_blit8_calls;
     kernel_wm_app_dirty(surface,0,0,(int32_t)w,(int32_t)h);
     return 0;
 }

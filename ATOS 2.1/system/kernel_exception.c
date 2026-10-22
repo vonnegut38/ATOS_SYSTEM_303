@@ -2002,6 +2002,7 @@ int32_t kdbg_game_disp_rc;
 /* Completed GUI submissions, draw/compose clocks, worst total clocks,
    commands, groups, >25 ms frames, >33 ms frames. Passive telemetry. */
 uint32_t kdbg_gui_frame_stats[8];
+uint32_t kdbg_palette_calls;
 
 /* --- ROZMIAR IKON + SIATKA PULPITU ------------------------------------------
    Wartosci trzyma JADRO, zeby SETTINGS mogl je zmienic, a pulpit zauwazyl zmiane
@@ -2432,6 +2433,18 @@ int kernel_user_syscall(uint32_t call,uint32_t argument0,uint32_t argument1,
         if(!user_write_range(destination,64u)){user_syscall_result=-0x3a2;return 0;}
         for(j=0;j<64u;++j){destination[j]=system_exec_path[j];if(!system_exec_path[j])break;}
         user_syscall_result=0;return 0;}
+    if(call==90u){
+        /* PALETTE: prywatny zakres 4..15 dla animacji demoscenowych.
+           count=0 przywraca palete motywu (po wyjsciu/ukryciu PLASMA). */
+        uint32_t first=argument0,count=argument1;
+        const uint16_t *rgb=(const uint16_t *)pointer0;
+        if(!count){user_syscall_result=kgfx_theme_apply(kgfx_theme_current());return 0;}
+        if(first>=256u||count>256u-first||!rgb||!user_range(rgb,count*2u)){
+            user_syscall_result=-0x3e0;return 0;}
+        {uint32_t k;for(k=0;k<count;++k)(void)kgfx_set_palette((uint8_t)(first+k),rgb[k]);}
+        ++kdbg_palette_calls;
+        user_syscall_result=0;return 0;
+    }
     if(call==89u){
         /* BLIT8: wlasna powierzchnia okna, 8bpp, 0,0,w,h.  Bufor jest
            uzytkownika - walidujemy caly zakres przed kopiowaniem. */
